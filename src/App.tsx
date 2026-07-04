@@ -7,6 +7,7 @@ import {
   Database,
   ChevronLeft,
   ChevronRight,
+  Monitor,
 } from "lucide-react";
 import { Editor } from "./components/Editor";
 import { Preview } from "./components/Preview";
@@ -351,9 +352,18 @@ function App() {
 
   const t = translations[lang];
   const hasStyleChanges = JSON.stringify(styles) !== JSON.stringify(defaultStyles);
+  const extra = extraTranslations[lang] || extraTranslations["en"];
 
   return (
-    <div className="app-workspace">
+    <>
+      <div className="low-res-barrier">
+        <div className="barrier-content">
+          <Monitor size={48} className="barrier-icon" />
+          <h2>{extra.barrierTitle}</h2>
+          <p>{extra.barrierDescription}</p>
+        </div>
+      </div>
+      <div className="app-workspace">
       {/* Top Navbar Actions */}
       <header className="app-header">
         <div className="header-logo">
@@ -527,6 +537,7 @@ function App() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

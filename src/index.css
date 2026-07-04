@@ -1792,6 +1792,22 @@ body {
   background-color: rgba(239, 68, 68, 0.1);
 }
 
+.save-slot-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  margin-right: 4px;
+}
+
+.save-slot-btn:hover {
+  color: var(--accent);
+  background-color: var(--accent-light, rgba(79, 70, 229, 0.1));
+}
+
 /* ==========================================
    Page Break Tip & Toast styles
    ========================================== */

@@ -146,6 +146,29 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     }
   };
 
+  const handleOverwrite = (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation(); // Prevent loading click trigger
+    const extra = extraTranslations[lang] || extraTranslations["en"];
+    const wantOverwrite = confirm(extra.overwriteConfirm);
+    if (!wantOverwrite) {
+      return;
+    }
+    const result = saveResumeSlot(
+      name,
+      currentMarkdown,
+      currentStyles,
+      currentTemplate,
+      id,
+      currentFileName
+    );
+    if (result.success) {
+      showToast(t.successSave, "success");
+      refreshList();
+    } else {
+      showToast(result.error || t.storageError, "error");
+    }
+  };
+
   const formatDate = (timestamp: number): string => {
     const date = new Date(timestamp);
     return date.toLocaleDateString(undefined, {
@@ -203,7 +226,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
           <div className="modal-section">
             <h3 className="modal-section-title">
               <FolderOpen size={14} />
-              <span>{t.loadResume}</span>
+              <span>{t.savedResume}</span>
             </h3>
 
             {resumes.length === 0 ? (
@@ -224,14 +247,24 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                         {formatDate(resume.timestamp)}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDelete(e, resume.id)}
-                      className="delete-slot-btn"
-                      title={t.deleteButton}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="slot-actions">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOverwrite(e, resume.id, resume.name)}
+                        className="save-slot-btn"
+                        title={t.saveButton.replace(/Cookie/gi, "Storage")}
+                      >
+                        <Save size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(e, resume.id)}
+                        className="delete-slot-btn"
+                        title={t.deleteButton}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

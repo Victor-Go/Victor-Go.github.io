@@ -119,6 +119,16 @@ function App() {
     return saved ? Math.max(280, parseInt(saved, 10)) : 340;
   });
 
+  const [avoidPageBreak, setAvoidPageBreak] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("markdown_resume_avoid_page_break");
+      return saved === null ? true : saved === "true";
+    } catch (e) {
+      console.error("Failed to load avoidPageBreak from localStorage", e);
+      return true;
+    }
+  });
+
   // Track if it's the initial load to prevent default resume from overriding saved content
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
@@ -173,6 +183,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem("markdown_resume_sidebar_width", String(sidebarWidth));
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("markdown_resume_avoid_page_break", String(avoidPageBreak));
+    } catch (e) {
+      console.error("Failed to save avoidPageBreak to localStorage", e);
+    }
+  }, [avoidPageBreak]);
 
   // Keyboard Shortcuts (Ctrl+S / Ctrl+O) to backup/restore CVs
   useEffect(() => {
@@ -439,6 +457,8 @@ function App() {
                 style={{ width: `${sidebarWidth}px` }}
                 onReset={handleResetStyles}
                 showReset={hasStyleChanges}
+                avoidPageBreak={avoidPageBreak}
+                setAvoidPageBreak={setAvoidPageBreak}
               />
               {/* Sidebar Resizer Splitter Handle */}
               <div className="sidebar-resizer" onMouseDown={handleSidebarMouseDown} />
@@ -459,6 +479,7 @@ function App() {
             styles={styles}
             lang={lang}
             template={template}
+            avoidPageBreak={avoidPageBreak}
           />
         </div>
 

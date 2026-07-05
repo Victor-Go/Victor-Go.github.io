@@ -44,6 +44,8 @@ export interface Translations {
   normalLabel: string;
   customLabel: string;
   inheritLabel: string;
+  preventSectionSplitting: string;
+  preventSectionSplittingSub: string;
 }
 
 export const translations: Record<
@@ -106,6 +108,8 @@ export const translations: Record<
     normalLabel: "Normal",
     customLabel: "Custom",
     inheritLabel: "Inherit",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# John Doe
 **Senior Software Engineer**  
 📧 john.doe@email.com | 📱 +1 (555) 019-2834 
@@ -192,6 +196,8 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     normalLabel: "常规",
     customLabel: "自定义",
     inheritLabel: "继承",
+    preventSectionSplitting: "防止经历跨页截断",
+    preventSectionSplittingSub: "尽量保持单条工作经历的完整性",
     defaultResume: `# 张三
 **高级软件工程师**  
 📧 zhangsan@email.com | 📱 +86 138-0000-0000 
@@ -278,6 +284,8 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     normalLabel: "Normal",
     customLabel: "Personnalisé",
     inheritLabel: "Hériter",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# Jean Dupont
 **Ingénieur Logiciel Senior**  
 📧 jean.dupont@email.com | 📱 +33 6 12 34 56 78 
@@ -364,6 +372,8 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
     normalLabel: "Normal",
     customLabel: "Benutzerdefiniert",
     inheritLabel: "Erben",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# Max Mustermann
 **Senior Softwareentwickler**  
 📧 max.mustermann@email.de | 📱 +49 170 1234567 
@@ -450,6 +460,8 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
     normalLabel: "Normale",
     customLabel: "Personalizzato",
     inheritLabel: "Eredita",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# Mario Rossi
 **Sviluppatore Software Senior**  
 📧 mario.rossi@email.it | 📱 +39 333 123 4567 
@@ -536,6 +548,8 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
     normalLabel: "Normal",
     customLabel: "Personalizado",
     inheritLabel: "Heredar",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# Juan Pérez
 **Ingeniero de Software Senior**  
 📧 juan.perez@email.es | 📱 +34 600 123 456 
@@ -622,6 +636,8 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
     normalLabel: "Normal",
     customLabel: "Personalizado",
     inheritLabel: "Herdar",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# João Silva
 **Engenheiro de Software Sénior**  
 📧 joao.silva@email.pt | 📱 +351 912 345 678 
@@ -708,6 +724,8 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     normalLabel: "標準",
     customLabel: "カスタム",
     inheritLabel: "継承",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# 田中 太郎
 **シニアソフトウェアエンジニア**  
 📧 taro.tanaka@email.jp | 📱 +81 90-1234-5678 
@@ -794,6 +812,8 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     normalLabel: "보통",
     customLabel: "사용자정의",
     inheritLabel: "상속",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# 김철수
 **시니어 소프트웨어 엔지니어**  
 📧 chulsoo.kim@email.kr | 📱 +82 10-1234-5678 
@@ -880,6 +900,8 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     normalLabel: "Обычный",
     customLabel: "Свой цвет",
     inheritLabel: "Наследовать",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# Иван Иванов
 **Старший разработчик программного обеспечения**  
 📧 ivan.ivanov@email.ru | 📱 +7 (999) 123-45-67 
@@ -966,6 +988,8 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     normalLabel: "常規",
     customLabel: "自訂顏色",
     inheritLabel: "繼承",
+    preventSectionSplitting: "防止經歷跨頁截斷",
+    preventSectionSplittingSub: "儘量保持單條工作經歷的完整性",
     defaultResume: `# 張三
 **高級軟體工程師**  
 📧 zhangsan@email.com | 📱 +886 912 345 678 
@@ -1052,6 +1076,8 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     normalLabel: "Звичайний",
     customLabel: "Свій колір",
     inheritLabel: "Успадкувати",
+    preventSectionSplitting: "Prevent Section Splitting",
+    preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# Олександр Коваленко
 **Старший розробник програмного забезпечення**  
 📧 o.kovalenko@email.ua | 📱 +380 50 123 4567 

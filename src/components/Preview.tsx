@@ -22,6 +22,7 @@ interface PreviewProps {
     | "ru"
     | "uk";
   template: ResumeTemplate;
+  avoidPageBreak: boolean;
 }
 
 // Map custom style font families to cross-platform fallbacks
@@ -147,6 +148,7 @@ export const Preview: React.FC<PreviewProps> = ({
   styles,
   lang,
   template,
+  avoidPageBreak,
 }) => {
   const t = translations[lang];
 
@@ -214,6 +216,7 @@ export const Preview: React.FC<PreviewProps> = ({
           id="preview-container"
           className={`template-${template}`}
           style={inlineStyles}
+          data-avoid-break={avoidPageBreak}
           dangerouslySetInnerHTML={{ __html: htmlContent }}
         />
       </div>

@@ -913,19 +913,34 @@ body {
 /* ==========================================
    PAGE BREAK & PRINT UTILITIES
    ========================================== */
-#preview-container .resume-section,
-#preview-container .resume-item,
-#preview-container li,
-#preview-container p,
-#preview-container pre,
-#preview-container h1,
-#preview-container h2,
-#preview-container h3,
-#preview-container h4,
-#preview-container h5,
-#preview-container h6 {
+#preview-container[data-avoid-break="true"] .resume-section,
+#preview-container[data-avoid-break="true"] .resume-item,
+#preview-container[data-avoid-break="true"] li,
+#preview-container[data-avoid-break="true"] p,
+#preview-container[data-avoid-break="true"] pre,
+#preview-container[data-avoid-break="true"] h1,
+#preview-container[data-avoid-break="true"] h2,
+#preview-container[data-avoid-break="true"] h3,
+#preview-container[data-avoid-break="true"] h4,
+#preview-container[data-avoid-break="true"] h5,
+#preview-container[data-avoid-break="true"] h6 {
   page-break-inside: avoid !important;
   break-inside: avoid !important;
+}
+
+#preview-container[data-avoid-break="false"] .resume-section,
+#preview-container[data-avoid-break="false"] .resume-item,
+#preview-container[data-avoid-break="false"] li,
+#preview-container[data-avoid-break="false"] p,
+#preview-container[data-avoid-break="false"] pre,
+#preview-container[data-avoid-break="false"] h1,
+#preview-container[data-avoid-break="false"] h2,
+#preview-container[data-avoid-break="false"] h3,
+#preview-container[data-avoid-break="false"] h4,
+#preview-container[data-avoid-break="false"] h5,
+#preview-container[data-avoid-break="false"] h6 {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
 }
 
 #preview-container h1,
@@ -1980,18 +1995,32 @@ body {
   }
 
   /* Avoid awkward vertical pagination splitting for structural content blocks */
-  .resume-section,
-  .resume-item,
-  li,
-  p,
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  [data-avoid-break="true"] .resume-section,
+  [data-avoid-break="true"] .resume-item,
+  [data-avoid-break="true"] li,
+  [data-avoid-break="true"] p,
+  [data-avoid-break="true"] h1,
+  [data-avoid-break="true"] h2,
+  [data-avoid-break="true"] h3,
+  [data-avoid-break="true"] h4,
+  [data-avoid-break="true"] h5,
+  [data-avoid-break="true"] h6 {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  [data-avoid-break="false"] .resume-section,
+  [data-avoid-break="false"] .resume-item,
+  [data-avoid-break="false"] li,
+  [data-avoid-break="false"] p,
+  [data-avoid-break="false"] h1,
+  [data-avoid-break="false"] h2,
+  [data-avoid-break="false"] h3,
+  [data-avoid-break="false"] h4,
+  [data-avoid-break="false"] h5,
+  [data-avoid-break="false"] h6 {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
   }
 }
 

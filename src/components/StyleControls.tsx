@@ -25,6 +25,8 @@ interface StyleControlsProps {
   style?: React.CSSProperties;
   onReset: () => void;
   showReset: boolean;
+  avoidPageBreak: boolean;
+  setAvoidPageBreak: (val: boolean) => void;
 }
 
 const templatesList: ResumeTemplate[] = [
@@ -175,6 +177,8 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
   style,
   onReset,
   showReset,
+  avoidPageBreak,
+  setAvoidPageBreak,
 }) => {
   const t = translations[lang];
   const [activeTab, setActiveTab] = useState<ActiveElementKey>("global");
@@ -305,6 +309,33 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
 
         {isSizesOpen && (
           <div className="collapsible-content sliders-stack">
+            {/* Page Break Control */}
+            <div className="toggle-item" style={{ marginTop: "4px", marginBottom: "8px" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={avoidPageBreak}
+                  onChange={(e) => setAvoidPageBreak(e.target.checked)}
+                  style={{
+                    cursor: "pointer",
+                    accentColor: "var(--accent)",
+                    width: "15px",
+                    height: "15px",
+                    marginTop: "2px",
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-main)", lineHeight: "1.4" }}>
+                    {t.preventSectionSplitting}
+                  </span>
+                  <span style={{ fontSize: "10.5px", color: "var(--text-muted)", marginTop: "2px", lineHeight: "1.3" }}>
+                    {t.preventSectionSplittingSub}
+                  </span>
+                </div>
+              </label>
+            </div>
+
             {/* Body Size */}
             <div className="slider-item">
               <div className="slider-header">

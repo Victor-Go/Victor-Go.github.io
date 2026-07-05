@@ -112,7 +112,7 @@ export const translations: Record<
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
     defaultResume: `# John Doe
 **Senior Software Engineer**  
-📧 john.doe@email.com | 📱 +1 (555) 019-2834 
+📧 john.doe@email.com | 📱 +1 (123) 456-7890 
 
 🌐 [github.com/victor-go](https://github.com/victor-go) | 📍 Vancouver, Canada
 
@@ -131,7 +131,7 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
 - Implemented robust React architectures with TypeScript, reducing runtime errors by **30%**.
 
 ### Software Engineer | InnovateWeb LLC
-*2019 - 2022 | Austin, TX*
+*2019 - 2022 | Vancouver, Canada*
 - Developed and launched 4 high-traffic web applications utilizing React and Node.js.
 - Authored reusable UI components and shared library packages, streamlining development.
 
@@ -139,8 +139,8 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
 
 ## Education
 
-### B.S. in Computer Science | Stanford University
-*2015 - 2019 | Stanford, CA*
+### B.S. in Computer Science | University of British Columbia
+*2015 - 2019 | Vancouver, Canada*
 - Graduated with Honors (GPA: 3.8/4.0).
 
 ---

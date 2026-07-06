@@ -23,6 +23,7 @@ interface PreviewProps {
     | "uk";
   template: ResumeTemplate;
   avoidPageBreak: boolean;
+  avoidPageBreakLevels: string[];
 }
 
 // Map custom style font families to cross-platform fallbacks
@@ -149,6 +150,7 @@ export const Preview: React.FC<PreviewProps> = ({
   lang,
   template,
   avoidPageBreak,
+  avoidPageBreakLevels,
 }) => {
   const t = translations[lang];
 
@@ -205,6 +207,10 @@ export const Preview: React.FC<PreviewProps> = ({
     }
   }, [markdown]);
 
+  const avoidClasses = avoidPageBreak
+    ? avoidPageBreakLevels.map((lvl) => `avoid-${lvl}`).join(" ")
+    : "";
+
   return (
     <div className="preview-container-wrapper">
       <div className="pane-header">
@@ -214,7 +220,7 @@ export const Preview: React.FC<PreviewProps> = ({
       <div className="preview-scroll-viewport">
         <div
           id="preview-container"
-          className={`template-${template}`}
+          className={`template-${template} ${avoidClasses}`}
           style={inlineStyles}
           data-avoid-break={avoidPageBreak}
           dangerouslySetInnerHTML={{ __html: htmlContent }}

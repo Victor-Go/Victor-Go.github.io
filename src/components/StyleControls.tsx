@@ -27,6 +27,8 @@ interface StyleControlsProps {
   showReset: boolean;
   avoidPageBreak: boolean;
   setAvoidPageBreak: (val: boolean) => void;
+  avoidPageBreakLevels: string[];
+  setAvoidPageBreakLevels: (val: string[]) => void;
 }
 
 const templatesList: ResumeTemplate[] = [
@@ -179,6 +181,8 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
   showReset,
   avoidPageBreak,
   setAvoidPageBreak,
+  avoidPageBreakLevels,
+  setAvoidPageBreakLevels,
 }) => {
   const t = translations[lang];
   const [activeTab, setActiveTab] = useState<ActiveElementKey>("global");
@@ -310,7 +314,7 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
         {isSizesOpen && (
           <div className="collapsible-content sliders-stack">
             {/* Page Break Control */}
-            <div className="toggle-item" style={{ marginTop: "4px", marginBottom: "8px" }}>
+            <div className="toggle-item" style={{ marginTop: "4px", marginBottom: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
               <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer" }}>
                 <input
                   type="checkbox"
@@ -334,6 +338,45 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
                   </span>
                 </div>
               </label>
+              
+              {avoidPageBreak && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "23px", marginTop: "4px" }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                    {t.preventSectionSplittingLevel}
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    {["h1", "h2", "h3"].map((level) => {
+                      const isActive = avoidPageBreakLevels.includes(level);
+                      return (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => {
+                            const updated = isActive
+                              ? avoidPageBreakLevels.filter((l) => l !== level)
+                              : [...avoidPageBreakLevels, level];
+                            setAvoidPageBreakLevels(updated);
+                          }}
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            fontSize: "10.5px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            border: "1px solid " + (isActive ? "var(--accent)" : "var(--border-subtle, #e2e8f0)"),
+                            backgroundColor: isActive ? "var(--accent)" : "transparent",
+                            color: isActive ? "#ffffff" : "var(--text-muted)",
+                            textTransform: "uppercase",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {level}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Body Size */}

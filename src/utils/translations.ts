@@ -46,6 +46,16 @@ export interface Translations {
   inheritLabel: string;
   preventSectionSplitting: string;
   preventSectionSplittingSub: string;
+  toggleReplace: string;
+  matchCase: string;
+  matchWholeWord: string;
+  useRegex: string;
+  prevMatch: string;
+  nextMatch: string;
+  close: string;
+  find: string;
+  replace: string;
+  replaceAll: string;
 }
 
 export const translations: Record<
@@ -110,6 +120,16 @@ export const translations: Record<
     inheritLabel: "Inherit",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    find: "Find",
+    toggleReplace: "Toggle Replace",
+    matchCase: "Match Case",
+    matchWholeWord: "Match Whole Word",
+    useRegex: "Use Regular Expression",
+    prevMatch: "Previous Match",
+    nextMatch: "Next Match",
+    close: "Close",
+    replace: "Replace",
+    replaceAll: "Replace All",
     defaultResume: `# John Doe
 **Senior Software Engineer**  
 📧 john.doe@email.com | 📱 +1 (123) 456-7890 
@@ -198,6 +218,16 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     inheritLabel: "继承",
     preventSectionSplitting: "防止经历跨页截断",
     preventSectionSplittingSub: "尽量保持单条工作经历的完整性",
+    find: "查找",
+    toggleReplace: "切换替换",
+    matchCase: "区分大小写",
+    matchWholeWord: "全字匹配",
+    useRegex: "使用正则表达式",
+    prevMatch: "上一个匹配项",
+    nextMatch: "下一个匹配项",
+    close: "关闭",
+    replace: "替换",
+    replaceAll: "全部替换",
     defaultResume: `# 张三
 **高级软件工程师**  
 📧 zhangsan@email.com | 📱 +86 138-0000-0000 
@@ -286,6 +316,16 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     inheritLabel: "Hériter",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Basculer remplacer",
+    matchCase: "Respecter la casse",
+    matchWholeWord: "Mot entier",
+    useRegex: "Utiliser une expression régulière",
+    prevMatch: "Occurrence précédente",
+    nextMatch: "Occurrence suivante",
+    close: "Fermer",
+    find: "Rechercher",
+    replace: "Remplacer",
+    replaceAll: "Tout remplacer",
     defaultResume: `# Jean Dupont
 **Ingénieur Logiciel Senior**  
 📧 jean.dupont@email.com | 📱 +33 6 12 34 56 78 
@@ -374,6 +414,16 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
     inheritLabel: "Erben",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Ersetzen umschalten",
+    matchCase: "Groß-/Kleinschreibung beachten",
+    matchWholeWord: "Ganzes Wort",
+    useRegex: "Regulären Ausdruck verwenden",
+    prevMatch: "Vorherige Übereinstimmung",
+    nextMatch: "Nächste Übereinstimmung",
+    close: "Schließen",
+    find: "Suchen",
+    replace: "Ersetzen",
+    replaceAll: "Alle ersetzen",
     defaultResume: `# Max Mustermann
 **Senior Softwareentwickler**  
 📧 max.mustermann@email.de | 📱 +49 170 1234567 
@@ -462,6 +512,16 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
     inheritLabel: "Eredita",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Attiva/disattiva sostituzione",
+    matchCase: "Maiuscole/minuscole",
+    matchWholeWord: "Parola intera",
+    useRegex: "Usa espressione regolare",
+    prevMatch: "Corrispondenza precedente",
+    nextMatch: "Corrispondenza successiva",
+    close: "Chiudi",
+    find: "Trova",
+    replace: "Sostituisci",
+    replaceAll: "Sostituisci tutto",
     defaultResume: `# Mario Rossi
 **Sviluppatore Software Senior**  
 📧 mario.rossi@email.it | 📱 +39 333 123 4567 
@@ -550,6 +610,16 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
     inheritLabel: "Heredar",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Alternar reemplazar",
+    matchCase: "Coincidir mayúsculas y minúsculas",
+    matchWholeWord: "Palabra completa",
+    useRegex: "Usar expresión regular",
+    prevMatch: "Coincidencia anterior",
+    nextMatch: "Coincidencia siguiente",
+    close: "Cerrar",
+    find: "Buscar",
+    replace: "Reemplazar",
+    replaceAll: "Reemplazar todo",
     defaultResume: `# Juan Pérez
 **Ingeniero de Software Senior**  
 📧 juan.perez@email.es | 📱 +34 600 123 456 
@@ -638,6 +708,16 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
     inheritLabel: "Herdar",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Alternar substituir",
+    matchCase: "Diferenciar maiúsculas de minúsculas",
+    matchWholeWord: "Palavra inteira",
+    useRegex: "Usar expressão regular",
+    prevMatch: "Coincidência anterior",
+    nextMatch: "Próxima coincidência",
+    close: "Fechar",
+    find: "Localizar",
+    replace: "Substituir",
+    replaceAll: "Substituir tudo",
     defaultResume: `# João Silva
 **Engenheiro de Software Sénior**  
 📧 joao.silva@email.pt | 📱 +351 912 345 678 
@@ -726,6 +806,16 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "継承",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "置換の切り替え",
+    matchCase: "大文字と小文字を区別する",
+    matchWholeWord: "単語全体",
+    useRegex: "正規表現を使用する",
+    prevMatch: "前を検索",
+    nextMatch: "次を検索",
+    close: "閉じる",
+    find: "検索",
+    replace: "置換",
+    replaceAll: "すべて置換",
     defaultResume: `# 田中 太郎
 **シニアソフトウェアエンジニア**  
 📧 taro.tanaka@email.jp | 📱 +81 90-1234-5678 
@@ -814,6 +904,16 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "상속",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "대체 토글",
+    matchCase: "대소문자 구분",
+    matchWholeWord: "단어 단위",
+    useRegex: "정규식 사용",
+    prevMatch: "이전 찾기",
+    nextMatch: "다음 찾기",
+    close: "닫기",
+    find: "찾기",
+    replace: "바꾸기",
+    replaceAll: "모두 바꾸기",
     defaultResume: `# 김철수
 **시니어 소프트웨어 엔지니어**  
 📧 chulsoo.kim@email.kr | 📱 +82 10-1234-5678 
@@ -902,6 +1002,16 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "Наследовать",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Переключить замену",
+    matchCase: "Учитывать регистр",
+    matchWholeWord: "Слово целиком",
+    useRegex: "Использовать регулярное выражение",
+    prevMatch: "Предыдущее совпадение",
+    nextMatch: "Следующее совпадение",
+    close: "Закрыть",
+    find: "Найти",
+    replace: "Заменить",
+    replaceAll: "Заменить все",
     defaultResume: `# Иван Иванов
 **Старший разработчик программного обеспечения**  
 📧 ivan.ivanov@email.ru | 📱 +7 (999) 123-45-67 
@@ -990,6 +1100,16 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "繼承",
     preventSectionSplitting: "防止經歷跨頁截斷",
     preventSectionSplittingSub: "儘量保持單條工作經歷的完整性",
+    toggleReplace: "切換替換",
+    matchCase: "區分大小寫",
+    matchWholeWord: "全字比對",
+    useRegex: "使用正規表示式",
+    prevMatch: "上一個比對項",
+    nextMatch: "下一個比對項",
+    close: "關閉",
+    find: "尋找",
+    replace: "替換",
+    replaceAll: "全部替換",
     defaultResume: `# 張三
 **高級軟體工程師**  
 📧 zhangsan@email.com | 📱 +886 912 345 678 
@@ -1078,6 +1198,16 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "Успадкувати",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    toggleReplace: "Перемкнути заміну",
+    matchCase: "Враховувати регістр",
+    matchWholeWord: "Слово цілком",
+    useRegex: "Використовувати регулярний вираз",
+    prevMatch: "Попередній збіг",
+    nextMatch: "Наступний збіг",
+    close: "Закрити",
+    find: "Знайти",
+    replace: "Замінити",
+    replaceAll: "Замінити все",
     defaultResume: `# Олександр Коваленко
 **Старший розробник програмного забезпечення**  
 📧 o.kovalenko@email.ua | 📱 +380 50 123 4567 

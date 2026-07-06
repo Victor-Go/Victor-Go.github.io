@@ -719,6 +719,7 @@ body {
 .editor-textarea-wrapper {
   flex: 1;
   padding: 16px;
+  position: relative;
 }
 
 .editor-textarea {
@@ -732,6 +733,58 @@ body {
   font-size: 13px;
   line-height: 1.6;
   outline: none;
+  position: relative;
+  z-index: 2;
+  padding: 0;
+  overflow-y: scroll;
+}
+
+.editor-highlight-overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1;
+  pointer-events: none;
+  color: transparent;
+  background: transparent;
+  margin: 0;
+  border: none;
+  outline: none;
+  font-family: 'Fira Code', Consolas, Monaco, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+.editor-highlight-overlay::-webkit-scrollbar {
+  width: 8px;
+}
+
+.editor-highlight-overlay::-webkit-scrollbar-thumb {
+  background: transparent !important;
+}
+
+.editor-highlight-overlay::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.search-highlight {
+  background-color: rgba(234, 179, 8, 0.35);
+  border-radius: 2px;
+  color: transparent;
+}
+
+.search-highlight-current {
+  background-color: rgba(249, 115, 22, 0.85);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #ff9800;
+  color: transparent;
 }
 
 .editor-footer {
@@ -2088,3 +2141,196 @@ body {
     display: none !important;
   }
 }
+
+/* ==========================================
+   Find & Replace Widget
+   ========================================== */
+.editor-container {
+  position: relative; /* Ensure child widgets can be absolute positioned relative to this */
+}
+
+.find-replace-widget {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 8px 12px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-system);
+  font-size: 13px;
+  color: var(--text-main);
+  user-select: none;
+  min-width: 330px;
+  max-width: 460px;
+}
+
+.find-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.find-replace-chevron-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.find-replace-chevron-btn:hover {
+  background-color: var(--border);
+  color: var(--text-main);
+}
+
+.find-replace-chevron-btn.rotated svg {
+  transform: rotate(-90deg);
+}
+
+.find-replace-chevron-btn svg {
+  transition: transform 0.15s ease;
+}
+
+.find-replace-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  flex: 1;
+  transition: border-color 0.2s ease;
+}
+
+.find-replace-input-wrapper:focus-within {
+  border-color: var(--border-focus);
+}
+
+.find-replace-input-wrapper.has-error {
+  border-color: var(--error);
+}
+
+.find-replace-input {
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 13px;
+  padding: 4px 62px 4px 8px; /* Room for toggles on the right */
+  width: 100%;
+  outline: none;
+  height: 24px;
+}
+
+.find-replace-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.find-replace-input-toggles {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.find-replace-toggle-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-system);
+  font-weight: 500;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.find-replace-toggle-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.find-replace-toggle-btn.active {
+  background-color: var(--accent);
+  border-color: var(--accent-hover);
+  color: #ffffff;
+}
+
+.find-replace-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 4px;
+  white-space: nowrap;
+  min-width: 45px;
+  text-align: center;
+}
+
+.find-replace-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.15s, color 0.15s;
+  height: 24px;
+  width: 24px;
+}
+
+.find-replace-action-btn:hover {
+  background-color: var(--border);
+}
+
+.find-replace-action-btn:disabled {
+  color: var(--text-muted);
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.find-replace-action-btn:disabled:hover {
+  background-color: transparent;
+}
+
+.find-replace-chevron-col {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.find-replace-input-col {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.find-replace-actions-col {
+  width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+

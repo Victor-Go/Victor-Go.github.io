@@ -966,14 +966,9 @@ body {
 /* ==========================================
    PAGE BREAK & PRINT UTILITIES
    ========================================== */
-#preview-container[data-avoid-break="true"] .resume-section,
-#preview-container[data-avoid-break="true"] .resume-item,
 #preview-container[data-avoid-break="true"] li,
 #preview-container[data-avoid-break="true"] p,
 #preview-container[data-avoid-break="true"] pre,
-#preview-container[data-avoid-break="true"] h1,
-#preview-container[data-avoid-break="true"] h2,
-#preview-container[data-avoid-break="true"] h3,
 #preview-container[data-avoid-break="true"] h4,
 #preview-container[data-avoid-break="true"] h5,
 #preview-container[data-avoid-break="true"] h6 {
@@ -981,6 +976,25 @@ body {
   break-inside: avoid !important;
 }
 
+#preview-container[data-avoid-break="true"].avoid-h1 .resume-header,
+#preview-container[data-avoid-break="true"].avoid-h1 h1 {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+#preview-container[data-avoid-break="true"].avoid-h2 .resume-section,
+#preview-container[data-avoid-break="true"].avoid-h2 h2 {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+#preview-container[data-avoid-break="true"].avoid-h3 .resume-item,
+#preview-container[data-avoid-break="true"].avoid-h3 h3 {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+#preview-container[data-avoid-break="false"] .resume-header,
 #preview-container[data-avoid-break="false"] .resume-section,
 #preview-container[data-avoid-break="false"] .resume-item,
 #preview-container[data-avoid-break="false"] li,
@@ -2048,13 +2062,8 @@ body {
   }
 
   /* Avoid awkward vertical pagination splitting for structural content blocks */
-  [data-avoid-break="true"] .resume-section,
-  [data-avoid-break="true"] .resume-item,
   [data-avoid-break="true"] li,
   [data-avoid-break="true"] p,
-  [data-avoid-break="true"] h1,
-  [data-avoid-break="true"] h2,
-  [data-avoid-break="true"] h3,
   [data-avoid-break="true"] h4,
   [data-avoid-break="true"] h5,
   [data-avoid-break="true"] h6 {
@@ -2062,6 +2071,25 @@ body {
     break-inside: avoid !important;
   }
 
+  [data-avoid-break="true"].avoid-h1 .resume-header,
+  [data-avoid-break="true"].avoid-h1 h1 {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  [data-avoid-break="true"].avoid-h2 .resume-section,
+  [data-avoid-break="true"].avoid-h2 h2 {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  [data-avoid-break="true"].avoid-h3 .resume-item,
+  [data-avoid-break="true"].avoid-h3 h3 {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  [data-avoid-break="false"] .resume-header,
   [data-avoid-break="false"] .resume-section,
   [data-avoid-break="false"] .resume-item,
   [data-avoid-break="false"] li,

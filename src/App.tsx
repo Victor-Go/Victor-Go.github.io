@@ -129,6 +129,16 @@ function App() {
     }
   });
 
+  const [avoidPageBreakLevels, setAvoidPageBreakLevels] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("markdown_resume_avoid_page_break_levels");
+      return saved ? JSON.parse(saved) : ["h3"];
+    } catch (e) {
+      console.error("Failed to load avoidPageBreakLevels from localStorage", e);
+      return ["h3"];
+    }
+  });
+
   // Track if it's the initial load to prevent default resume from overriding saved content
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
@@ -191,6 +201,14 @@ function App() {
       console.error("Failed to save avoidPageBreak to localStorage", e);
     }
   }, [avoidPageBreak]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("markdown_resume_avoid_page_break_levels", JSON.stringify(avoidPageBreakLevels));
+    } catch (e) {
+      console.error("Failed to save avoidPageBreakLevels to localStorage", e);
+    }
+  }, [avoidPageBreakLevels]);
 
   // Keyboard Shortcuts (Ctrl+S / Ctrl+O) to backup/restore CVs
   useEffect(() => {
@@ -293,7 +311,7 @@ function App() {
     
     try {
       const filename = `${fileName}.pdf`;
-      await generateResumePDF("preview-container", filename);
+      await generateResumePDF("preview-container", filename, avoidPageBreakLevels);
       showToast(extra.pdfSuccess, "success");
     } catch (err: any) {
       console.error(err);
@@ -459,6 +477,8 @@ function App() {
                 showReset={hasStyleChanges}
                 avoidPageBreak={avoidPageBreak}
                 setAvoidPageBreak={setAvoidPageBreak}
+                avoidPageBreakLevels={avoidPageBreakLevels}
+                setAvoidPageBreakLevels={setAvoidPageBreakLevels}
               />
               {/* Sidebar Resizer Splitter Handle */}
               <div className="sidebar-resizer" onMouseDown={handleSidebarMouseDown} />
@@ -480,6 +500,7 @@ function App() {
             lang={lang}
             template={template}
             avoidPageBreak={avoidPageBreak}
+            avoidPageBreakLevels={avoidPageBreakLevels}
           />
         </div>
 

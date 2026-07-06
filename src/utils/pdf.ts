@@ -5,7 +5,8 @@
  */
 export async function generateResumePDF(
   elementId: string,
-  filename: string = "resume.pdf"
+  filename: string = "resume.pdf",
+  _avoidLevels: string[] = ["h3"]
 ): Promise<void> {
   const element = document.getElementById(elementId);
   if (!element) {

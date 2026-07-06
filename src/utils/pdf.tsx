@@ -7,12 +7,25 @@ import html2pdf from "html2pdf.js";
  */
 export async function generateResumePDF(
   elementId: string,
-  filename: string = "resume.pdf"
+  filename: string = "resume.pdf",
+  avoidLevels: string[] = ["h3"]
 ): Promise<void> {
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error(`Element #${elementId} not found.`);
   }
+
+  // Build the page break selectors dynamically based on user selections
+  const avoidSelectors = [
+    ...(avoidLevels.includes("h1") ? [".resume-header", "h1"] : []),
+    ...(avoidLevels.includes("h2") ? [".resume-section", "h2"] : []),
+    ...(avoidLevels.includes("h3") ? [".resume-item", "h3"] : []),
+    "li",
+    "h4",
+    "h5",
+    "h6",
+    "p"
+  ];
 
   // Configure html2pdf with A4 specs and clean 12mm margins
   const options = {
@@ -34,19 +47,7 @@ export async function generateResumePDF(
     },
     pagebreak: {
       mode: ["avoid-all", "css"],
-      // Force page-breaks to avoid splitting paragraphs, section blocks, list elements, or headings
-      avoid: [
-        ".resume-section",
-        ".resume-item",
-        "li",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "p",
-      ],
+      avoid: avoidSelectors,
     },
   };
 

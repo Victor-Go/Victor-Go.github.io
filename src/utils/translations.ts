@@ -46,6 +46,7 @@ export interface Translations {
   inheritLabel: string;
   preventSectionSplitting: string;
   preventSectionSplittingSub: string;
+  preventSectionSplittingLevel: string;
   toggleReplace: string;
   matchCase: string;
   matchWholeWord: string;
@@ -120,6 +121,7 @@ export const translations: Record<
     inheritLabel: "Inherit",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Apply to:",
     find: "Find",
     toggleReplace: "Toggle Replace",
     matchCase: "Match Case",
@@ -218,6 +220,7 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     inheritLabel: "继承",
     preventSectionSplitting: "防止经历跨页截断",
     preventSectionSplittingSub: "尽量保持单条工作经历的完整性",
+    preventSectionSplittingLevel: "应用层级:",
     find: "查找",
     toggleReplace: "切换替换",
     matchCase: "区分大小写",
@@ -316,6 +319,7 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     inheritLabel: "Hériter",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Appliquer à :",
     toggleReplace: "Basculer remplacer",
     matchCase: "Respecter la casse",
     matchWholeWord: "Mot entier",
@@ -414,6 +418,7 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
     inheritLabel: "Erben",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Anwenden auf:",
     toggleReplace: "Ersetzen umschalten",
     matchCase: "Groß-/Kleinschreibung beachten",
     matchWholeWord: "Ganzes Wort",
@@ -512,6 +517,7 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
     inheritLabel: "Eredita",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Applica a:",
     toggleReplace: "Attiva/disattiva sostituzione",
     matchCase: "Maiuscole/minuscole",
     matchWholeWord: "Parola intera",
@@ -610,6 +616,7 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
     inheritLabel: "Heredar",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Aplicar a:",
     toggleReplace: "Alternar reemplazar",
     matchCase: "Coincidir mayúsculas y minúsculas",
     matchWholeWord: "Palabra completa",
@@ -708,6 +715,7 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
     inheritLabel: "Herdar",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Aplicar a:",
     toggleReplace: "Alternar substituir",
     matchCase: "Diferenciar maiúsculas de minúsculas",
     matchWholeWord: "Palavra inteira",
@@ -806,6 +814,7 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "継承",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "適用レベル:",
     toggleReplace: "置換の切り替え",
     matchCase: "大文字と小文字を区別する",
     matchWholeWord: "単語全体",
@@ -904,6 +913,7 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "상속",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "적용 수준:",
     toggleReplace: "대체 토글",
     matchCase: "대소문자 구분",
     matchWholeWord: "단어 단위",
@@ -1002,6 +1012,7 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "Наследовать",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Применить к:",
     toggleReplace: "Переключить замену",
     matchCase: "Учитывать регистр",
     matchWholeWord: "Слово целиком",
@@ -1100,6 +1111,7 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "繼承",
     preventSectionSplitting: "防止經歷跨頁截斷",
     preventSectionSplittingSub: "儘量保持單條工作經歷的完整性",
+    preventSectionSplittingLevel: "應用層級:",
     toggleReplace: "切換替換",
     matchCase: "區分大小寫",
     matchWholeWord: "全字比對",
@@ -1198,6 +1210,7 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     inheritLabel: "Успадкувати",
     preventSectionSplitting: "Prevent Section Splitting",
     preventSectionSplittingSub: "Keep experience blocks on the same page when possible",
+    preventSectionSplittingLevel: "Застосувати до:",
     toggleReplace: "Перемкнути заміну",
     matchCase: "Враховувати регістр",
     matchWholeWord: "Слово цілком",

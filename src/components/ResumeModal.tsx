@@ -6,7 +6,7 @@ import {
   loadResumeSlot,
   deleteResumeSlot,
 } from "../utils/cookies";
-import type { ResumeMetadata, ResumeTemplate } from "../utils/cookies";
+import type { ResumeTemplate, ResumeData } from "../utils/cookies";
 import type { AppStyles } from "../utils/storage";
 import { translations, extraTranslations } from "../utils/translations";
 
@@ -51,16 +51,37 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   showToast,
 }) => {
   const t = translations[lang];
-  const [resumes, setResumes] = useState<ResumeMetadata[]>([]);
+  const [resumes, setResumes] = useState<ResumeData[]>([]);
   const [newResumeName, setNewResumeName] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const searchPlaceholderMap: Record<string, string> = {
+    en: "Search...",
+    zh: "搜索...",
+    "zh-tw": "搜尋...",
+    fr: "Rechercher...",
+    de: "Suchen...",
+    it: "Cerca...",
+    es: "Buscar...",
+    pt: "Buscar...",
+    ja: "検索...",
+    ko: "검색...",
+    ru: "Поиск...",
+    uk: "Пошук...",
+  };
+  const searchPlaceholder = searchPlaceholderMap[lang] || searchPlaceholderMap["en"];
 
   // Refresh saved resume slots from localStorage
   const refreshList = () => {
     const list = getSavedResumesList();
+    // Load full details for each
+    const fullList = list
+      .map((item) => loadResumeSlot(item.id))
+      .filter((item): item is ResumeData => item !== null);
     // Sort by timestamp descending (most recent first)
-    list.sort((a, b) => b.timestamp - a.timestamp);
-    setResumes(list);
+    fullList.sort((a, b) => b.timestamp - a.timestamp);
+    setResumes(fullList);
   };
 
   useEffect(() => {
@@ -69,6 +90,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     refreshList();
     setNewResumeName("");
     setErrorMsg(null);
+    setSearchQuery("");
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -179,6 +201,83 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
       minute: "2-digit",
     });
   };
+  const renderSnippet = (text: string, query: string) => {
+    if (!query.trim()) return null;
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase().trim();
+    const index = lowerText.indexOf(lowerQuery);
+    if (index === -1) return null;
+
+    const start = Math.max(0, index - 50);
+    const end = Math.min(text.length, index + query.length + 50);
+    const snippet = text.slice(start, end);
+    
+    const keywordStart = index - start;
+    const keywordEnd = keywordStart + query.length;
+
+    const before = snippet.slice(0, keywordStart);
+    const keyword = snippet.slice(keywordStart, keywordEnd);
+    const after = snippet.slice(keywordEnd);
+
+    const hasPrefix = start > 0;
+    const hasSuffix = end < text.length;
+
+    return (
+      <div className="slot-snippet">
+        {hasPrefix && "..."}
+        {before}
+        <mark className="search-keyword-highlight">{keyword}</mark>
+        {after}
+        {hasSuffix && "..."}
+      </div>
+    );
+  };
+  const highlightText = (text: string, query: string): React.ReactNode => {
+    if (!query.trim()) return text;
+    const lowerQuery = query.toLowerCase().trim();
+    const regex = new RegExp(`(${lowerQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')})`, 'gi');
+    const matches = [...text.matchAll(regex)];
+    if (matches.length === 0) return text;
+
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+
+    matches.forEach((match, idx) => {
+      const matchIndex = match.index!;
+      if (matchIndex > lastIndex) {
+        parts.push(text.slice(lastIndex, matchIndex));
+      }
+      parts.push(
+        <mark key={idx} className="search-keyword-highlight">
+          {text.slice(matchIndex, matchIndex + match[0].length)}
+        </mark>
+      );
+      lastIndex = matchIndex + match[0].length;
+    });
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return <>{parts}</>;
+  };
+
+  const filteredResumes = resumes.filter((resume) => {
+    if (!searchQuery.trim()) return true;
+    const queryLower = searchQuery.toLowerCase().trim();
+
+    const name = resume.name || "";
+    const template = resume.template || "";
+    const markdown = resume.markdown || "";
+    const formattedDate = formatDate(resume.timestamp);
+
+    return (
+      name.toLowerCase().includes(queryLower) ||
+      template.toLowerCase().includes(queryLower) ||
+      markdown.toLowerCase().includes(queryLower) ||
+      formattedDate.toLowerCase().includes(queryLower)
+    );
+  });
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -224,16 +323,32 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
 
           {/* Section: Saved Resumes List */}
           <div className="modal-section">
-            <h3 className="modal-section-title">
-              <FolderOpen size={14} />
-              <span>{t.savedResume}</span>
+            <h3 className="modal-section-title" style={{ justifyContent: "space-between", width: "100%" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <FolderOpen size={14} />
+                <span>{t.savedResume}</span>
+              </div>
+              {resumes.length > 0 && (
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="modal-search-input"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
             </h3>
 
             {resumes.length === 0 ? (
               <div className="empty-state">{t.noResumesSaved.replace(/Cookie/gi, "Storage")}</div>
+            ) : filteredResumes.length === 0 ? (
+              <div className="empty-state">
+                {lang === "zh" ? "没有找到匹配的简历" : "No matching resumes found"}
+              </div>
             ) : (
               <div className="resumes-list">
-                {resumes.map((resume) => (
+                {filteredResumes.map((resume) => (
                   <div
                     key={resume.id}
                     onClick={() => handleLoad(resume.id)}
@@ -241,10 +356,11 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                     title={(extraTranslations[lang] || extraTranslations["en"]).clickToLoad}
                   >
                     <div className="slot-info">
-                      <span className="slot-name">{resume.name}</span>
+                      <span className="slot-name">{highlightText(resume.name, searchQuery)}</span>
+                      {renderSnippet(resume.markdown, searchQuery)}
                       <span className="slot-meta">
-                        Template: {resume.template.toUpperCase()} •{" "}
-                        {formatDate(resume.timestamp)}
+                        Template: {highlightText(resume.template.toUpperCase(), searchQuery)} •{" "}
+                        {highlightText(formatDate(resume.timestamp), searchQuery)}
                       </span>
                     </div>
                     <div className="slot-actions">
@@ -275,3 +391,4 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     </div>
   );
 };
+

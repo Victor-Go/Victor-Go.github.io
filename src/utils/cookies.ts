@@ -63,7 +63,7 @@ export function saveResumeSlot(
   template: ResumeTemplate,
   existingId?: string,
   fileName?: string
-): { success: boolean; error?: string } {
+): { success: boolean; id?: string; error?: string } {
   try {
     const list = getSavedResumesList();
     const id = existingId || Math.random().toString(36).substring(2, 11);
@@ -95,7 +95,7 @@ export function saveResumeSlot(
     });
 
     localStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(updatedList));
-    return { success: true };
+    return { success: true, id };
   } catch (err: any) {
     console.error("Failed to save resume slot to localStorage:", err);
     return {

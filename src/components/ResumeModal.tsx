@@ -55,6 +55,8 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   const [newResumeName, setNewResumeName] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [lastLoadedId, setLastLoadedId] = useState<string | null>(null);
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
 
   const searchPlaceholderMap: Record<string, string> = {
     en: "Search...",
@@ -82,6 +84,8 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     // Sort by timestamp descending (most recent first)
     fullList.sort((a, b) => b.timestamp - a.timestamp);
     setResumes(fullList);
+    setLastLoadedId(localStorage.getItem("last_loaded_resume_id"));
+    setLastSavedId(localStorage.getItem("last_saved_resume_id"));
   };
 
   useEffect(() => {
@@ -138,6 +142,9 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     );
 
     if (result.success) {
+      if (result.id) {
+        localStorage.setItem("last_saved_resume_id", result.id);
+      }
       showToast(t.successSave, "success");
       setNewResumeName("");
       setErrorMsg(null);
@@ -150,6 +157,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   const handleLoad = (id: string) => {
     const data = loadResumeSlot(id);
     if (data) {
+      localStorage.setItem("last_loaded_resume_id", id);
       onLoad(data.markdown, data.styles, data.template, data.fileName);
       showToast((extraTranslations[lang] || extraTranslations["en"]).loadSuccess, "success");
       onClose();
@@ -163,6 +171,12 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     const extra = extraTranslations[lang] || extraTranslations["en"];
     if (confirm(extra.deleteConfirm)) {
       deleteResumeSlot(id);
+      if (localStorage.getItem("last_loaded_resume_id") === id) {
+        localStorage.removeItem("last_loaded_resume_id");
+      }
+      if (localStorage.getItem("last_saved_resume_id") === id) {
+        localStorage.removeItem("last_saved_resume_id");
+      }
       showToast(extra.deletedToast, "info");
       refreshList();
     }
@@ -184,6 +198,9 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
       currentFileName
     );
     if (result.success) {
+      if (result.id) {
+        localStorage.setItem("last_saved_resume_id", result.id);
+      }
       showToast(t.successSave, "success");
       refreshList();
     } else {
@@ -355,13 +372,49 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                     className="resume-slot-item"
                     title={(extraTranslations[lang] || extraTranslations["en"]).clickToLoad}
                   >
-                    <div className="slot-info">
-                      <span className="slot-name">{highlightText(resume.name, searchQuery)}</span>
-                      {renderSnippet(resume.markdown, searchQuery)}
-                      <span className="slot-meta">
-                        Template: {highlightText(resume.template.toUpperCase(), searchQuery)} •{" "}
-                        {highlightText(formatDate(resume.timestamp), searchQuery)}
-                      </span>
+                    <div className="slot-left-content" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div className="slot-info">
+                        <span className="slot-name">{highlightText(resume.name, searchQuery)}</span>
+                        {renderSnippet(resume.markdown, searchQuery)}
+                        <span className="slot-meta">
+                          Template: {highlightText(resume.template.toUpperCase(), searchQuery)} •{" "}
+                          {highlightText(formatDate(resume.timestamp), searchQuery)}
+                        </span>
+                      </div>
+                      {(resume.id === lastLoadedId || resume.id === lastSavedId) && (
+                        <div className="slot-status-tags" style={{ display: "flex", gap: "6px" }}>
+                          {resume.id === lastLoadedId && (
+                            <span className="status-tag status-tag-loaded" style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "2px 8px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              borderRadius: "12px",
+                              backgroundColor: "rgba(16, 185, 129, 0.1)",
+                              color: "#10b981",
+                              border: "1px solid rgba(16, 185, 129, 0.2)"
+                            }}>
+                              {(extraTranslations[lang] || extraTranslations["en"]).lastLoaded}
+                            </span>
+                          )}
+                          {resume.id === lastSavedId && (
+                            <span className="status-tag status-tag-saved" style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "2px 8px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              borderRadius: "12px",
+                              backgroundColor: "rgba(99, 102, 241, 0.1)",
+                              color: "#6366f1",
+                              border: "1px solid rgba(99, 102, 241, 0.2)"
+                            }}>
+                              {(extraTranslations[lang] || extraTranslations["en"]).lastSaved}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="slot-actions">
                       <button

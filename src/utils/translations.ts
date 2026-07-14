@@ -1334,6 +1334,8 @@ export interface ExtraTranslations {
   metaTitleSuffix: string;
   githubStarText: string;
   linkTab: string;
+  lastLoaded: string;
+  lastSaved: string;
 }
 
 export const extraTranslations: Record<string, ExtraTranslations> = {
@@ -1406,7 +1408,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Reset all styles",
     metaTitleSuffix: "Design A4 Resumes Client-Side",
     githubStarText: "If you find this project helpful, please consider giving it a star on GitHub! ⭐",
-    linkTab: "Link"
+    linkTab: "Link",
+    lastLoaded: "Last Loaded",
+    lastSaved: "Last Saved"
   },
   zh: {
     deleteConfirm: "确定要删除此简历备份吗？此操作无法撤销。",
@@ -1477,7 +1481,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "重置所有样式",
     metaTitleSuffix: "专业 Markdown 简历排版生成器",
     githubStarText: "如果您觉得本项目有帮助，请在 GitHub 上点个 Star 支持一下！⭐",
-    linkTab: "链接"
+    linkTab: "链接",
+    lastLoaded: "上次加载",
+    lastSaved: "上次保存"
   },
   fr: {
     deleteConfirm: "Voulez-vous vraiment supprimer ce CV ? Cette opération est irréversible.",
@@ -1548,7 +1554,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "重置所有样式",
     metaTitleSuffix: "专业 Markdown 简历排版生成器",
     githubStarText: "Si vous trouvez ce projet utile, n'hésitez pas à lui attribuer une étoile sur GitHub ! ⭐",
-    linkTab: "Lien"
+    linkTab: "Lien",
+    lastLoaded: "Dernier chargement",
+    lastSaved: "Dernier enregistrement"
   },
   de: {
     deleteConfirm: "Sind Sie sicher, dass Sie diesen Lebenslauf löschen möchten? Dies kann nicht rückgängig gemacht werden.",
@@ -1619,7 +1627,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Alle Stile zurücksetzen",
     metaTitleSuffix: "Professioneller Markdown-Lebenslauf-Generator",
     githubStarText: "Wenn Sie dieses Projekt nützlich finden, geben Sie ihm bitte einen Stern auf GitHub! ⭐",
-    linkTab: "Link"
+    linkTab: "Link",
+    lastLoaded: "Zuletzt geladen",
+    lastSaved: "Zuletzt gespeichert"
   },
   it: {
     deleteConfirm: "Sei sicuro di voler eliminare questo curriculum? L'azione non può essere annullata.",
@@ -1690,7 +1700,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Réinitialiser tous les styles",
     metaTitleSuffix: "Concevoir des CV A4 côté client",
     githubStarText: "Se trovi utile questo progetto, considera di mettere una stella su GitHub! ⭐",
-    linkTab: "Link"
+    linkTab: "Link",
+    lastLoaded: "Ultimo caricamento",
+    lastSaved: "Ultimo salvataggio"
   },
   es: {
     deleteConfirm: "¿Está seguro de que desea eliminar este currículum? Esta acción no se puede deshacer.",
@@ -1761,7 +1773,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Réinitialiser tous les styles",
     metaTitleSuffix: "Concevoir des CV A4 côté client",
     githubStarText: "Si este proyecto te resulta útil, ¡considera darle una estrella en GitHub! ⭐",
-    linkTab: "Enlace"
+    linkTab: "Enlace",
+    lastLoaded: "Última carga",
+    lastSaved: "Último guardado"
   },
   pt: {
     deleteConfirm: "Tem certeza de que deseja excluir este currículo? Esta ação não pode ser desfeita.",
@@ -1831,8 +1845,10 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     stylesTitle: "Stilkonfiguration",
     resetTooltip: "Alle Stile zurücksetzen",
     metaTitleSuffix: "A4-Lebensläufe clientseitig entwerfen",
-    githubStarText: "Se você achar este projeto útil, por favor, dê uma estrela no GitHub! ⭐",
-    linkTab: "Link"
+    githubStarText: "Se você achar este projeto útil, por favor, considere dar uma estrela no GitHub! ⭐",
+    linkTab: "Link",
+    lastLoaded: "Último carregamento",
+    lastSaved: "Último salvo"
   },
   ja: {
     deleteConfirm: "この履歴書のバックアップを削除してもよろしいですか？この操作は取り消せません。",
@@ -1903,7 +1919,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Alle Stile zurücksetzen",
     metaTitleSuffix: "A4-Lebensläufe clientseitig entwerfen",
     githubStarText: "このプロジェクトが気に入ったら、GitHubでスターをお願いします！⭐",
-    linkTab: "リンク"
+    linkTab: "リンク",
+    lastLoaded: "最終読み込み",
+    lastSaved: "最終保存"
   },
   ko: {
     deleteConfirm: "이 이력서 백업을 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
@@ -1974,7 +1992,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Ripristina tutti gli stili",
     metaTitleSuffix: "Progetta CV A4 lato client",
     githubStarText: "이 프로젝트가 유용하셨다면 GitHub에서 스타를 눌러주세요! ⭐",
-    linkTab: "링크"
+    linkTab: "링크",
+    lastLoaded: "최근 불러옴",
+    lastSaved: "최근 저장됨"
   },
   ru: {
     deleteConfirm: "Вы уверены, что хотите удалить эту резервную копию резюме? Это действие необратимо.",
@@ -2045,7 +2065,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Ripristina tutti gli stili",
     metaTitleSuffix: "Progetta CV A4 lato client",
     githubStarText: "Если проект вам понравился, поставьте, пожалуйста, звезду на GitHub! ⭐",
-    linkTab: "Ссылка"
+    linkTab: "Ссылка",
+    lastLoaded: "Последняя загрузка",
+    lastSaved: "Последнее сохранение"
   },
   "zh-tw": {
     deleteConfirm: "確定要刪除此履歷備份嗎？此操作無法復原。",
@@ -2116,7 +2138,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "重置所有樣式",
     metaTitleSuffix: "專業 Markdown 履歷排版生成器",
     githubStarText: "如果您覺得本專案有幫助，請在 GitHub 上點個 Star 支持一下！⭐",
-    linkTab: "連結"
+    linkTab: "連結",
+    lastLoaded: "上次載入",
+    lastSaved: "上次儲存"
   },
   uk: {
     deleteConfirm: "Ви впевнені, що хочете видалити цю копію резюме? Цю дію не можна скасувати.",
@@ -2187,6 +2211,8 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     resetTooltip: "Restablecer todos los estilos",
     metaTitleSuffix: "Diseño de currículums A4 en el cliente",
     githubStarText: "Якщо проект став вам у пригоді, будь ласка, поставте зірку на GitHub! ⭐",
-    linkTab: "Посилання"
+    linkTab: "Посилання",
+    lastLoaded: "Останнє завантаження",
+    lastSaved: "Останнє збереження"
   },
 };

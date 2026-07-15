@@ -189,6 +189,7 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
 
   // Collapsible sections state
   const [isLayoutOpen, setIsLayoutOpen] = useState(true);
+  const [isMarginsOpen, setIsMarginsOpen] = useState(true);
   const [isSizesOpen, setIsSizesOpen] = useState(true);
   const [isPresetsOpen, setIsPresetsOpen] = useState(true);
   const [isOverridesOpen, setIsOverridesOpen] = useState(true);
@@ -293,6 +294,57 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+        )}
+      </div>
+ 
+      {/* Margins Section */}
+      <div className="control-section">
+        <button
+          type="button"
+          onClick={() => setIsMarginsOpen(!isMarginsOpen)}
+          className="section-header-toggle"
+        >
+          <span className="section-title">
+            <Layout size={16} />
+            {t.margins}
+          </span>
+          {isMarginsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {isMarginsOpen && (
+          <div className="collapsible-content sliders-stack">
+            {/* Horizontal Margin */}
+            <div className="slider-item">
+              <div className="slider-header">
+                <span>{t.marginHorizontal}</span>
+                <span className="slider-value">{styles.marginHorizontal}mm</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value={styles.marginHorizontal}
+                onChange={(e) => updateStyle("marginHorizontal", parseInt(e.target.value))}
+                className="app-slider"
+              />
+            </div>
+
+            {/* Vertical Margin */}
+            <div className="slider-item">
+              <div className="slider-header">
+                <span>{t.marginVertical}</span>
+                <span className="slider-value">{styles.marginVertical}mm</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                value={styles.marginVertical}
+                onChange={(e) => updateStyle("marginVertical", parseInt(e.target.value))}
+                className="app-slider"
+              />
+            </div>
           </div>
         )}
       </div>

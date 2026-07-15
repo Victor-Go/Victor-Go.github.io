@@ -164,6 +164,8 @@ export const Preview: React.FC<PreviewProps> = ({
       "--preview-h4-size": `${styles.h4Size}px`,
       "--preview-h5-size": `${styles.h5Size}px`,
       "--preview-h6-size": `${styles.h6Size}px`,
+      "--preview-margin-horizontal": `${styles.marginHorizontal !== undefined ? styles.marginHorizontal : 18}mm`,
+      "--preview-margin-vertical": `${styles.marginVertical !== undefined ? styles.marginVertical : 20}mm`,
     };
 
     const keys: ("global" | "h1" | "h2" | "h3" | "p" | "strong" | "em" | "a")[] = [

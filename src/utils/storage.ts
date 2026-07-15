@@ -13,6 +13,8 @@ export interface AppStyles {
   h4Size: number;
   h5Size: number;
   h6Size: number;
+  marginHorizontal: number;
+  marginVertical: number;
   global: ElementStyle; // Overall / Global overrides
   h1: ElementStyle;
   h2: ElementStyle;
@@ -31,6 +33,8 @@ export const defaultStyles: AppStyles = {
   h4Size: 14,
   h5Size: 13,
   h6Size: 12,
+  marginHorizontal: 18,
+  marginVertical: 20,
   global: {
     color: "inherit",
     fontFamily: "inherit",

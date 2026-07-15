@@ -828,7 +828,7 @@ body {
   background: white;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   box-sizing: border-box;
-  padding: 20mm 18mm;
+  padding: var(--preview-margin-vertical, 20mm) var(--preview-margin-horizontal, 18mm);
   position: relative;
   text-align: left;
   line-height: 1.6;
@@ -1242,7 +1242,7 @@ body {
 /* --- 9. DENSE COMPACT (compact) --- */
 #preview-container.template-compact {
   font-family: var(--preview-p-font, 'Open Sans', sans-serif);
-  padding: 10mm 10mm !important; /* Force tighter margins */
+  padding: var(--preview-margin-vertical, 10mm) var(--preview-margin-horizontal, 10mm) !important; /* Force tighter margins */
   line-height: 1.35;
   --template-h1-color: #1e3a8a;
   --template-h1-size: 24px;
@@ -1386,7 +1386,7 @@ body {
   background: var(--preview-h1-color, #1e3a8a);
   color: white;
   padding: 30px;
-  margin: -20mm -18mm 2em -18mm; /* pull to margins of preview A4 container */
+  margin: calc(-1 * var(--preview-margin-vertical, 20mm)) calc(-1 * var(--preview-margin-horizontal, 18mm)) 2em calc(-1 * var(--preview-margin-horizontal, 18mm));
   border-bottom: 4px solid var(--preview-h2-color, #2563eb);
 }
 #preview-container.template-executive .resume-header h1 {
@@ -2107,9 +2107,9 @@ body {
 
   #preview-container.template-executive .resume-header {
     margin-top: 0 !important;
-    margin-left: -18mm !important;
-    margin-right: -18mm !important;
-    padding-top: 20mm !important;
+    margin-left: calc(-1 * var(--preview-margin-horizontal, 18mm)) !important;
+    margin-right: calc(-1 * var(--preview-margin-horizontal, 18mm)) !important;
+    padding-top: var(--preview-margin-vertical, 20mm) !important;
   }
 
   /* Avoid awkward vertical pagination splitting for structural content blocks */

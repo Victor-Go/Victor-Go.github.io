@@ -144,6 +144,11 @@ export const Editor: React.FC<EditorProps> = ({ markdown, onChange, lang }) => {
   // Synchronize selection/highlight and jump/scroll to matched word as user types
   useEffect(() => {
     if (showReplacePanel && matches.length > 0) {
+      // If the user is currently focusing/editing the textarea, do not disrupt their focus/selection/scrolling
+      if (document.activeElement === textareaRef.current) {
+        return;
+      }
+
       const match = matches[currentMatchIndex];
       if (match && textareaRef.current) {
         const textarea = textareaRef.current;
@@ -152,19 +157,27 @@ export const Editor: React.FC<EditorProps> = ({ markdown, onChange, lang }) => {
         textarea.setSelectionRange(match.start, match.end);
 
         // 2. Scroll the matched line into the center of the textarea
-        const textBefore = markdown.slice(0, match.start);
-        const lineIndex = textBefore.split("\n").length - 1;
+        // Try to scroll precisely using the highlight overlay element (works with wrapped lines)
+        const currentHighlight = overlayRef.current?.querySelector(".search-highlight-current") as HTMLElement;
+        if (currentHighlight) {
+          const offsetTop = currentHighlight.offsetTop;
+          textarea.scrollTop = offsetTop - (textarea.clientHeight / 2) + (currentHighlight.clientHeight / 2);
+        } else {
+          // Fallback to line-based calculation
+          const textBefore = markdown.slice(0, match.start);
+          const lineIndex = textBefore.split("\n").length - 1;
 
-        const computedStyle = window.getComputedStyle(textarea);
-        const fontSize = parseFloat(computedStyle.fontSize) || 13;
-        const lineHeightVal = computedStyle.lineHeight;
-        let lineHeight = fontSize * 1.6; // default fallback
-        if (lineHeightVal && lineHeightVal !== "normal") {
-          lineHeight = parseFloat(lineHeightVal);
+          const computedStyle = window.getComputedStyle(textarea);
+          const fontSize = parseFloat(computedStyle.fontSize) || 13;
+          const lineHeightVal = computedStyle.lineHeight;
+          let lineHeight = fontSize * 1.6; // default fallback
+          if (lineHeightVal && lineHeightVal !== "normal") {
+            lineHeight = parseFloat(lineHeightVal);
+          }
+
+          const targetScrollTop = lineIndex * lineHeight;
+          textarea.scrollTop = targetScrollTop - (textarea.clientHeight / 2) + (lineHeight / 2);
         }
-
-        const targetScrollTop = lineIndex * lineHeight;
-        textarea.scrollTop = targetScrollTop - (textarea.clientHeight / 2) + (lineHeight / 2);
       }
     }
   }, [currentMatchIndex, matches, showReplacePanel, markdown]);

@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { marked } from "marked";
-import { Eye } from "lucide-react";
+import { Eye, Maximize2, FileText } from "lucide-react";
 import type { AppStyles } from "../utils/storage";
 import type { ResumeTemplate } from "../utils/cookies";
 import { translations } from "../utils/translations";
@@ -150,6 +150,51 @@ export const Preview: React.FC<PreviewProps> = ({
   avoidPageBreakLevels,
 }) => {
   const t = translations[lang];
+  const [previewMode, setPreviewMode] = useState<"fit-width" | "real-size">("fit-width");
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [containerHeight, setContainerHeight] = useState(1123);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const container = containerRef.current;
+    if (!viewport || !container) return;
+
+    const handleResize = () => {
+      if (previewMode === "real-size") {
+        const computedStyle = window.getComputedStyle(viewport);
+        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+        const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+        const viewportWidth = viewport.clientWidth - (paddingLeft + paddingRight);
+
+        const a4Width = 794; // 210mm in pixels at 96dpi (793.7px)
+
+        if (viewportWidth < a4Width && viewportWidth > 0) {
+          setScale(viewportWidth / a4Width);
+        } else {
+          setScale(1);
+        }
+
+        setContainerHeight(container.offsetHeight);
+      } else {
+        setScale(1);
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    resizeObserver.observe(viewport);
+    resizeObserver.observe(container);
+
+    handleResize();
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [markdown, styles, template, previewMode]);
 
   // Dynamic CSS custom variables map
   const inlineStyles = useMemo(() => {
@@ -226,18 +271,71 @@ export const Preview: React.FC<PreviewProps> = ({
           }
         `}
       </style>
-      <div className="pane-header">
-        <Eye size={16} />
-        <h2>{t.preview}</h2>
+      <div className="pane-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Eye size={16} />
+          <h2>{t.preview}</h2>
+        </div>
+        <div className="preview-mode-toggle">
+          <button
+            type="button"
+            className={`preview-mode-btn ${previewMode === "fit-width" ? "active" : ""}`}
+            onClick={() => setPreviewMode("fit-width")}
+            title={t.fitWidthTitle}
+          >
+            <Maximize2 size={13} />
+            <span>{t.fitWidth}</span>
+          </button>
+          <button
+            type="button"
+            className={`preview-mode-btn ${previewMode === "real-size" ? "active" : ""}`}
+            onClick={() => setPreviewMode("real-size")}
+            title={t.realSizeTitle}
+          >
+            <FileText size={13} />
+            <span>{t.realSize}</span>
+          </button>
+        </div>
       </div>
-      <div className="preview-scroll-viewport">
-        <div
-          id="preview-container"
-          className={`template-${template} ${avoidClasses}`}
-          style={inlineStyles}
-          data-avoid-break={avoidPageBreak}
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
+      <div className="preview-scroll-viewport" ref={viewportRef}>
+        {previewMode === "real-size" ? (
+          <div
+            className="preview-scale-wrapper"
+            style={{
+              width: `${794 * scale}px`,
+              height: `${containerHeight * scale}px`,
+              overflow: "hidden",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "flex-start",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              id="preview-container"
+              ref={containerRef}
+              className={`template-${template} ${avoidClasses} preview-mode-real-size`}
+              style={{
+                ...inlineStyles,
+                transform: `scale(${scale})`,
+                transformOrigin: "top center",
+                width: "210mm",
+                flexShrink: 0,
+              }}
+              data-avoid-break={avoidPageBreak}
+              dangerouslySetInnerHTML={{ __html: htmlContent }}
+            />
+          </div>
+        ) : (
+          <div
+            id="preview-container"
+            ref={containerRef}
+            className={`template-${template} ${avoidClasses} preview-mode-fit-width`}
+            style={inlineStyles}
+            data-avoid-break={avoidPageBreak}
+            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          />
+        )}
       </div>
     </div>
   );

@@ -60,7 +60,11 @@ export interface Translations {
   find: string;
   replace: string;
   replaceAll: string;
-}
+
+  fitWidth: string;
+  realSize: string;
+  fitWidthTitle: string;
+  realSizeTitle: string;}
 
 export const translations: Record<
   | "en"
@@ -138,7 +142,11 @@ export const translations: Record<
     close: "Close",
     replace: "Replace",
     replaceAll: "Replace All",
-    defaultResume: `# John Doe
+        fitWidth: "Fit Width",
+    realSize: "Real Size",
+    fitWidthTitle: "Fit Width (Real Font Size)",
+    realSizeTitle: "Real Size (A4 Page)",
+defaultResume: `# John Doe
 **Senior Software Engineer**  
 📧 john.doe@email.com | 📱 +1 (123) 456-7890 
 
@@ -240,7 +248,11 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     close: "关闭",
     replace: "替换",
     replaceAll: "全部替换",
-    defaultResume: `# 张三
+        fitWidth: "适应宽度",
+    realSize: "真实大小",
+    fitWidthTitle: "适应宽度 (真实字号)",
+    realSizeTitle: "真实大小 (A4 页面)",
+defaultResume: `# 张三
 **高级软件工程师**  
 📧 zhangsan@email.com | 📱 +86 138-0000-0000 
 
@@ -342,7 +354,11 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
     find: "Rechercher",
     replace: "Remplacer",
     replaceAll: "Tout remplacer",
-    defaultResume: `# Jean Dupont
+        fitWidth: "Ajuster la largeur",
+    realSize: "Taille réelle",
+    fitWidthTitle: "Ajuster la largeur (taille de police réelle)",
+    realSizeTitle: "Taille réelle (page A4)",
+defaultResume: `# Jean Dupont
 **Ingénieur Logiciel Senior**  
 📧 jean.dupont@email.com | 📱 +33 6 12 34 56 78 
 
@@ -444,7 +460,11 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
     find: "Suchen",
     replace: "Ersetzen",
     replaceAll: "Alle ersetzen",
-    defaultResume: `# Max Mustermann
+        fitWidth: "Breite anpassen",
+    realSize: "Tatsächliche Größe",
+    fitWidthTitle: "Breite anpassen (tatsächliche Schriftgröße)",
+    realSizeTitle: "Tatsächliche Größe (A4-Seite)",
+defaultResume: `# Max Mustermann
 **Senior Softwareentwickler**  
 📧 max.mustermann@email.de | 📱 +49 170 1234567 
 
@@ -546,7 +566,11 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
     find: "Trova",
     replace: "Sostituisci",
     replaceAll: "Sostituisci tutto",
-    defaultResume: `# Mario Rossi
+        fitWidth: "Adatta alla larghezza",
+    realSize: "Dimensioni reali",
+    fitWidthTitle: "Adatta alla larghezza (dimensione carattere reale)",
+    realSizeTitle: "Dimensioni reali (pagina A4)",
+defaultResume: `# Mario Rossi
 **Sviluppatore Software Senior**  
 📧 mario.rossi@email.it | 📱 +39 333 123 4567 
 
@@ -648,7 +672,11 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
     find: "Buscar",
     replace: "Reemplazar",
     replaceAll: "Reemplazar todo",
-    defaultResume: `# Juan Pérez
+        fitWidth: "Ajustar al ancho",
+    realSize: "Tamaño real",
+    fitWidthTitle: "Ajustar al ancho (tamaño de fuente real)",
+    realSizeTitle: "Tamaño real (página A4)",
+defaultResume: `# Juan Pérez
 **Ingeniero de Software Senior**  
 📧 juan.perez@email.es | 📱 +34 600 123 456 
 
@@ -750,7 +778,11 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
     find: "Localizar",
     replace: "Substituir",
     replaceAll: "Substituir tudo",
-    defaultResume: `# João Silva
+        fitWidth: "Ajustar à largura",
+    realSize: "Tamanho real",
+    fitWidthTitle: "Ajustar à largura (tamanho de fonte real)",
+    realSizeTitle: "Tamanho real (página A4)",
+defaultResume: `# João Silva
 **Engenheiro de Software Sénior**  
 📧 joao.silva@email.pt | 📱 +351 912 345 678 
 
@@ -852,7 +884,11 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     find: "検索",
     replace: "置換",
     replaceAll: "すべて置換",
-    defaultResume: `# 田中 太郎
+        fitWidth: "幅に合わせる",
+    realSize: "実際のサイズ",
+    fitWidthTitle: "幅に合わせる (実際のフォントサイズ)",
+    realSizeTitle: "実際のサイズ (A4 ページ)",
+defaultResume: `# 田中 太郎
 **シニアソフトウェアエンジニア**  
 📧 taro.tanaka@email.jp | 📱 +81 90-1234-5678 
 
@@ -954,7 +990,11 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     find: "찾기",
     replace: "바꾸기",
     replaceAll: "모두 바꾸기",
-    defaultResume: `# 김철수
+        fitWidth: "너비 맞춤",
+    realSize: "실제 크기",
+    fitWidthTitle: "너비 맞춤 (실제 글꼴 크기)",
+    realSizeTitle: "실제 크기 (A4 페이지)",
+defaultResume: `# 김철수
 **시니어 소프트웨어 엔지니어**  
 📧 chulsoo.kim@email.kr | 📱 +82 10-1234-5678 
 
@@ -1056,7 +1096,11 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     find: "Найти",
     replace: "Заменить",
     replaceAll: "Заменить все",
-    defaultResume: `# Иван Иванов
+        fitWidth: "По ширине",
+    realSize: "Реальный размер",
+    fitWidthTitle: "По ширине (реальный размер шрифта)",
+    realSizeTitle: "Реальный размер (A4)",
+defaultResume: `# Иван Иванов
 **Старший разработчик программного обеспечения**  
 📧 ivan.ivanov@email.ru | 📱 +7 (999) 123-45-67 
 
@@ -1158,7 +1202,11 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     find: "尋找",
     replace: "替換",
     replaceAll: "全部替換",
-    defaultResume: `# 張三
+        fitWidth: "適應寬度",
+    realSize: "真實大小",
+    fitWidthTitle: "適應寬度 (真實字號)",
+    realSizeTitle: "真實大小 (A4 頁面)",
+defaultResume: `# 張三
 **高級軟體工程師**  
 📧 zhangsan@email.com | 📱 +886 912 345 678 
 
@@ -1260,7 +1308,11 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
     find: "Знайти",
     replace: "Замінити",
     replaceAll: "Замінити все",
-    defaultResume: `# Олександр Коваленко
+        fitWidth: "По ширині",
+    realSize: "Реальний розмір",
+    fitWidthTitle: "По ширині (реальний розмір шрифту)",
+    realSizeTitle: "Реальний розмір (A4)",
+defaultResume: `# Олександр Коваленко
 **Старший розробник програмного забезпечення**  
 📧 o.kovalenko@email.ua | 📱 +380 50 123 4567 
 

@@ -26,12 +26,13 @@ A premium, high-fidelity, client-side Markdown resume generator. Design and writ
 
 ---
 
-## 🛠️ Technology Stack
-
 - **Framework:** React 19 + TypeScript 6
+- **State Management:** Zustand (decoupled stores and persistence layers)
 - **Build Tool:** Vite 8 (Ultra-fast Hot Module Replacement)
 - **Markdown Compiler:** Marked.js (Speed-oriented parser)
+- **PDF Engine:** Browser-native print engine (100% vector, ATS-friendly A4 PDFs)
 - **Icons:** Lucide React
+- **Testing:** Vitest + React Testing Library (30+ automated tests verifying editor find/replace, custom styles, language fallback logic, and happy-path integration)
 - **Formatting & Verification:** Husky + Lint-staged + Oxlint (extremely fast static analyzer)
 
 ---
@@ -55,7 +56,17 @@ npm run dev
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### 4. Build Production Bundle
+### 4. Running Tests
+Run tests in watch mode:
+```bash
+npm run test
+```
+Or run the full test suite once:
+```bash
+npm run test:run
+```
+
+### 5. Build Production Bundle
 ```bash
 npm run build
 ```

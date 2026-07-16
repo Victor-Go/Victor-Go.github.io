@@ -2088,8 +2088,10 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding-top: 0 !important; /* Force margin/padding top reset to fit page 1 */
-    padding-bottom: 0 !important; /* Prevent extra blank page overflow */
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: var(--preview-margin-horizontal, 18mm) !important;
+    padding-right: var(--preview-margin-horizontal, 18mm) !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
     height: auto !important;

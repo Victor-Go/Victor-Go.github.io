@@ -101,9 +101,6 @@ function structureResumeHtml(rawHtml: string): string {
       const secName = el.textContent?.toLowerCase().trim().replace(/[^a-z0-9\u4e00-\u9fa5]/gi, "") || "item";
       currentSection.className = `resume-section section-${secName}`;
       currentSection.appendChild(el.cloneNode(true));
-    } else if (el.tagName === "H1") {
-      // H1 goes to header
-      headerDiv.appendChild(el.cloneNode(true));
     } else {
       if (inHeader) {
         headerDiv.appendChild(el.cloneNode(true));
@@ -213,8 +210,22 @@ export const Preview: React.FC<PreviewProps> = ({
     ? avoidPageBreakLevels.map((lvl) => `avoid-${lvl}`).join(" ")
     : "";
 
+  const verticalMargin = styles.marginVertical !== undefined ? styles.marginVertical : 20;
+
   return (
     <div className="preview-container-wrapper">
+      <style>
+        {`
+          @media print {
+            @page {
+              margin-top: ${verticalMargin}mm !important;
+              margin-bottom: ${verticalMargin}mm !important;
+              margin-left: 0 !important;
+              margin-right: 0 !important;
+            }
+          }
+        `}
+      </style>
       <div className="pane-header">
         <Eye size={16} />
         <h2>{t.preview}</h2>

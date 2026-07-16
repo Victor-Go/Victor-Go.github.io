@@ -329,7 +329,22 @@ function App() {
     loadedFileName?: string
   ) => {
     setMarkdown(loadedMd);
-    setStyles(loadedStyles);
+    
+    // Deep merge loadedStyles with defaultStyles to avoid setting properties (like margins) to undefined
+    const mergedStyles: AppStyles = {
+      ...defaultStyles,
+      ...loadedStyles,
+      global: { ...defaultStyles.global, ...loadedStyles?.global },
+      h1: { ...defaultStyles.h1, ...loadedStyles?.h1 },
+      h2: { ...defaultStyles.h2, ...loadedStyles?.h2 },
+      h3: { ...defaultStyles.h3, ...loadedStyles?.h3 },
+      p: { ...defaultStyles.p, ...loadedStyles?.p },
+      strong: { ...defaultStyles.strong, ...loadedStyles?.strong },
+      em: { ...defaultStyles.em, ...loadedStyles?.em },
+      a: { ...defaultStyles.a, ...loadedStyles?.a },
+    };
+
+    setStyles(mergedStyles);
     setTemplate(loadedTemplate);
     if (loadedFileName) {
       setFileName(loadedFileName);

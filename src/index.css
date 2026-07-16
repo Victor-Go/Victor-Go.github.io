@@ -819,12 +819,78 @@ body {
   align-items: flex-start;
 }
 
+/* Preview Mode Toggles */
+.preview-mode-toggle {
+  display: flex;
+  background-color: var(--bg-input);
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+
+.preview-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-system);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.preview-mode-btn:hover {
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.preview-mode-btn.active {
+  color: #ffffff;
+  background-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.preview-mode-btn svg {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.preview-mode-btn:active svg {
+  transform: scale(0.9);
+}
+
+#preview-container.preview-mode-fit-width {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: auto !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}
+
+#preview-container.preview-mode-real-size {
+  width: 210mm !important;
+  min-height: 297mm !important;
+  margin: 0 auto !important;
+  flex-shrink: 0 !important;
+}
+
 /* ==========================================
    STRICTLY SCOPED RESUME PREVIEW
    ========================================== */
 #preview-container {
   width: 210mm; /* A4 Width */
   min-height: 297mm; /* A4 Height */
+  margin: 0 auto;
+  flex-shrink: 0;
   background: white;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   box-sizing: border-box;
@@ -2070,7 +2136,8 @@ body {
   .workspace-main,
   .workspace-right,
   .preview-container-wrapper,
-  .preview-scroll-viewport {
+  .preview-scroll-viewport,
+  .preview-scale-wrapper {
     display: block !important;
     width: 100% !important;
     height: auto !important;
@@ -2082,6 +2149,7 @@ body {
   }
 
   #preview-container {
+    transform: none !important;
     box-shadow: none !important;
     border: none !important;
     background: #ffffff !important;
@@ -2166,60 +2234,131 @@ body {
 }
 
 @media screen and (max-width: 1124px) {
+  /* Hide the low-res barrier */
   .low-res-barrier {
-    display: flex;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: #0f172a;
-    color: #f8fafc;
-    z-index: 999999;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 32px;
-    box-sizing: border-box;
-    font-family: 'Outfit', 'Inter', sans-serif;
-  }
-
-  .barrier-content {
-    max-width: 500px;
-    background: rgba(30, 41, 59, 0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 40px;
-    border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .barrier-icon {
-    color: #6366f1;
-    margin-bottom: 24px;
-  }
-
-  .barrier-content h2 {
-    font-size: 24px;
-    font-weight: 700;
-    margin-bottom: 16px;
-    color: #ffffff;
-  }
-
-  .barrier-content p {
-    font-size: 15px;
-    color: #cbd5e1;
-    line-height: 1.6;
-    margin: 0;
-  }
-
-  /* Hide the main app layout when barrier is active */
-  .app-workspace {
     display: none !important;
+  }
+
+  /* Ensure the workspace layout is visible and stacks vertically */
+  .app-workspace {
+    display: flex !important;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Header mobile styling */
+  .app-header {
+    flex-wrap: wrap;
+    height: auto !important;
+    padding: 8px 12px !important;
+    gap: 8px !important;
+  }
+
+  .header-logo {
+    margin-right: auto;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+
+  .header-file-wrapper {
+    flex-grow: 1;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+  }
+
+  .header-file-input {
+    width: 100%;
+  }
+
+  /* Collapse button text to icons on screens under 768px */
+  @media screen and (max-width: 768px) {
+    .btn-text {
+      display: none !important;
+    }
+    .action-btn {
+      padding: 8px !important;
+      min-width: 36px;
+      justify-content: center;
+    }
+  }
+
+  /* Mobile Tabs Navigation Bar */
+  .mobile-tabs-nav {
+    display: flex;
+    background-color: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    z-index: 90;
+  }
+
+  .mobile-tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-family: var(--font-system);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 8px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    text-align: center;
+    outline: none;
+  }
+
+  .mobile-tab-btn:hover {
+    color: var(--text-main);
+  }
+
+  .mobile-tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+
+  /* Workspace Main container on mobile */
+  .workspace-mobile {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mobile-active-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  /* Force components to fill container on mobile */
+  .mobile-active-pane > .style-controls-container,
+  .mobile-active-pane > .editor-container,
+  .mobile-active-pane > .preview-container-wrapper {
+    flex: 1;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Mobile Page Break Tip stacking */
+  .page-break-tip {
+    display: flex;
+    flex-direction: column;
+    height: auto !important;
+    padding: 10px 16px !important;
+    gap: 8px !important;
+    text-align: center;
+    align-items: center;
   }
 }
 

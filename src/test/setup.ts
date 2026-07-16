@@ -6,3 +6,10 @@ import { afterEach } from 'vitest';
 afterEach(() => {
   cleanup();
 });
+
+// Mock ResizeObserver for jsdom test environment
+globalThis.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};

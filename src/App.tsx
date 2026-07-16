@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FileDown,
   Download,
@@ -7,7 +7,6 @@ import {
   Database,
   ChevronLeft,
   ChevronRight,
-  Monitor,
 } from "lucide-react";
 import { Editor } from "./components/Editor";
 import { Preview } from "./components/Preview";
@@ -15,28 +14,15 @@ import { StyleControls } from "./components/StyleControls";
 import { LanguageSelector } from "./components/LanguageSelector";
 import { ResumeModal } from "./components/ResumeModal";
 import type { ResumeTemplate } from "./utils/cookies";
-import {
-  loadStylesFromStorage,
-  saveStylesToStorage,
-  defaultStyles,
-} from "./utils/storage";
+import { defaultStyles } from "./utils/storage";
 import type { AppStyles } from "./utils/storage";
 import { translations, extraTranslations } from "./utils/translations";
-import { generateResumePDF } from "./utils/pdf";
-
-type SupportedLang =
-  | "en"
-  | "zh"
-  | "zh-tw"
-  | "fr"
-  | "de"
-  | "it"
-  | "es"
-  | "pt"
-  | "ja"
-  | "ko"
-  | "ru"
-  | "uk";
+import { useResumeStore } from "./stores/useResumeStore";
+import { useLayoutStore } from "./stores/useLayoutStore";
+import { useUIStore } from "./stores/useUIStore";
+import { useLanguage } from "./hooks/useLanguage";
+import { useResumePersistence } from "./hooks/useResumePersistence";
+import { usePrint } from "./hooks/usePrint";
 
 const getFileNameLabel = (lang: string): string => {
   switch (lang) {
@@ -55,162 +41,87 @@ const getFileNameLabel = (lang: string): string => {
   }
 };
 
+const getTabLabels = (lang: string) => {
+  switch (lang) {
+    case "zh":
+      return { styles: "样式", editor: "编辑", preview: "预览" };
+    case "zh-tw":
+      return { styles: "樣式", editor: "編輯", preview: "預覽" };
+    case "fr":
+      return { styles: "Styles", editor: "Éditeur", preview: "Aperçu" };
+    case "de":
+      return { styles: "Stile", editor: "Editor", preview: "Vorschau" };
+    case "it":
+      return { styles: "Stili", editor: "Editor", preview: "Anteprima" };
+    case "es":
+      return { styles: "Estilos", editor: "Editor", preview: "Vista previa" };
+    case "pt":
+      return { styles: "Estilos", editor: "Editor", preview: "Visualização" };
+    case "ja":
+      return { styles: "スタイル", editor: "編集", preview: "プレビュー" };
+    case "ko":
+      return { styles: "스타일", editor: "편집기", preview: "미리보기" };
+    case "ru":
+      return { styles: "Стили", editor: "Редактор", preview: "Предпросмотр" };
+    case "uk":
+      return { styles: "Стилі", editor: "Редактор", preview: "Перегляд" };
+    default:
+      return { styles: "Styles", editor: "Editor", preview: "Preview" };
+  }
+};
+
 function App() {
-  const [lang, setLang] = useState<SupportedLang>(() => {
-    const supported: SupportedLang[] = [
-      "en",
-      "zh",
-      "zh-tw",
-      "fr",
-      "de",
-      "it",
-      "es",
-      "pt",
-      "ja",
-      "ko",
-      "ru",
-      "uk",
-    ];
-    // Check URL parameters first for crawler / link sharing routing
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlLang = urlParams.get("lang");
-    if (urlLang && supported.includes(urlLang as SupportedLang)) {
-      return urlLang as SupportedLang;
-    }
+  // Custom hooks
+  const { lang, handleLangChange } = useLanguage();
+  useResumePersistence();
+  const { pdfGenerating, handleExportMarkdown, handleDownloadPdf } = usePrint();
 
-    const saved = localStorage.getItem("markdown_resume_lang");
-    if (saved && supported.includes(saved as SupportedLang)) return saved as SupportedLang;
+  // Zustand Store - Resume
+  const template = useResumeStore((state) => state.template);
+  const styles = useResumeStore((state) => state.styles);
+  const markdown = useResumeStore((state) => state.markdown);
+  const fileName = useResumeStore((state) => state.fileName);
+  const avoidPageBreak = useResumeStore((state) => state.avoidPageBreak);
+  const avoidPageBreakLevels = useResumeStore((state) => state.avoidPageBreakLevels);
+  const setTemplate = useResumeStore((state) => state.setTemplate);
+  const setStyles = useResumeStore((state) => state.setStyles);
+  const setMarkdown = useResumeStore((state) => state.setMarkdown);
+  const setFileName = useResumeStore((state) => state.setFileName);
+  const setAvoidPageBreak = useResumeStore((state) => state.setAvoidPageBreak);
+  const setAvoidPageBreakLevels = useResumeStore((state) => state.setAvoidPageBreakLevels);
+  const loadResume = useResumeStore((state) => state.loadResume);
 
-    const sysLangFull = (navigator.language || "en").toLowerCase();
-    if (sysLangFull.includes("zh-tw") || sysLangFull.includes("zh-hk") || sysLangFull.includes("zh-hant") || sysLangFull.includes("tw") || sysLangFull.includes("hk")) {
-      return "zh-tw";
-    }
-    const sysLang = sysLangFull.split("-")[0];
-    return supported.includes(sysLang as SupportedLang)
-      ? (sysLang as SupportedLang)
-      : "en";
-  });
+  // Zustand Store - Layout
+  const showSidebar = useLayoutStore((state) => state.showSidebar);
+  const leftWidth = useLayoutStore((state) => state.leftWidth);
+  const sidebarWidth = useLayoutStore((state) => state.sidebarWidth);
+  const setShowSidebar = useLayoutStore((state) => state.setShowSidebar);
+  const setLeftWidth = useLayoutStore((state) => state.setLeftWidth);
+  const setSidebarWidth = useLayoutStore((state) => state.setSidebarWidth);
 
-  const [template, setTemplate] = useState<ResumeTemplate>(() => {
-    return (localStorage.getItem("markdown_resume_template") as ResumeTemplate) || "classic";
-  });
-  const [styles, setStyles] = useState<AppStyles>(() => loadStylesFromStorage());
-  const [markdown, setMarkdown] = useState<string>(() => {
-    return localStorage.getItem("markdown_resume_content") || "";
-  });
-  
-  // Feedback Messages/Toast state & Modals
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
-  const [pdfGenerating, setPdfGenerating] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [fileName, setFileName] = useState(() => {
-    return localStorage.getItem("markdown_resume_file_name") || "resume";
-  });
-  const [showSidebar, setShowSidebar] = useState(() => {
-    const saved = localStorage.getItem("markdown_resume_show_sidebar");
-    return saved === null ? true : saved === "true";
-  });
-  const [leftWidth, setLeftWidth] = useState(() => {
-    const saved = localStorage.getItem("markdown_resume_left_width");
-    return saved ? parseInt(saved, 10) : 820;
-  });
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem("markdown_resume_sidebar_width");
-    return saved ? Math.max(280, parseInt(saved, 10)) : 340;
-  });
+  // Zustand Store - UI
+  const toast = useUIStore((state) => state.toast);
+  const isModalOpen = useUIStore((state) => state.isModalOpen);
+  const activeTab = useUIStore((state) => state.activeTab);
+  const showToast = useUIStore((state) => state.showToast);
+  const clearToast = useUIStore((state) => state.clearToast);
+  const setIsModalOpen = useUIStore((state) => state.setIsModalOpen);
+  const setActiveTab = useUIStore((state) => state.setActiveTab);
 
-  const [avoidPageBreak, setAvoidPageBreak] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem("markdown_resume_avoid_page_break");
-      return saved === null ? true : saved === "true";
-    } catch (e) {
-      console.error("Failed to load avoidPageBreak from localStorage", e);
-      return true;
-    }
-  });
-
-  const [avoidPageBreakLevels, setAvoidPageBreakLevels] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem("markdown_resume_avoid_page_break_levels");
-      return saved ? JSON.parse(saved) : ["h3"];
-    } catch (e) {
-      console.error("Failed to load avoidPageBreakLevels from localStorage", e);
-      return ["h3"];
-    }
-  });
-
-  // Track if it's the initial load to prevent default resume from overriding saved content
-  const [isFirstLoad, setIsFirstLoad] = useState(true);
-
-  // Initialize markdown with default translation once lang is resolved
-  useEffect(() => {
-    if (isFirstLoad) {
-      setIsFirstLoad(false);
-      // If there is no saved markdown, default to the language's preset CV
-      const saved = localStorage.getItem("markdown_resume_content");
-      if (saved) {
-        setMarkdown(saved);
-        return;
-      }
-    }
-    
-    if (!markdown) {
-      setMarkdown(translations[lang].defaultResume);
-    }
-  }, [lang]);
-
-  // Auto-save settings & state to localStorage on changes
-  useEffect(() => {
-    localStorage.setItem("markdown_resume_lang", lang);
-  }, [lang]);
+  // Responsive Layout detection
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200
+  );
 
   useEffect(() => {
-    localStorage.setItem("markdown_resume_template", template);
-  }, [template]);
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-  useEffect(() => {
-    saveStylesToStorage(styles);
-  }, [styles]);
+  const isMobile = windowWidth < 1125;
 
-  useEffect(() => {
-    if (markdown) {
-      localStorage.setItem("markdown_resume_content", markdown);
-    }
-  }, [markdown]);
-
-  useEffect(() => {
-    localStorage.setItem("markdown_resume_show_sidebar", String(showSidebar));
-  }, [showSidebar]);
-
-  useEffect(() => {
-    localStorage.setItem("markdown_resume_file_name", fileName);
-  }, [fileName]);
-
-  useEffect(() => {
-    localStorage.setItem("markdown_resume_left_width", String(leftWidth));
-  }, [leftWidth]);
-
-  useEffect(() => {
-    localStorage.setItem("markdown_resume_sidebar_width", String(sidebarWidth));
-  }, [sidebarWidth]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("markdown_resume_avoid_page_break", String(avoidPageBreak));
-    } catch (e) {
-      console.error("Failed to save avoidPageBreak to localStorage", e);
-    }
-  }, [avoidPageBreak]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("markdown_resume_avoid_page_break_levels", JSON.stringify(avoidPageBreakLevels));
-    } catch (e) {
-      console.error("Failed to save avoidPageBreakLevels to localStorage", e);
-    }
-  }, [avoidPageBreakLevels]);
-
-  // Keyboard Shortcuts (Ctrl+S / Ctrl+O) to backup/restore CVs
+  // Keyboard Shortcuts (Ctrl+S / Ctrl+O)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
@@ -224,55 +135,16 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [setIsModalOpen]);
 
-  // Dynamic SEO Updates
-  useEffect(() => {
-    const t = translations[lang];
-    const extra = extraTranslations[lang] || extraTranslations["en"];
-    document.title = `${t.title} | ${extra.metaTitleSuffix}`;
-    
-    // Set HTML lang attribute
-    document.documentElement.lang = lang;
-    
-    // Set Meta Description
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) {
-      metaDesc.setAttribute("content", t.metaDescription);
-    }
-  }, [lang]);
-
-  // Toast auto-clear
+  // Toast Auto-clear
   useEffect(() => {
     if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
+      const timer = setTimeout(() => clearToast(), 3000);
       return () => clearTimeout(timer);
     }
-  }, [toast]);
+  }, [toast, clearToast]);
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
-    setToast({ message, type });
-  };
-
-  // 2. Language Switch handler
-  const handleLangChange = (newLang: SupportedLang) => {
-    // Overwrite the resume ONLY if they haven't modified the default template resume
-    if (markdown === translations[lang].defaultResume) {
-      setMarkdown(translations[newLang].defaultResume);
-    }
-    setLang(newLang);
-
-    // Update URL query parameter silently
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("lang", newLang);
-      window.history.replaceState({}, "", url.pathname + url.search);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Styles configuration is now auto-saved on changes. Manual Save/Load buttons removed.
   const handleResetStyles = () => {
     const extra = extraTranslations[lang] || extraTranslations["en"];
     const isConfirmed = confirm(extra.resetConfirm);
@@ -283,54 +155,12 @@ function App() {
     }
   };
 
-  // 6. Export Markdown to local file
-  const handleExportMarkdown = () => {
-    const extra = extraTranslations[lang] || extraTranslations["en"];
-    try {
-      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `${fileName}.md`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast(extra.mdSuccess, "success");
-    } catch (err) {
-      console.error(err);
-      showToast(extra.mdError, "error");
-    }
-  };
-
-  // 7. Generate PDF
-  const handleDownloadPdf = async () => {
-    const extra = extraTranslations[lang] || extraTranslations["en"];
-    setPdfGenerating(true);
-    showToast(extra.pdfGeneratingToast, "info");
-    
-    try {
-      const filename = `${fileName}.pdf`;
-      await generateResumePDF("preview-container", filename, avoidPageBreakLevels);
-      showToast(extra.pdfSuccess, "success");
-    } catch (err: any) {
-      console.error(err);
-      showToast(extra.pdfError, "error");
-    } finally {
-      setPdfGenerating(false);
-    }
-  };
-
-  // 8. Handler for loading from cookie slots modal
   const handleResumeLoad = (
     loadedMd: string,
     loadedStyles: AppStyles,
     loadedTemplate: ResumeTemplate,
     loadedFileName?: string
   ) => {
-    setMarkdown(loadedMd);
-    
-    // Deep merge loadedStyles with defaultStyles to avoid setting properties (like margins) to undefined
     const mergedStyles: AppStyles = {
       ...defaultStyles,
       ...loadedStyles,
@@ -344,14 +174,10 @@ function App() {
       a: { ...defaultStyles.a, ...loadedStyles?.a },
     };
 
-    setStyles(mergedStyles);
-    setTemplate(loadedTemplate);
-    if (loadedFileName) {
-      setFileName(loadedFileName);
-    }
+    loadResume(loadedMd, mergedStyles, loadedTemplate, loadedFileName);
   };
 
-  // 9. Resize dragging logic
+  // Drag resizers
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -376,7 +202,6 @@ function App() {
     document.addEventListener("mouseup", handleMouseUp);
   };
 
-  // 10. Sidebar Resize dragging logic
   const handleSidebarMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -386,7 +211,7 @@ function App() {
       const delta = moveEvent.clientX - startX;
       let newWidth = startWidth + delta;
       const minWidth = 280;
-      const maxWidth = leftWidth - 200; // Leave at least 200px for the editor
+      const maxWidth = leftWidth - 200;
       if (newWidth < minWidth) newWidth = minWidth;
       if (newWidth > maxWidth) newWidth = maxWidth;
       setSidebarWidth(newWidth);
@@ -404,196 +229,249 @@ function App() {
   const t = translations[lang];
   const hasStyleChanges = JSON.stringify(styles) !== JSON.stringify(defaultStyles);
   const extra = extraTranslations[lang] || extraTranslations["en"];
+  const tabLabels = getTabLabels(lang);
 
   return (
     <>
-      <div className="low-res-barrier">
-        <div className="barrier-content">
-          <Monitor size={48} className="barrier-icon" />
-          <h2>{extra.barrierTitle}</h2>
-          <p>{extra.barrierDescription}</p>
-        </div>
-      </div>
       <div className="app-workspace">
-      {/* Top Navbar Actions */}
-      <header className="app-header">
-        <div className="header-logo">
-          <Sparkles size={20} className="logo-icon" />
-          <h1>{t.title}</h1>
-        </div>
-
-        <div className="header-actions">
-          {/* 1. Manage Saved Resumes */}
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="action-btn accent-btn"
-            title={t.manageResumes}
-          >
-            <Database size={16} />
-            <span className="btn-text">{t.manageResumes}</span>
-          </button>
-
-          {/* 2. File name */}
-          <div className="header-file-wrapper">
-            <span className="file-label">{getFileNameLabel(lang)}:</span>
-            <input
-              type="text"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              className="header-file-input"
-              placeholder="resume"
-            />
+        {/* Top Navbar Actions */}
+        <header className="app-header">
+          <div className="header-logo">
+            <Sparkles size={20} className="logo-icon" />
+            <h1>{t.title}</h1>
           </div>
 
-          {/* 3. Download MD */}
-          <button
-            type="button"
-            onClick={handleExportMarkdown}
-            className="action-btn secondary-btn"
-            title={t.exportMarkdown}
-          >
-            <FileDown size={16} />
-            <span className="btn-text">{t.exportMarkdown}</span>
-          </button>
+          <div className="header-actions">
+            {/* Manage Saved Resumes */}
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="action-btn accent-btn"
+              title={t.manageResumes}
+            >
+              <Database size={16} />
+              <span className="btn-text">{t.manageResumes}</span>
+            </button>
 
-          {/* 4. Download PDF */}
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={pdfGenerating}
-            className="action-btn primary-btn download-btn"
-            title={t.downloadPdf}
-          >
-            <Download size={16} className={pdfGenerating ? "animate-spin" : ""} />
-            <span className="btn-text">{pdfGenerating ? "..." : t.downloadPdf}</span>
-          </button>
-
-          {/* 5. Language */}
-          <LanguageSelector lang={lang} setLang={handleLangChange} />
-        </div>
-      </header>
-
-      {/* Workspace Panel Split */}
-      <main className="workspace-main">
-        {/* Left Side: Sidebar controls & Editor */}
-        <div className="workspace-left" style={{ width: showSidebar ? `${leftWidth}px` : `${leftWidth - sidebarWidth}px` }}>
-          {/* Controls Config */}
-          {showSidebar && (
-            <>
-              <StyleControls
-                styles={styles}
-                onChange={setStyles}
-                lang={lang}
-                template={template}
-                setTemplate={setTemplate}
-                style={{ width: `${sidebarWidth}px` }}
-                onReset={handleResetStyles}
-                showReset={hasStyleChanges}
-                avoidPageBreak={avoidPageBreak}
-                setAvoidPageBreak={setAvoidPageBreak}
-                avoidPageBreakLevels={avoidPageBreakLevels}
-                setAvoidPageBreakLevels={setAvoidPageBreakLevels}
+            {/* File name */}
+            <div className="header-file-wrapper">
+              <span className="file-label">{getFileNameLabel(lang)}:</span>
+              <input
+                type="text"
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                className="header-file-input"
+                placeholder="resume"
               />
-              {/* Sidebar Resizer Splitter Handle */}
-              <div className="sidebar-resizer" onMouseDown={handleSidebarMouseDown} />
+            </div>
+
+            {/* Download MD */}
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              className="action-btn secondary-btn"
+              title={t.exportMarkdown}
+            >
+              <FileDown size={16} />
+              <span className="btn-text">{t.exportMarkdown}</span>
+            </button>
+
+            {/* Download PDF */}
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfGenerating}
+              className="action-btn primary-btn download-btn"
+              title={t.downloadPdf}
+            >
+              <Download size={16} className={pdfGenerating ? "animate-spin" : ""} />
+              <span className="btn-text">{pdfGenerating ? "..." : t.downloadPdf}</span>
+            </button>
+
+            {/* Language Selection */}
+            <LanguageSelector lang={lang} setLang={handleLangChange} />
+          </div>
+        </header>
+
+        {/* Mobile Tabs Switcher */}
+        {isMobile && (
+          <div className="mobile-tabs-nav">
+            <button
+              type="button"
+              className={`mobile-tab-btn ${activeTab === "styles" ? "active" : ""}`}
+              onClick={() => setActiveTab("styles")}
+            >
+              {tabLabels.styles}
+            </button>
+            <button
+              type="button"
+              className={`mobile-tab-btn ${activeTab === "editor" ? "active" : ""}`}
+              onClick={() => setActiveTab("editor")}
+            >
+              {tabLabels.editor}
+            </button>
+            <button
+              type="button"
+              className={`mobile-tab-btn ${activeTab === "preview" ? "active" : ""}`}
+              onClick={() => setActiveTab("preview")}
+            >
+              {tabLabels.preview}
+            </button>
+          </div>
+        )}
+
+        {/* Workspace Panel Split */}
+        <main className={`workspace-main ${isMobile ? "workspace-mobile" : ""}`}>
+          {!isMobile ? (
+            <>
+              {/* Desktop Workspace: Multi-pane side-by-side splits */}
+              <div
+                className="workspace-left"
+                style={{
+                  width: showSidebar ? `${leftWidth}px` : `${leftWidth - sidebarWidth}px`,
+                }}
+              >
+                {showSidebar && (
+                  <>
+                    <StyleControls
+                      styles={styles}
+                      onChange={setStyles}
+                      lang={lang}
+                      template={template}
+                      setTemplate={setTemplate}
+                      style={{ width: `${sidebarWidth}px` }}
+                      onReset={handleResetStyles}
+                      showReset={hasStyleChanges}
+                      avoidPageBreak={avoidPageBreak}
+                      setAvoidPageBreak={setAvoidPageBreak}
+                      avoidPageBreakLevels={avoidPageBreakLevels}
+                      setAvoidPageBreakLevels={setAvoidPageBreakLevels}
+                    />
+                    <div className="sidebar-resizer" onMouseDown={handleSidebarMouseDown} />
+                  </>
+                )}
+
+                <Editor markdown={markdown} onChange={setMarkdown} lang={lang} />
+              </div>
+
+              <div className="workspace-resizer" onMouseDown={handleMouseDown} />
+
+              <div className="workspace-right">
+                <Preview
+                  markdown={markdown}
+                  styles={styles}
+                  lang={lang}
+                  template={template}
+                  avoidPageBreak={avoidPageBreak}
+                  avoidPageBreakLevels={avoidPageBreakLevels}
+                />
+              </div>
+
+              {/* Floating Sidebar Toggle Handle */}
+              <button
+                type="button"
+                onClick={() => setShowSidebar(!showSidebar)}
+                className={`sidebar-toggle-handle ${showSidebar ? "open" : "collapsed"}`}
+                style={{
+                  position: "absolute",
+                  left: showSidebar ? `${sidebarWidth}px` : "0px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  zIndex: 100,
+                }}
+                title={showSidebar ? extra.hidePanel : extra.showPanel}
+              >
+                {showSidebar ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+              </button>
             </>
+          ) : (
+            /* Mobile Workspace: Conditionally render based on active mobile tab */
+            <div className="mobile-active-pane">
+              {activeTab === "styles" && (
+                <StyleControls
+                  styles={styles}
+                  onChange={setStyles}
+                  lang={lang}
+                  template={template}
+                  setTemplate={setTemplate}
+                  onReset={handleResetStyles}
+                  showReset={hasStyleChanges}
+                  avoidPageBreak={avoidPageBreak}
+                  setAvoidPageBreak={setAvoidPageBreak}
+                  avoidPageBreakLevels={avoidPageBreakLevels}
+                  setAvoidPageBreakLevels={setAvoidPageBreakLevels}
+                />
+              )}
+              {activeTab === "editor" && (
+                <Editor markdown={markdown} onChange={setMarkdown} lang={lang} />
+              )}
+              {activeTab === "preview" && (
+                <Preview
+                  markdown={markdown}
+                  styles={styles}
+                  lang={lang}
+                  template={template}
+                  avoidPageBreak={avoidPageBreak}
+                  avoidPageBreakLevels={avoidPageBreakLevels}
+                />
+              )}
+            </div>
           )}
+        </main>
 
-          {/* Raw Editor */}
-          <Editor markdown={markdown} onChange={setMarkdown} lang={lang} />
-        </div>
-
-        {/* Resizer Splitter Handle */}
-        <div className="workspace-resizer" onMouseDown={handleMouseDown} />
-
-        {/* Right Side: Live preview */}
-        <div className="workspace-right">
-          <Preview
-            markdown={markdown}
-            styles={styles}
-            lang={lang}
-            template={template}
-            avoidPageBreak={avoidPageBreak}
-            avoidPageBreakLevels={avoidPageBreakLevels}
-          />
-        </div>
-
-        {/* Floating Sidebar Toggle Handle in Vertical Center */}
-        <button
-          type="button"
-          onClick={() => setShowSidebar(!showSidebar)}
-          className={`sidebar-toggle-handle ${showSidebar ? "open" : "collapsed"}`}
-          style={{
-            position: "absolute",
-            left: showSidebar ? `${sidebarWidth}px` : "0px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            zIndex: 100,
-          }}
-          title={showSidebar ? (extraTranslations[lang] || extraTranslations["en"]).hidePanel : (extraTranslations[lang] || extraTranslations["en"]).showPanel}
-        >
-          {showSidebar ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-        </button>
-      </main>
-
-      {/* Info notice for page breaks */}
-      <div className="page-break-tip">
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <Info size={14} />
-          <span>
-            {(extraTranslations[lang] || extraTranslations["en"]).pageBreakTip}
-          </span>
-        </div>
-        <a
-          href="https://github.com/Victor-Go/Victor-Go.github.io"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="github-star-link"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            color: "var(--accent)",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          <svg
-            height="14"
-            width="14"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            style={{ verticalAlign: "middle" }}
+        {/* Info notice for page breaks */}
+        <div className="page-break-tip">
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <Info size={14} />
+            <span>{extra.pageBreakTip}</span>
+          </div>
+          <a
+            href="https://github.com/Victor-Go/Victor-Go.github.io"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="github-star-link"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              color: "var(--accent)",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
           >
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-          </svg>
-          <span>
-            {(extraTranslations[lang] || extraTranslations["en"]).githubStarText}
-          </span>
-        </a>
-      </div>
-
-      {/* Saved Resumes Cookie Modal */}
-      <ResumeModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        currentMarkdown={markdown}
-        currentStyles={styles}
-        currentTemplate={template}
-        currentFileName={fileName}
-        onLoad={handleResumeLoad}
-        lang={lang}
-        showToast={showToast}
-      />
-
-      {/* Toast Alert Notification */}
-      {toast && (
-        <div className={`app-toast toast-${toast.type}`}>
-          <span>{toast.message}</span>
+            <svg
+              height="14"
+              width="14"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              style={{ verticalAlign: "middle" }}
+            >
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            <span>{extra.githubStarText}</span>
+          </a>
         </div>
-      )}
-    </div>
+
+        {/* Saved Resumes Cookie Modal */}
+        <ResumeModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          currentMarkdown={markdown}
+          currentStyles={styles}
+          currentTemplate={template}
+          currentFileName={fileName}
+          onLoad={handleResumeLoad}
+          lang={lang}
+          showToast={showToast}
+        />
+
+        {/* Toast Alert Notification */}
+        {toast && (
+          <div className={`app-toast toast-${toast.type}`}>
+            <span>{toast.message}</span>
+          </div>
+        )}
+      </div>
     </>
   );
 }

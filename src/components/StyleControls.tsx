@@ -8,18 +8,18 @@ interface StyleControlsProps {
   styles: AppStyles;
   onChange: (updatedStyles: AppStyles) => void;
   lang:
-    | "en"
-    | "zh"
-    | "zh-tw"
-    | "fr"
-    | "de"
-    | "it"
-    | "es"
-    | "pt"
-    | "ja"
-    | "ko"
-    | "ru"
-    | "uk";
+  | "en"
+  | "zh"
+  | "zh-tw"
+  | "fr"
+  | "de"
+  | "it"
+  | "es"
+  | "pt"
+  | "ja"
+  | "ko"
+  | "ru"
+  | "uk";
   template: ResumeTemplate;
   setTemplate: (tpl: ResumeTemplate) => void;
   style?: React.CSSProperties;
@@ -279,7 +279,7 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
           </span>
           {isLayoutOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
-        
+
         {isLayoutOpen && (
           <div className="collapsible-content">
             <select
@@ -297,7 +297,7 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
           </div>
         )}
       </div>
- 
+
       {/* Margins Section */}
       <div className="control-section">
         <button
@@ -390,7 +390,7 @@ export const StyleControls: React.FC<StyleControlsProps> = ({
                   </span>
                 </div>
               </label>
-              
+
               {avoidPageBreak && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "23px", marginTop: "4px" }}>
                   <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>

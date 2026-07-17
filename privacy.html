@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Markdown Resume PDF Generator</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #333;
+    }
+
+    h1 {
+      border-bottom: 2px solid #eee;
+      padding-bottom: 10px;
+    }
+
+    h2 {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Privacy Policy</h1>
+  <p>Last updated: July 17, 2026</p>
+
+  <p>This Privacy Policy describes how our "Markdown Resume PDF Generator" (the "Application") handles your personal
+    data. <strong>We care deeply about your privacy and do not collect, store, or share your personal information on any
+      external servers.</strong></p>
+
+  <h2>1. Information We Access and How We Use It</h2>
+  <p>The Application integrates with Google Drive API to allow you to sync and back up your resume configuration files
+    across devices. To achieve this, we request the following Google OAuth scope:</p>
+  <ul>
+    <li><strong>.../auth/drive.appdata:</strong> This permission allows the Application to store and manage resume
+      backups only in its private Google Drive application-data folder. We do not have access to your other Google Drive
+      files.</li>
+  </ul>
+
+  <h2>2. Local Storage and Direct Synchronization</h2>
+  <p>All data processing happens entirely within your web browser (client-side):</p>
+  <ul>
+    <li>Your resume data is stored locally in your browser's <code>localStorage</code>.</li>
+    <li>When you sync with Google Drive, the data is transmitted directly from your browser to Google's servers.
+      <strong>We do not run any backend server, and we have no access to your Google credentials, access tokens, or
+        resume files.</strong></li>
+  </ul>
+
+  <h2>3. Third-Party Services</h2>
+  <p>The Application uses the official Google Identity Services SDK to handle authentication. Your interaction with
+    Google's login and authorization screens is governed by <a href="https://policies.google.com/privacy"
+      target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
+
+  <h2>4. Data Retention and Deletion</h2>
+  <p>Since we do not store any of your data on our servers, we cannot delete it for you. You can completely remove your
+    data at any time by:</p>
+  <ul>
+    <li>Clearing your browser's local storage/cache.</li>
+    <li>Disconnecting Google Drive and clearing your local browser storage.</li>
+    <li>Removing the Application from your Google account through the <a href="https://myaccount.google.com/permissions"
+        target="_blank" rel="noopener">Google Account Permissions page</a>. Application-data files are stored in a
+      private folder and are not visible as regular Google Drive files.</li>
+  </ul>
+
+  <h2>5. Changes to This Privacy Policy</h2>
+  <p>We may update our Privacy Policy from time to time. Any changes will be posted on this page with an updated "Last
+    updated" date.</p>
+
+  <h2>6. Contact Us</h2>
+  <p>If you have any questions or suggestions about this Privacy Policy, please feel free to contact us via GitHub or
+    our official website.</p>
+
+</body>
+
+</html>

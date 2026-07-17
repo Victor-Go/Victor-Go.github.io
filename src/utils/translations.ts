@@ -71,6 +71,7 @@ export interface Translations {
     failed: string;
     login: string;
     disconnect: string;
+    privacyPolicy: string;
   };
 }
 
@@ -200,7 +201,8 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
       syncing: "Syncing...",
       failed: "Sync Failed",
       login: "Connect Google Drive",
-      disconnect: "Disconnect"
+      disconnect: "Disconnect",
+      privacyPolicy: "Privacy Policy"
     }
   },
   zh: {
@@ -314,7 +316,8 @@ defaultResume: `# 张三
       syncing: "同步中...",
       failed: "同步失败",
       login: "连接 Google 云端硬盘",
-      disconnect: "断开连接"
+      disconnect: "断开连接",
+      privacyPolicy: "隐私政策"
     }
   },
   fr: {
@@ -428,7 +431,8 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
       syncing: "Synchronisation...",
       failed: "Échec sync",
       login: "Connecter Google Drive",
-      disconnect: "Déconnecter"
+      disconnect: "Déconnecter",
+      privacyPolicy: "Politique de confidentialité"
     }
   },
   de: {
@@ -542,7 +546,8 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
       syncing: "Synchronisiere...",
       failed: "Sync fehlgeschlagen",
       login: "Mit Google Drive verbinden",
-      disconnect: "Trennen"
+      disconnect: "Trennen",
+      privacyPolicy: "Datenschutzerklärung"
     }
   },
   it: {
@@ -656,7 +661,8 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
       syncing: "Sincronizzazione...",
       failed: "Sincronizzazione fallita",
       login: "Connetti Google Drive",
-      disconnect: "Disconnetti"
+      disconnect: "Disconnetti",
+      privacyPolicy: "Informativa sulla privacy"
     }
   },
   es: {
@@ -770,7 +776,8 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
       syncing: "Sincronizando...",
       failed: "Error de sincronización",
       login: "Conectar Google Drive",
-      disconnect: "Desconectar"
+      disconnect: "Desconectar",
+      privacyPolicy: "Política de privacidad"
     }
   },
   pt: {
@@ -884,7 +891,8 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
       syncing: "Sincronizando...",
       failed: "Falha na sincronização",
       login: "Conectar ao Google Drive",
-      disconnect: "Desconectar"
+      disconnect: "Desconectar",
+      privacyPolicy: "Política de Privacidade"
     }
   },
   ja: {
@@ -998,7 +1006,8 @@ defaultResume: `# 田中 太郎
       syncing: "同期中...",
       failed: "同期失敗",
       login: "Google ドライブに接続",
-      disconnect: "接続解除"
+      disconnect: "接続解除",
+      privacyPolicy: "プライバシーポリシー"
     }
   },
   ko: {
@@ -1112,7 +1121,8 @@ defaultResume: `# 김철수
       syncing: "동기화 중...",
       failed: "동기화 실패",
       login: "Google 드라이브 연결",
-      disconnect: "연결 해제"
+      disconnect: "연결 해제",
+      privacyPolicy: "개인정보 처리방침"
     }
   },
   ru: {
@@ -1226,7 +1236,8 @@ defaultResume: `# Иван Иванов
       syncing: "Синхронизация...",
       failed: "Ошибка синхронизации",
       login: "Подключить Google Диск",
-      disconnect: "Отключить"
+      disconnect: "Отключить",
+      privacyPolicy: "Политика конфиденциальности"
     }
   },
   "zh-tw": {
@@ -1340,7 +1351,8 @@ defaultResume: `# 張三
       syncing: "同步中...",
       failed: "同步失敗",
       login: "連接 Google 雲端硬碟",
-      disconnect: "斷開連接"
+      disconnect: "斷開連接",
+      privacyPolicy: "隱私權政策"
     }
   },
   uk: {
@@ -1454,7 +1466,8 @@ defaultResume: `# Олександр Коваленко
       syncing: "Синхронізація...",
       failed: "Помилка синхронізації",
       login: "Підключити Google Диск",
-      disconnect: "Відключити"
+      disconnect: "Відключити",
+      privacyPolicy: "Політика конфіденційності"
     }
   }
 };

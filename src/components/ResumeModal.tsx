@@ -409,7 +409,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
               <span>Google Drive Sync</span>
             </h3>
             {syncStatus === "disconnected" ? (
-              <div style={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
                 <button
                   type="button"
                   onClick={loginToGDrive}
@@ -419,6 +419,14 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                   <Cloud size={16} />
                   {t.syncStatus.login}
                 </button>
+                <a
+                  href="privacy.html"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: "12px", color: '#aaa' }}
+                >
+                  {t.syncStatus.privacyPolicy}
+                </a>
               </div>
             ) : (
               <div

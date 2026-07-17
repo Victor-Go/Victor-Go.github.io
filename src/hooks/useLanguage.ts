@@ -11,22 +11,19 @@ export function useLanguage() {
   const isFirstLoad = useResumeStore((state) => state.isFirstLoad);
   const setIsFirstLoad = useResumeStore((state) => state.setIsFirstLoad);
 
-  // Initialize markdown with default translation once lang is resolved
+  // Initialize only once. An intentionally blank editor must remain blank until
+  // the user explicitly switches language or layout.
   useEffect(() => {
     if (isFirstLoad) {
       setIsFirstLoad(false);
-      // If there is no saved markdown, default to the language's preset CV
       const saved = localStorage.getItem("markdown_resume_content");
-      if (saved) {
+      if (saved !== null) {
         setMarkdown(saved);
-        return;
+      } else {
+        setMarkdown(translations[lang].defaultResume);
       }
     }
-
-    if (!markdown) {
-      setMarkdown(translations[lang].defaultResume);
-    }
-  }, [lang, isFirstLoad, markdown, setMarkdown, setIsFirstLoad]);
+  }, [lang, isFirstLoad, setMarkdown, setIsFirstLoad]);
 
   // Sync language selection to localStorage
   useEffect(() => {
@@ -51,7 +48,7 @@ export function useLanguage() {
 
   const handleLangChange = (newLang: SupportedLang) => {
     // Overwrite the resume ONLY if they haven't modified the default template resume
-    if (markdown === translations[lang].defaultResume) {
+    if (!markdown.trim() || markdown === translations[lang].defaultResume) {
       setMarkdown(translations[newLang].defaultResume);
     }
     setLang(newLang);

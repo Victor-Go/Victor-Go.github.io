@@ -23,6 +23,12 @@ import { useUIStore } from "./stores/useUIStore";
 import { useLanguage } from "./hooks/useLanguage";
 import { useResumePersistence } from "./hooks/useResumePersistence";
 import { usePrint } from "./hooks/usePrint";
+import {
+  getAccessToken,
+  handleOAuthCallback,
+  isGoogleDriveSdkInitialized,
+  syncWithGoogleDrive,
+} from "./utils/googleDriveSync";
 
 const getFileNameLabel = (lang: string): string => {
   switch (lang) {
@@ -119,6 +125,29 @@ function App() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  useEffect(() => {
+    let handledOAuthCallback = false;
+
+    try {
+      handledOAuthCallback = handleOAuthCallback();
+    } catch (error) {
+      console.error("Failed to handle Google Drive OAuth callback:", error);
+    }
+
+    if (handledOAuthCallback) {
+      showToast(
+        (extraTranslations[lang] || extraTranslations["en"]).syncConnectedSuccess,
+        "success"
+      );
+
+      if (getAccessToken() && isGoogleDriveSdkInitialized()) {
+        void syncWithGoogleDrive();
+      }
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [lang, showToast]);
+
   const isMobile = windowWidth < 1125;
 
   // Keyboard Shortcuts (Ctrl+S / Ctrl+O)
@@ -153,6 +182,13 @@ function App() {
       localStorage.removeItem("markdown_resume_style_config");
       showToast(extra.resetSuccess, "info");
     }
+  };
+
+  const handleTemplateChange = (nextTemplate: ResumeTemplate) => {
+    if (!markdown.trim()) {
+      setMarkdown(translations[lang].defaultResume);
+    }
+    setTemplate(nextTemplate);
   };
 
   const handleResumeLoad = (
@@ -338,7 +374,7 @@ function App() {
                       onChange={setStyles}
                       lang={lang}
                       template={template}
-                      setTemplate={setTemplate}
+                      setTemplate={handleTemplateChange}
                       style={{ width: `${sidebarWidth}px` }}
                       onReset={handleResetStyles}
                       showReset={hasStyleChanges}
@@ -393,7 +429,7 @@ function App() {
                   onChange={setStyles}
                   lang={lang}
                   template={template}
-                  setTemplate={setTemplate}
+                  setTemplate={handleTemplateChange}
                   onReset={handleResetStyles}
                   showReset={hasStyleChanges}
                   avoidPageBreak={avoidPageBreak}

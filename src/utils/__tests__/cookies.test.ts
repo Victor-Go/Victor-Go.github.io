@@ -69,7 +69,7 @@ describe('cookies utility (resume slot storage)', () => {
     expect(loaded?.template).toBe('creative');
   });
 
-  it('should delete a resume slot and remove it from the master list', () => {
+  it('should delete a resume slot and keep a tombstone in the master list', () => {
     saveResumeSlot('R1', 'MD1', defaultStyles, 'minimalist');
     saveResumeSlot('R2', 'MD2', defaultStyles, 'developer');
 
@@ -80,8 +80,10 @@ describe('cookies utility (resume slot storage)', () => {
     deleteResumeSlot(idToDelete);
 
     const listAfter = getSavedResumesList();
-    expect(listAfter.length).toBe(1);
-    expect(listAfter[0].id).not.toBe(idToDelete);
+    expect(listAfter.length).toBe(2);
+    const deletedItem = listAfter.find((item) => item.id === idToDelete);
+    expect(deletedItem).toBeDefined();
+    expect(deletedItem?.deleted).toBe(true);
 
     expect(loadResumeSlot(idToDelete)).toBeNull();
   });

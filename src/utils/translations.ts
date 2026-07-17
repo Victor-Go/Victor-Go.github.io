@@ -64,7 +64,15 @@ export interface Translations {
   fitWidth: string;
   realSize: string;
   fitWidthTitle: string;
-  realSizeTitle: string;}
+  realSizeTitle: string;
+  syncStatus: {
+    completed: string;
+    syncing: string;
+    failed: string;
+    login: string;
+    disconnect: string;
+  };
+}
 
 export const translations: Record<
   | "en"
@@ -186,6 +194,14 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
 - **Frameworks:** React, Next.js, Node.js, Express, TailwindCSS
 - **Tools:** Git, AWS (S3, Lambda, RDS), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Synced",
+      syncing: "Syncing...",
+      failed: "Sync Failed",
+      login: "Connect Google Drive",
+      disconnect: "Disconnect"
+    }
   },
   zh: {
     title: "Markdown 简历 PDF 生成器",
@@ -292,6 +308,14 @@ defaultResume: `# 张三
 - **框架与库:** React, Next.js, Node.js, Express, TailwindCSS
 - **开发工具:** Git, AWS (S3, Lambda, RDS), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "已同步",
+      syncing: "同步中...",
+      failed: "同步失败",
+      login: "连接 Google 云端硬盘",
+      disconnect: "断开连接"
+    }
   },
   fr: {
     title: "Générateur de CV Markdown en PDF",
@@ -398,6 +422,14 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
 - **Frameworks :** React, Next.js, Node.js, Express, TailwindCSS
 - **Outils :** Git, AWS (S3, Lambda), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Synchronisé",
+      syncing: "Synchronisation...",
+      failed: "Échec sync",
+      login: "Connecter Google Drive",
+      disconnect: "Déconnecter"
+    }
   },
   de: {
     title: "Markdown zu PDF Lebenslauf-Generator",
@@ -504,6 +536,14 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
 - **Frameworks:** React, Next.js, Node.js, Express, TailwindCSS
 - **Werkzeuge:** Git, AWS (S3, Lambda, RDS), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Synchronisiert",
+      syncing: "Synchronisiere...",
+      failed: "Sync fehlgeschlagen",
+      login: "Mit Google Drive verbinden",
+      disconnect: "Trennen"
+    }
   },
   it: {
     title: "Generatore CV da Markdown a PDF",
@@ -610,6 +650,14 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
 - **Frameworks:** React, Next.js, Node.js, Express, TailwindCSS
 - **Strumenti:** Git, AWS (S3, Lambda), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Sincronizzato",
+      syncing: "Sincronizzazione...",
+      failed: "Sincronizzazione fallita",
+      login: "Connetti Google Drive",
+      disconnect: "Disconnetti"
+    }
   },
   es: {
     title: "Generador de CV de Markdown a PDF",
@@ -716,6 +764,14 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
 - **Frameworks:** React, Next.js, Node.js, Express, TailwindCSS
 - **Herramientas:** Git, AWS (S3, Lambda, RDS), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Sincronizado",
+      syncing: "Sincronizando...",
+      failed: "Error de sincronización",
+      login: "Conectar Google Drive",
+      disconnect: "Desconectar"
+    }
   },
   pt: {
     title: "Gerador de Currículo Markdown para PDF",
@@ -822,6 +878,14 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
 - **Frameworks:** React, Next.js, Node.js, Express, TailwindCSS
 - **Ferramentas:** Git, AWS (S3, Lambda), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Sincronizado",
+      syncing: "Sincronizando...",
+      failed: "Falha na sincronização",
+      login: "Conectar ao Google Drive",
+      disconnect: "Desconectar"
+    }
   },
   ja: {
     title: "MarkdownからPDF 履歴書ジェネレーター",
@@ -928,6 +992,14 @@ defaultResume: `# 田中 太郎
 - **フレームワーク:** React, Next.js, Node.js, Express, TailwindCSS
 - **ツール・インフラ:** Git, AWS (S3, Lambda, RDS), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "同期済み",
+      syncing: "同期中...",
+      failed: "同期失敗",
+      login: "Google ドライブに接続",
+      disconnect: "接続解除"
+    }
   },
   ko: {
     title: "Markdown PDF 이력서 생성기",
@@ -1034,6 +1106,14 @@ defaultResume: `# 김철수
 - **프레임워크:** React, Next.js, Node.js, Express, TailwindCSS
 - **도구 및 인프라:** Git, AWS (S3, Lambda, RDS), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "동기화됨",
+      syncing: "동기화 중...",
+      failed: "동기화 실패",
+      login: "Google 드라이브 연결",
+      disconnect: "연결 해제"
+    }
   },
   ru: {
     title: "Генератор резюме из Markdown в PDF",
@@ -1140,6 +1220,14 @@ defaultResume: `# Иван Иванов
 - **Фреймворки:** React, Next.js, Node.js, Express, TailwindCSS
 - **Инструменты:** Git, AWS (S3, Lambda), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Синхронизировано",
+      syncing: "Синхронизация...",
+      failed: "Ошибка синхронизации",
+      login: "Подключить Google Диск",
+      disconnect: "Отключить"
+    }
   },
   "zh-tw": {
     title: "Markdown 轉 PDF 履歷生成器",
@@ -1246,6 +1334,14 @@ defaultResume: `# 張三
 - **框架與庫:** React, Next.js, Node.js, Express, TailwindCSS
 - **工具:** Git, AWS (S3, Lambda), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "已同步",
+      syncing: "同步中...",
+      failed: "同步失敗",
+      login: "連接 Google 雲端硬碟",
+      disconnect: "斷開連接"
+    }
   },
   uk: {
     title: "Генератор резюме з Markdown в PDF",
@@ -1352,6 +1448,14 @@ defaultResume: `# Олександр Коваленко
 - **Фреймворки:** React, Next.js, Node.js, Express, TailwindCSS
 - **Інструменти:** Git, AWS (S3, Lambda), Docker, GitHub Actions
 `
+,
+    syncStatus: {
+      completed: "Синхронізовано",
+      syncing: "Синхронізація...",
+      failed: "Помилка синхронізації",
+      login: "Підключити Google Диск",
+      disconnect: "Відключити"
+    }
   }
 };
 
@@ -1427,6 +1531,8 @@ export interface ExtraTranslations {
   linkTab: string;
   lastLoaded: string;
   lastSaved: string;
+  syncConnectedSuccess: string;
+  syncErrorTimeout: string;
 }
 
 export const extraTranslations: Record<string, ExtraTranslations> = {
@@ -1501,7 +1607,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "If you find this project helpful, please consider giving it a star on GitHub! ⭐",
     linkTab: "Link",
     lastLoaded: "Last Loaded",
-    lastSaved: "Last Saved"
+    lastSaved: "Last Saved",
+    syncConnectedSuccess: "Google Drive connected, syncing...",
+    syncErrorTimeout: "Sync timed out after 15 seconds. Check your network connection and try again."
   },
   zh: {
     deleteConfirm: "确定要删除此简历备份吗？此操作无法撤销。",
@@ -1574,7 +1682,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "如果您觉得本项目有帮助，请在 GitHub 上点个 Star 支持一下！⭐",
     linkTab: "链接",
     lastLoaded: "上次加载",
-    lastSaved: "上次保存"
+    lastSaved: "上次保存",
+    syncConnectedSuccess: "Google 云端硬盘连接成功，正在同步...",
+    syncErrorTimeout: "同步在 15 秒后超时。请检查网络连接后重试。"
   },
   fr: {
     deleteConfirm: "Voulez-vous vraiment supprimer ce CV ? Cette opération est irréversible.",
@@ -1647,7 +1757,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Si vous trouvez ce projet utile, n'hésitez pas à lui attribuer une étoile sur GitHub ! ⭐",
     linkTab: "Lien",
     lastLoaded: "Dernier chargement",
-    lastSaved: "Dernier enregistrement"
+    lastSaved: "Dernier enregistrement",
+    syncConnectedSuccess: "Google Drive connecté, synchronisation...",
+    syncErrorTimeout: "La synchronisation a expiré après 15 secondes. Vérifiez votre connexion réseau et réessayez."
   },
   de: {
     deleteConfirm: "Sind Sie sicher, dass Sie diesen Lebenslauf löschen möchten? Dies kann nicht rückgängig gemacht werden.",
@@ -1720,7 +1832,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Wenn Sie dieses Projekt nützlich finden, geben Sie ihm bitte einen Stern auf GitHub! ⭐",
     linkTab: "Link",
     lastLoaded: "Zuletzt geladen",
-    lastSaved: "Zuletzt gespeichert"
+    lastSaved: "Zuletzt gespeichert",
+    syncConnectedSuccess: "Google Drive verbunden, Synchronisierung...",
+    syncErrorTimeout: "Die Synchronisierung wurde nach 15 Sekunden abgebrochen. Überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut."
   },
   it: {
     deleteConfirm: "Sei sicuro di voler eliminare questo curriculum? L'azione non può essere annullata.",
@@ -1793,7 +1907,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Se trovi utile questo progetto, considera di mettere una stella su GitHub! ⭐",
     linkTab: "Link",
     lastLoaded: "Ultimo caricamento",
-    lastSaved: "Ultimo salvataggio"
+    lastSaved: "Ultimo salvataggio",
+    syncConnectedSuccess: "Google Drive connesso, sincronizzazione...",
+    syncErrorTimeout: "La sincronizzazione è scaduta dopo 15 secondi. Controlla la connessione di rete e riprova."
   },
   es: {
     deleteConfirm: "¿Está seguro de que desea eliminar este currículum? Esta acción no se puede deshacer.",
@@ -1866,7 +1982,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Si este proyecto te resulta útil, ¡considera darle una estrella en GitHub! ⭐",
     linkTab: "Enlace",
     lastLoaded: "Última carga",
-    lastSaved: "Último guardado"
+    lastSaved: "Último guardado",
+    syncConnectedSuccess: "Google Drive conectado, sincronizando...",
+    syncErrorTimeout: "La sincronización agotó el tiempo de espera después de 15 segundos. Comprueba tu conexión de red e inténtalo de nuevo."
   },
   pt: {
     deleteConfirm: "Tem certeza de que deseja excluir este currículo? Esta ação não pode ser desfeita.",
@@ -1939,7 +2057,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Se você achar este projeto útil, por favor, considere dar uma estrela no GitHub! ⭐",
     linkTab: "Link",
     lastLoaded: "Último carregamento",
-    lastSaved: "Último salvo"
+    lastSaved: "Último salvo",
+    syncConnectedSuccess: "Google Drive conectado, sincronizando...",
+    syncErrorTimeout: "A sincronização expirou após 15 segundos. Verifique sua conexão de rede e tente novamente."
   },
   ja: {
     deleteConfirm: "この履歴書のバックアップを削除してもよろしいですか？この操作は取り消せません。",
@@ -2012,7 +2132,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "このプロジェクトが気に入ったら、GitHubでスターをお願いします！⭐",
     linkTab: "リンク",
     lastLoaded: "最終読み込み",
-    lastSaved: "最終保存"
+    lastSaved: "最終保存",
+    syncConnectedSuccess: "Google ドライブに接続されました。同期しています...",
+    syncErrorTimeout: "同期は15秒後にタイムアウトしました。ネットワーク接続を確認して、もう一度お試しください。"
   },
   ko: {
     deleteConfirm: "이 이력서 백업을 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
@@ -2085,7 +2207,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "이 프로젝트가 유용하셨다면 GitHub에서 스타를 눌러주세요! ⭐",
     linkTab: "링크",
     lastLoaded: "최근 불러옴",
-    lastSaved: "최근 저장됨"
+    lastSaved: "최근 저장됨",
+    syncConnectedSuccess: "Google 드라이브가 연결되어 동기화 중입니다...",
+    syncErrorTimeout: "동기화가 15초 후 시간 초과되었습니다. 네트워크 연결을 확인한 후 다시 시도하세요."
   },
   ru: {
     deleteConfirm: "Вы уверены, что хотите удалить эту резервную копию резюме? Это действие необратимо.",
@@ -2158,7 +2282,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Если проект вам понравился, поставьте, пожалуйста, звезду на GitHub! ⭐",
     linkTab: "Ссылка",
     lastLoaded: "Последняя загрузка",
-    lastSaved: "Последнее сохранение"
+    lastSaved: "Последнее сохранение",
+    syncConnectedSuccess: "Google Диск подключен, выполняется синхронизация...",
+    syncErrorTimeout: "Синхронизация превысила время ожидания в 15 секунд. Проверьте подключение к сети и повторите попытку."
   },
   "zh-tw": {
     deleteConfirm: "確定要刪除此履歷備份嗎？此操作無法復原。",
@@ -2231,7 +2357,9 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "如果您覺得本專案有幫助，請在 GitHub 上點個 Star 支持一下！⭐",
     linkTab: "連結",
     lastLoaded: "上次載入",
-    lastSaved: "上次儲存"
+    lastSaved: "上次儲存",
+    syncConnectedSuccess: "Google 雲端硬碟連線成功，正在同步...",
+    syncErrorTimeout: "同步在 15 秒後逾時。請檢查網路連線後再試一次。"
   },
   uk: {
     deleteConfirm: "Ви впевнені, що хочете видалити цю копію резюме? Цю дію не можна скасувати.",
@@ -2304,6 +2432,8 @@ export const extraTranslations: Record<string, ExtraTranslations> = {
     githubStarText: "Якщо проект став вам у пригоді, будь ласка, поставте зірку на GitHub! ⭐",
     linkTab: "Посилання",
     lastLoaded: "Останнє завантаження",
-    lastSaved: "Останнє збереження"
+    lastSaved: "Останнє збереження",
+    syncConnectedSuccess: "Google Диск підключено, виконується синхронізація...",
+    syncErrorTimeout: "Синхронізація перевищила час очікування у 15 секунд. Перевірте підключення до мережі та повторіть спробу."
   },
 };

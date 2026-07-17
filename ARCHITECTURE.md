@@ -76,6 +76,38 @@ To keep `App.tsx` clean and dedicated solely to rendering layout components, sta
 
 ---
 
+## ☁️ Google Drive Synchronization
+
+`src/utils/googleDriveSync.ts` owns the Google Identity Services (GIS) authorization flow and synchronization with the Google Drive `appDataFolder`. It subscribes to local resume mutation events at module level, so sync is not tied to whether `ResumeModal` is mounted. `ResumeModal` consumes the status subscription to render connection state, progress, and recoverable errors.
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Modal as ResumeModal
+  participant Local as cookies.ts/localStorage
+  participant Sync as googleDriveSync.ts
+  participant GIS as Google Identity Services
+  participant Drive as Google Drive appDataFolder
+
+  User->>Modal: Save or delete resume
+  Modal->>Local: Persist slot or deletion tombstone
+  Local-->>Sync: local_resume_saved / local_resume_deleted
+  Sync->>Sync: Reuse valid cached token
+  alt Token expires within five minutes
+    Sync->>GIS: Request token with prompt: none
+  end
+  Sync->>Drive: Reconcile resume payloads and sync_metadata.json
+  Sync-->>Modal: Publish syncing/completed/failed status
+```
+
+- **Local-first data model:** `cookies.ts` stores full resume payloads and a master metadata list in `localStorage`, then emits `local_resume_saved` or `local_resume_deleted` after a successful mutation. Deletes become timestamped tombstones so they can be propagated instead of returning as zombie items from another device.
+- **Conflict resolution:** Sync merges local and remote metadata by resume ID and timestamp. Active records upload/download payloads; newer deletion tombstones remove the corresponding payload and remain in metadata.
+- **Token lifecycle:** The access token and absolute expiry timestamp are cached in `localStorage`. A five-minute refresh buffer marks an otherwise valid token as due for renewal; the sync module first calls GIS with `prompt: "none"`, which never opens a popup. Interactive authorization is reserved for an explicit user action such as **Connect Google Drive** or **Sync**. Logout and HTTP 401 responses purge the token cache.
+- **Status and recovery:** The module publishes `syncing`, `completed`, `failed`, and `disconnected` transitions to subscribers. A 15-second watchdog aborts stalled requests and exposes a localized error to the modal.
+- **Privacy boundary:** There is no application backend. Without user authorization, resume data stays in browser storage; enabled Drive sync sends only the backup records to the user's Google Drive application-data folder.
+
+---
+
 ## 📱 Responsive Layout Stacking Flow
 
 When viewport width falls below `1125px`, the layout transitions from a multi-pane side-by-side view to a **mobile-tabbed single-pane view**:

@@ -21,8 +21,12 @@ A premium, high-fidelity, client-side Markdown resume generator. Design and writ
   - Configuration settings and resume markups save automatically as you type.
   - Infinite slot backups using `localStorage` API, with name overwrite checking and recovery controls.
   - Custom filename exports for Markdown (`.md`).
+- ☁️ **Google Drive Sync:**
+  - Optional, user-authorized backups of saved resume slots to Google Drive's private `appDataFolder`.
+  - Saving, overwriting, or deleting a resume automatically synchronizes changes, including deletion tombstones, across connected devices.
+  - OAuth tokens are cached locally with an expiry timestamp and silently refreshed five minutes before Google expiry when possible.
 - 🌐 **12-Language Multilingual UI:** Fully localized in English, Simplified Chinese, Traditional Chinese (`zh-tw`), French, German, Italian, Spanish, Portuguese, Japanese, Korean, Russian, and Ukrainian.
-- 🚫 **Privacy First:** Zero trackers, zero analytical cookies, and zero server-side uploads. Your resume remains strictly yours.
+- 🚫 **Privacy First:** No trackers, analytics, or proprietary backend. Resume data remains in browser storage by default; Google Drive backup is optional, user-authorized, and stored only in the user's private Drive application-data area.
 
 ---
 
@@ -85,6 +89,17 @@ To export the cleanest A4 PDF from your browser:
    - **Margins:** Set to **None** (the page's print media queries automatically inject custom 12mm bounds).
    - **Options:** Enable **Background graphics** to preserve the custom theme colors.
 3. Click **Save**.
+
+---
+
+## ☁️ Google Drive Sync
+
+1. Open **Manage Saved Resumes** and select **Connect Google Drive**.
+2. Complete the Google authorization flow. Resume backups are stored in Google Drive's private application-data area and are not visible as ordinary Drive files.
+3. Save, overwrite, or delete a resume slot to synchronize the change automatically. The app reuses a valid cached token or attempts a silent refresh before Google expiry; you can also select **Sync** to run a manual backup.
+4. Select **Disconnect** to remove the local connection and cached authorization token.
+
+The app is local-first: local backups remain available offline and Google Drive sync is optional. If Google cannot renew authorization silently, the app does not open a popup automatically; use **Sync** to authorize again.
 
 ---
 

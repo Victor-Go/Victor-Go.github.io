@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Trash2, FolderOpen, Save, FileText } from "lucide-react";
+import { X, Trash2, FolderOpen, Save, FileText, Cloud, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
 import {
   getSavedResumesList,
   saveResumeSlot,
@@ -9,6 +9,17 @@ import {
 import type { ResumeTemplate, ResumeData } from "../utils/cookies";
 import type { AppStyles } from "../utils/storage";
 import { translations, extraTranslations } from "../utils/translations";
+import {
+  getSyncStatus,
+  subscribeSyncStatus,
+  loginToGDrive,
+  logoutFromGDrive,
+  syncWithGoogleDrive,
+  getAccessToken,
+  getSyncErrorMessage,
+  isGoogleDriveSdkInitialized,
+} from "../utils/googleDriveSync";
+import type { SyncStatusType } from "../utils/googleDriveSync";
 
 interface ResumeModalProps {
   isOpen: boolean;
@@ -57,6 +68,8 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [lastLoadedId, setLastLoadedId] = useState<string | null>(null);
   const [lastSavedId, setLastSavedId] = useState<string | null>(null);
+  const [syncStatus, setSyncStatusState] = useState<SyncStatusType>(getSyncStatus());
+  const [syncError, setSyncError] = useState<string | null>(getSyncErrorMessage(lang));
 
   const searchPlaceholderMap: Record<string, string> = {
     en: "Search...",
@@ -76,9 +89,10 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
 
   // Refresh saved resume slots from localStorage
   const refreshList = () => {
-    const list = getSavedResumesList();
+    const savedResumes = getSavedResumesList();
+    const visibleResumes = savedResumes.filter((item) => !item.deleted);
     // Load full details for each
-    const fullList = list
+    const fullList = visibleResumes
       .map((item) => loadResumeSlot(item.id))
       .filter((item): item is ResumeData => item !== null);
     // Sort by timestamp descending (most recent first)
@@ -89,12 +103,58 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   };
 
   useEffect(() => {
+    setSyncStatusState(getSyncStatus());
+    setSyncError(getSyncErrorMessage(lang));
+    const unsubscribe = subscribeSyncStatus((status) => {
+      setSyncStatusState(status);
+      const error = getSyncErrorMessage(lang);
+      setSyncError(error);
+      if (status === "completed") {
+        refreshList();
+      }
+      if (status === "failed" && isOpen) {
+        showToast(`${t.syncStatus.failed}: ${error || "Sync failed"}`, "error");
+      }
+    });
+    return () => unsubscribe();
+  }, [isOpen, showToast, t.syncStatus.failed]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     refreshList();
     setNewResumeName("");
     setErrorMsg(null);
     setSearchQuery("");
+
+    if (getSyncStatus() !== "disconnected" && isGoogleDriveSdkInitialized()) {
+      void syncWithGoogleDrive();
+    }
+
+    const handleOnline = () => {
+      if (getSyncStatus() !== "disconnected" && isGoogleDriveSdkInitialized()) {
+        void syncWithGoogleDrive();
+      }
+    };
+
+    window.addEventListener("online", handleOnline);
+
+    const handleLocalSyncEvent = () => {
+      refreshList();
+    };
+    window.addEventListener("local_resumes_synced", handleLocalSyncEvent);
+
+    const handleLocalResumeChange = () => {
+      if (
+        getSyncStatus() !== "syncing" &&
+        getSyncStatus() !== "disconnected" &&
+        isGoogleDriveSdkInitialized()
+      ) {
+        void syncWithGoogleDrive();
+      }
+    };
+    window.addEventListener("local_resume_saved", handleLocalResumeChange);
+    window.addEventListener("local_resume_deleted", handleLocalResumeChange);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -104,6 +164,10 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("local_resumes_synced", handleLocalSyncEvent);
+      window.removeEventListener("local_resume_saved", handleLocalResumeChange);
+      window.removeEventListener("local_resume_deleted", handleLocalResumeChange);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, onClose]);
@@ -338,6 +402,133 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
             {errorMsg && <div className="modal-error">{errorMsg}</div>}
           </div>
 
+          {/* Section: Google Drive Sync */}
+          <div className="modal-section google-drive-sync-section" style={{ borderBottom: "1px solid var(--border)", paddingBottom: "16px", marginBottom: "16px" }}>
+            <h3 className="modal-section-title">
+              <Cloud size={14} />
+              <span>Google Drive Sync</span>
+            </h3>
+            {syncStatus === "disconnected" ? (
+              <div style={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>
+                <button
+                  type="button"
+                  onClick={loginToGDrive}
+                  className="action-btn primary-btn"
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <Cloud size={16} />
+                  {t.syncStatus.login}
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  gap: "12px",
+                  padding: "12px 14px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--bg-input)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {syncStatus === "syncing" && (
+                    <span
+                      style={{
+                        color: "#60a5fa",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <RefreshCw size={14} className="animate-spin" />
+                      {t.syncStatus.syncing}
+                    </span>
+                  )}
+                  {syncStatus === "completed" && (
+                    <span
+                      style={{
+                        color: "var(--success)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <CheckCircle size={14} />
+                      {t.syncStatus.completed}
+                    </span>
+                  )}
+                  {syncStatus === "failed" && (
+                    <span
+                      style={{
+                        color: "#f59e0b",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      <AlertCircle size={14} />
+                      {t.syncStatus.failed}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    disabled={syncStatus === "syncing"}
+                    onClick={() => {
+                      if (getAccessToken() && isGoogleDriveSdkInitialized()) {
+                        void syncWithGoogleDrive();
+                      } else {
+                        void loginToGDrive();
+                      }
+                    }}
+                    className="action-btn secondary-btn"
+                    style={{
+                      height: "28px",
+                      padding: "0 10px",
+                      fontSize: "12px",
+                      gap: "4px",
+                    }}
+                  >
+                    <RefreshCw size={11} />
+                    Sync
+                  </button>
+                  <button
+                    type="button"
+                    onClick={logoutFromGDrive}
+                    className="delete-slot-btn"
+                    style={{
+                      padding: "4px 8px",
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      borderRadius: "4px",
+                      height: "28px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    {t.syncStatus.disconnect}
+                  </button>
+                </div>
+              </div>
+            )}
+            {syncStatus === "failed" && syncError && (
+              <div className="modal-error" role="alert" style={{ marginTop: "10px" }}>
+                {syncError}
+              </div>
+            )}
+          </div>
+
           {/* Section: Saved Resumes List */}
           <div className="modal-section">
             <h3 className="modal-section-title" style={{ justifyContent: "space-between", width: "100%" }}>
@@ -444,4 +635,3 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     </div>
   );
 };
-

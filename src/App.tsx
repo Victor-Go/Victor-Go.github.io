@@ -23,6 +23,7 @@ import { useUIStore } from "./stores/useUIStore";
 import { useLanguage } from "./hooks/useLanguage";
 import { useResumePersistence } from "./hooks/useResumePersistence";
 import { usePrint } from "./hooks/usePrint";
+import { trackPageView } from "./utils/analytics";
 import {
   getAccessToken,
   handleOAuthCallback,
@@ -124,6 +125,10 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    trackPageView();
+  }, [lang]);
 
   useEffect(() => {
     let handledOAuthCallback = false;

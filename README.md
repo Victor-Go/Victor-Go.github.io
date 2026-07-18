@@ -26,7 +26,7 @@ A premium, high-fidelity, client-side Markdown resume generator. Design and writ
   - Saving, overwriting, or deleting a resume automatically synchronizes changes, including deletion tombstones, across connected devices.
   - OAuth tokens are cached locally with an expiry timestamp and silently refreshed five minutes before Google expiry when possible.
 - 🌐 **12-Language Multilingual UI:** Fully localized in English, Simplified Chinese, Traditional Chinese (`zh-tw`), French, German, Italian, Spanish, Portuguese, Japanese, Korean, Russian, and Ukrainian.
-- 🚫 **Privacy First:** No trackers, analytics, or proprietary backend. Resume data remains in browser storage by default; Google Drive backup is optional, user-authorized, and stored only in the user's private Drive application-data area.
+- 🔒 **Privacy First:** No advertising trackers or proprietary backend. Resume data remains in browser storage by default; Google Drive backup is optional, user-authorized, and stored only in the user's private Drive application-data area. We use Google Analytics for aggregate usage measurement; see the privacy policy for details.
 
 ---
 

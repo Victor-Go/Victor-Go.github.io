@@ -7,7 +7,9 @@ const LIST_STORAGE_KEY = "saved_resumes_master_list";
 const SYNC_TIMEOUT_ERROR = "SYNC_TIMEOUT";
 const ACCESS_TOKEN_STORAGE_KEY = "gdrive_access_token";
 const ACCESS_TOKEN_EXPIRY_STORAGE_KEY = "gdrive_access_token_expires_at";
+const LAST_SYNC_STORAGE_KEY = "gdrive_last_successful_sync_at";
 const TOKEN_EXPIRY_BUFFER_SECONDS = 5 * 60;
+export const GOOGLE_DRIVE_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 
 export interface SyncResult {
   success: boolean;
@@ -40,6 +42,16 @@ let syncQueuedAfterMutation = false;
 
 export function getSyncStatus(): SyncStatusType {
   return currentSyncStatus;
+}
+
+export function getLastSuccessfulSyncAt(): number | null {
+  const storedTimestamp = Number(localStorage.getItem(LAST_SYNC_STORAGE_KEY));
+  return Number.isFinite(storedTimestamp) && storedTimestamp > 0 ? storedTimestamp : null;
+}
+
+export function shouldSyncGoogleDrive(now = Date.now()): boolean {
+  const lastSyncAt = getLastSuccessfulSyncAt();
+  return lastSyncAt === null || now - lastSyncAt >= GOOGLE_DRIVE_SYNC_INTERVAL_MS;
 }
 
 export function getSyncErrorMessage(
@@ -573,6 +585,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     }
 
     result = { success: true };
+    localStorage.setItem(LAST_SYNC_STORAGE_KEY, String(Date.now()));
     terminalStatus = "completed";
   } catch (err: any) {
     console.error("Google Drive sync failed:", err);

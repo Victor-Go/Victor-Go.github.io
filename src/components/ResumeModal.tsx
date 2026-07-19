@@ -17,7 +17,9 @@ import {
   syncWithGoogleDrive,
   getAccessToken,
   getSyncErrorMessage,
+  getLastSuccessfulSyncAt,
   isGoogleDriveSdkInitialized,
+  shouldSyncGoogleDrive,
 } from "../utils/googleDriveSync";
 import type { SyncStatusType } from "../utils/googleDriveSync";
 
@@ -70,6 +72,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   const [lastSavedId, setLastSavedId] = useState<string | null>(null);
   const [syncStatus, setSyncStatusState] = useState<SyncStatusType>(getSyncStatus());
   const [syncError, setSyncError] = useState<string | null>(getSyncErrorMessage(lang));
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(getLastSuccessfulSyncAt());
 
   const searchPlaceholderMap: Record<string, string> = {
     en: "Search...",
@@ -110,6 +113,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
       const error = getSyncErrorMessage(lang);
       setSyncError(error);
       if (status === "completed") {
+        setLastSyncAt(getLastSuccessfulSyncAt());
         refreshList();
       }
       if (status === "failed" && isOpen) {
@@ -127,7 +131,12 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     setErrorMsg(null);
     setSearchQuery("");
 
-    if (getSyncStatus() !== "disconnected" && isGoogleDriveSdkInitialized()) {
+    setLastSyncAt(getLastSuccessfulSyncAt());
+    if (
+      getSyncStatus() !== "disconnected" &&
+      isGoogleDriveSdkInitialized() &&
+      shouldSyncGoogleDrive()
+    ) {
       void syncWithGoogleDrive();
     }
 
@@ -173,6 +182,13 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const formattedLastSync = lastSyncAt
+    ? new Intl.DateTimeFormat(lang, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(lastSyncAt)
+    : null;
 
   const handleSave = () => {
     const trimmedName = newResumeName.trim();
@@ -406,7 +422,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
           <div className="modal-section google-drive-sync-section" style={{ borderBottom: "1px solid var(--border)", paddingBottom: "16px", marginBottom: "16px" }}>
             <h3 className="modal-section-title">
               <Cloud size={14} />
-              <span>Google Drive Sync</span>
+              <span>{t.syncStatus.title}</span>
             </h3>
             {syncStatus === "disconnected" ? (
               <div style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
@@ -442,7 +458,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                   backgroundColor: "var(--bg-input)",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
                   {syncStatus === "syncing" && (
                     <span
                       style={{
@@ -488,6 +504,11 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                       {t.syncStatus.failed}
                     </span>
                   )}
+                  {formattedLastSync && (
+                    <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>
+                      {t.syncStatus.lastSynced}: {formattedLastSync}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <button
@@ -509,7 +530,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                     }}
                   >
                     <RefreshCw size={11} />
-                    Sync
+                    {t.syncStatus.syncNow}
                   </button>
                   <button
                     type="button"

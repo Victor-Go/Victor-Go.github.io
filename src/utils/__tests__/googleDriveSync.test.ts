@@ -34,6 +34,20 @@ describe("Google Drive synchronization", () => {
     vi.unstubAllGlobals();
   });
 
+  it("only requests an automatic sync when the last successful sync is stale", async () => {
+    const { GOOGLE_DRIVE_SYNC_INTERVAL_MS, getLastSuccessfulSyncAt, shouldSyncGoogleDrive } =
+      await loadSyncModule();
+    const now = Date.now();
+
+    expect(getLastSuccessfulSyncAt()).toBeNull();
+    expect(shouldSyncGoogleDrive(now)).toBe(true);
+
+    localStorage.setItem("gdrive_last_successful_sync_at", String(now));
+    expect(getLastSuccessfulSyncAt()).toBe(now);
+    expect(shouldSyncGoogleDrive(now + GOOGLE_DRIVE_SYNC_INTERVAL_MS - 1)).toBe(false);
+    expect(shouldSyncGoogleDrive(now + GOOGLE_DRIVE_SYNC_INTERVAL_MS)).toBe(true);
+  });
+
   it("shares one in-progress sync across concurrent callers", async () => {
     connectWithValidToken();
     let releaseFirstRequest!: () => void;

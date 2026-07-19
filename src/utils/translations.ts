@@ -66,12 +66,15 @@ export interface Translations {
   fitWidthTitle: string;
   realSizeTitle: string;
   syncStatus: {
+    title: string;
+    syncNow: string;
     completed: string;
     syncing: string;
     failed: string;
     login: string;
     disconnect: string;
     privacyPolicy: string;
+    lastSynced: string;
   };
 }
 
@@ -197,12 +200,15 @@ Detail-oriented and passionate Senior Software Engineer with 8+ years of experie
 `
 ,
     syncStatus: {
+      title: "Google Drive Sync",
+      syncNow: "Sync",
       completed: "Synced",
       syncing: "Syncing...",
       failed: "Sync Failed",
       login: "Connect Google Drive",
       disconnect: "Disconnect",
-      privacyPolicy: "Privacy Policy"
+      privacyPolicy: "Privacy Policy",
+      lastSynced: "Last synced"
     }
   },
   zh: {
@@ -312,12 +318,15 @@ defaultResume: `# 张三
 `
 ,
     syncStatus: {
+      title: "Google 云端硬盘同步",
+      syncNow: "同步",
       completed: "已同步",
       syncing: "同步中...",
       failed: "同步失败",
       login: "连接 Google 云端硬盘",
       disconnect: "断开连接",
-      privacyPolicy: "隐私政策"
+      privacyPolicy: "隐私政策",
+      lastSynced: "上次同步"
     }
   },
   fr: {
@@ -427,12 +436,15 @@ Ingénieur logiciel senior passionné, fort de plus de 8 ans d'expérience dans 
 `
 ,
     syncStatus: {
+      title: "Synchronisation Google Drive",
+      syncNow: "Synchroniser",
       completed: "Synchronisé",
       syncing: "Synchronisation...",
       failed: "Échec sync",
       login: "Connecter Google Drive",
       disconnect: "Déconnecter",
-      privacyPolicy: "Politique de confidentialité"
+      privacyPolicy: "Politique de confidentialité",
+      lastSynced: "Dernière synchronisation"
     }
   },
   de: {
@@ -542,12 +554,15 @@ Detailorientierter und leidenschaftlicher Senior Softwareentwickler mit mehr als
 `
 ,
     syncStatus: {
+      title: "Google Drive-Synchronisierung",
+      syncNow: "Synchronisieren",
       completed: "Synchronisiert",
       syncing: "Synchronisiere...",
       failed: "Sync fehlgeschlagen",
       login: "Mit Google Drive verbinden",
       disconnect: "Trennen",
-      privacyPolicy: "Datenschutzerklärung"
+      privacyPolicy: "Datenschutzerklärung",
+      lastSynced: "Zuletzt synchronisiert"
     }
   },
   it: {
@@ -657,12 +672,15 @@ Sviluppatore Software Senior appassionato e orientato ai dettagli con oltre 8 an
 `
 ,
     syncStatus: {
+      title: "Sincronizzazione Google Drive",
+      syncNow: "Sincronizza",
       completed: "Sincronizzato",
       syncing: "Sincronizzazione...",
       failed: "Sincronizzazione fallita",
       login: "Connetti Google Drive",
       disconnect: "Disconnetti",
-      privacyPolicy: "Informativa sulla privacy"
+      privacyPolicy: "Informativa sulla privacy",
+      lastSynced: "Ultima sincronizzazione"
     }
   },
   es: {
@@ -772,12 +790,15 @@ Ingeniero de Software Senior apasionado y detallista con más de 8 años de expe
 `
 ,
     syncStatus: {
+      title: "Sincronización con Google Drive",
+      syncNow: "Sincronizar",
       completed: "Sincronizado",
       syncing: "Sincronizando...",
       failed: "Error de sincronización",
       login: "Conectar Google Drive",
       disconnect: "Desconectar",
-      privacyPolicy: "Política de privacidad"
+      privacyPolicy: "Política de privacidad",
+      lastSynced: "Última sincronización"
     }
   },
   pt: {
@@ -887,12 +908,15 @@ Engenheiro de Software Sénior detalhista e apaixonado com mais de 8 anos de exp
 `
 ,
     syncStatus: {
+      title: "Sincronização com Google Drive",
+      syncNow: "Sincronizar",
       completed: "Sincronizado",
       syncing: "Sincronizando...",
       failed: "Falha na sincronização",
       login: "Conectar ao Google Drive",
       disconnect: "Desconectar",
-      privacyPolicy: "Política de Privacidade"
+      privacyPolicy: "Política de Privacidade",
+      lastSynced: "Última sincronização"
     }
   },
   ja: {
@@ -1002,12 +1026,15 @@ defaultResume: `# 田中 太郎
 `
 ,
     syncStatus: {
+      title: "Google ドライブ同期",
+      syncNow: "同期",
       completed: "同期済み",
       syncing: "同期中...",
       failed: "同期失敗",
       login: "Google ドライブに接続",
       disconnect: "接続解除",
-      privacyPolicy: "プライバシーポリシー"
+      privacyPolicy: "プライバシーポリシー",
+      lastSynced: "最終同期"
     }
   },
   ko: {
@@ -1117,12 +1144,15 @@ defaultResume: `# 김철수
 `
 ,
     syncStatus: {
+      title: "Google Drive 동기화",
+      syncNow: "동기화",
       completed: "동기화됨",
       syncing: "동기화 중...",
       failed: "동기화 실패",
       login: "Google 드라이브 연결",
       disconnect: "연결 해제",
-      privacyPolicy: "개인정보 처리방침"
+      privacyPolicy: "개인정보 처리방침",
+      lastSynced: "마지막 동기화"
     }
   },
   ru: {
@@ -1232,12 +1262,15 @@ defaultResume: `# Иван Иванов
 `
 ,
     syncStatus: {
+      title: "Синхронизация с Google Диском",
+      syncNow: "Синхронизировать",
       completed: "Синхронизировано",
       syncing: "Синхронизация...",
       failed: "Ошибка синхронизации",
       login: "Подключить Google Диск",
       disconnect: "Отключить",
-      privacyPolicy: "Политика конфиденциальности"
+      privacyPolicy: "Политика конфиденциальности",
+      lastSynced: "Последняя синхронизация"
     }
   },
   "zh-tw": {
@@ -1347,12 +1380,15 @@ defaultResume: `# 張三
 `
 ,
     syncStatus: {
+      title: "Google 雲端硬碟同步",
+      syncNow: "同步",
       completed: "已同步",
       syncing: "同步中...",
       failed: "同步失敗",
       login: "連接 Google 雲端硬碟",
       disconnect: "斷開連接",
-      privacyPolicy: "隱私權政策"
+      privacyPolicy: "隱私權政策",
+      lastSynced: "上次同步"
     }
   },
   uk: {
@@ -1462,12 +1498,15 @@ defaultResume: `# Олександр Коваленко
 `
 ,
     syncStatus: {
+      title: "Синхронізація з Google Диском",
+      syncNow: "Синхронізувати",
       completed: "Синхронізовано",
       syncing: "Синхронізація...",
       failed: "Помилка синхронізації",
       login: "Підключити Google Диск",
       disconnect: "Відключити",
-      privacyPolicy: "Політика конфіденційності"
+      privacyPolicy: "Політика конфіденційності",
+      lastSynced: "Остання синхронізація"
     }
   }
 };

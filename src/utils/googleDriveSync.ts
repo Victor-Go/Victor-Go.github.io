@@ -1,4 +1,4 @@
-import { getSavedResumesList, loadResumeSlot, computeResumeHash, getSyncDeviceId, rememberRemoteLogicalVersion } from "./cookies";
+import { getSavedResumesList, loadResumeSlot, computeResumeHash, getSyncDeviceId, rememberRemoteLogicalVersion, MAX_RESUME_PAYLOAD_BYTES } from "./cookies";
 import type { ResumeMetadata } from "./cookies";
 import { extraTranslations } from "./translations";
 
@@ -39,10 +39,11 @@ interface RemoteFile {
 interface RemoteMetadataDocument {
   records: RemoteResumeMetadata[];
   etag: string | null;
+  invalid: boolean;
 }
 
 // Global state/listeners for sync status
-export type SyncStatusType = "completed" | "syncing" | "failed" | "disconnected";
+export type SyncStatusType = "completed" | "syncing" | "retrying" | "failed" | "disconnected";
 let currentSyncStatus: SyncStatusType = localStorage.getItem("gdrive_sync_connected") === "true" ? "completed" : "disconnected";
 const listeners: ((status: SyncStatusType) => void)[] = [];
 let syncWatchdog: ReturnType<typeof setTimeout> | null = null;
@@ -50,6 +51,11 @@ let currentSyncError: string | null = null;
 let syncAbortController: AbortController | null = null;
 let activeSyncPromise: Promise<SyncResult> | null = null;
 let syncQueuedAfterMutation = false;
+let metadataConflictRetryCount = 0;
+let metadataConflictRetryTimer: ReturnType<typeof setTimeout> | null = null;
+const METADATA_CONFLICT_RETRY_BASE_MS = 1_000;
+const METADATA_CONFLICT_RETRY_MAX_MS = 30_000;
+const METADATA_CONFLICT_MAX_RETRIES = 5;
 
 export function getSyncStatus(): SyncStatusType {
   return currentSyncStatus;
@@ -90,6 +96,34 @@ function setSyncStatus(status: SyncStatusType) {
   if (currentSyncStatus === status) return;
   currentSyncStatus = status;
   [...listeners].forEach((listener) => listener(status));
+}
+
+function scheduleMetadataConflictRetry(): boolean {
+  if (metadataConflictRetryTimer) return true;
+  if (metadataConflictRetryCount >= METADATA_CONFLICT_MAX_RETRIES) return false;
+  const exponentialDelay = Math.min(
+    METADATA_CONFLICT_RETRY_MAX_MS,
+    METADATA_CONFLICT_RETRY_BASE_MS * 2 ** metadataConflictRetryCount
+  );
+  metadataConflictRetryCount += 1;
+  // A small jitter prevents multiple devices that collided once from retrying
+  // on the same cadence forever.
+  const delay = exponentialDelay + Math.floor(Math.random() * 250);
+  metadataConflictRetryTimer = setTimeout(() => {
+    metadataConflictRetryTimer = null;
+    if (isSyncConnected() && isGoogleDriveSdkInitialized()) {
+      void syncWithGoogleDrive();
+    }
+  }, delay);
+  return true;
+}
+
+function clearMetadataConflictRetry() {
+  metadataConflictRetryCount = 0;
+  if (metadataConflictRetryTimer) {
+    clearTimeout(metadataConflictRetryTimer);
+    metadataConflictRetryTimer = null;
+  }
 }
 
 function startSyncWatchdog() {
@@ -374,34 +408,57 @@ async function getMetadataDocument(fileId: string): Promise<RemoteMetadataDocume
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const res = await apiFetch(url);
   if (!res.ok) throw new Error(`Failed to get file ${fileId}`);
-  const records = await res.json();
-  if (!isRemoteMetadataList(records)) {
-    throw new Error("Remote sync metadata is invalid; sync was stopped to protect backup data");
+  const text = await res.text();
+  try {
+    const records = JSON.parse(text);
+    if (isRemoteMetadataList(records)) {
+      return { records, etag: res.headers.get("ETag"), invalid: false };
+    }
+  } catch {
+    // Invalid metadata is deliberately treated as an uncommitted empty Drive.
   }
-  return { records, etag: res.headers.get("ETag") };
+  return { records: [], etag: res.headers.get("ETag"), invalid: true };
 }
 
 async function createRemoteFile(name: string, content: any, appProperties?: Record<string, string>): Promise<string> {
-  // 1. Create file metadata
-  const metadataUrl = "https://www.googleapis.com/drive/v3/files";
-  const metaRes = await apiFetch(metadataUrl, {
+  const boundary = `resume-sync-${crypto.randomUUID()}`;
+  const metadata = JSON.stringify({
+    name,
+    parents: ["appDataFolder"],
+    ...(appProperties ? { appProperties } : {}),
+  });
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    metadata,
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    JSON.stringify(content),
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+  const res = await apiFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": `multipart/related; boundary=${boundary}`,
     },
-    body: JSON.stringify({
-      name,
-      parents: ["appDataFolder"],
-      ...(appProperties ? { appProperties } : {}),
-    }),
+    body,
   });
-  if (!metaRes.ok) throw new Error(`Failed to create remote file metadata for ${name}`);
-  const meta = await metaRes.json();
-  const fileId = meta.id;
+  if (!res.ok) throw new Error(`Failed to create remote file ${name}`);
+  const file = await res.json();
+  return file.id;
+}
 
-  // 2. Upload file content
-  await updateRemoteFileContent(fileId, content);
-  return fileId;
+function assertPayloadSize(payload: unknown): void {
+  if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > MAX_RESUME_PAYLOAD_BYTES) {
+    throw new Error("PAYLOAD_TOO_LARGE");
+  }
+}
+
+function payloadHash(payload: { markdown: string; styles: any; name: string; template: any }): string {
+  return computeResumeHash(payload.markdown, payload.styles, payload.name, payload.template);
 }
 
 async function updateRemoteFileContent(fileId: string, content: any, etag?: string | null): Promise<void> {
@@ -488,6 +545,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     for (const metadataFile of metadataFiles) {
       const document = await getMetadataDocument(metadataFile.id);
       if (metadataFile.id === metadataFileId) metadataEtag = document.etag;
+      if (document.invalid) metadataNeedsCommit = true;
       document.records.forEach((item) => {
         const existing = mergedMetadataMap.get(item.id);
         if (!existing || versionOf(item) > versionOf(existing)) {
@@ -557,10 +615,17 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
             localData.name,
             localData.template
           );
+          assertPayloadSize(localData);
           const version = versionOf(localItem);
           const writerDeviceId = localItem.writerDeviceId || getSyncDeviceId();
           const fileName = createPayloadFileName(id, version, writerDeviceId, computedHash);
-          if (!remoteFilesByName[fileName]) {
+          const existingFileId = remoteFilesByName[fileName];
+          if (existingFileId) {
+            const existingPayload = await getFileContent(existingFileId);
+            if (payloadHash(existingPayload) !== computedHash) {
+              await updateRemoteFileContent(existingFileId, localData);
+            }
+          } else {
             await createRemoteFile(fileName, localData, {
               resumeId: id,
               contentHash: computedHash,
@@ -608,6 +673,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
         } else {
           // Skip payload transfer when the local copy already has the same hash.
           if (localItem && !localItem.deleted && localItem.hash === remoteItem.hash && loadResumeSlot(id)) {
+            assertPayloadSize(loadResumeSlot(id));
             if (versionOf(localItem) !== versionOf(remoteItem) || localItem.writerDeviceId !== remoteItem.writerDeviceId) {
               const list = getSavedResumesList();
               const updated = list.filter((item) => item.id !== id);
@@ -632,6 +698,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
             throw new Error(`Remote resume payload is missing for ${id}`);
           }
           const remotePayload = await getFileContent(rFileId);
+          assertPayloadSize(remotePayload);
           const latest = getSavedResumesList().find((item) => item.id === id);
           if (localItem && latest && versionOf(latest) !== versionOf(localItem)) {
             syncQueuedAfterMutation = true;
@@ -710,15 +777,22 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
 
     result = { success: true };
     localStorage.setItem(LAST_SYNC_STORAGE_KEY, String(Date.now()));
+    clearMetadataConflictRetry();
     terminalStatus = "completed";
   } catch (err: any) {
     console.error("Google Drive sync failed:", err);
     if (err?.message === "SYNC_METADATA_CONFLICT") {
       // Another device committed first. Re-read and merge from its new ETag;
-      // the shared single-flight queue prevents parallel retries locally.
-      syncQueuedAfterMutation = true;
+      // backoff and jitter prevent two devices from immediately colliding again.
+      if (!scheduleMetadataConflictRetry()) {
+        currentSyncError = "Google Drive kept changing; please try syncing again.";
+        result = { success: false, error: currentSyncError };
+        terminalStatus = "failed";
+        return result;
+      }
+      setSyncStatus("retrying");
       result = { success: true };
-      terminalStatus = "completed";
+      terminalStatus = "retrying";
       return result;
     }
     const isInteractionRequired = err?.error === "interaction_required" || err?.error === "consent_required";
@@ -733,7 +807,9 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     result = { success: false, error: currentSyncError || error };
   } finally {
     if (syncAbortController === abortController) syncAbortController = null;
-    setSyncStatus(result.success ? "completed" : terminalStatus);
+    if (currentSyncStatus !== "retrying") {
+      setSyncStatus(result.success ? "completed" : terminalStatus);
+    }
   }
 
   return result;

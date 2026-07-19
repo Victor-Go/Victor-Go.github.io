@@ -70,7 +70,8 @@ describe("Google Drive synchronization", () => {
     expect(secondSync).toBe(firstSync);
     releaseFirstRequest();
     await expect(firstSync).resolves.toEqual({ success: true });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][0]).toContain("uploadType=multipart");
   });
 
   it("fails without writing metadata when a remote resume payload cannot be read", async () => {
@@ -156,6 +157,22 @@ describe("Google Drive synchronization", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("upload/drive"))).toBe(false);
+  });
+
+  it("treats invalid metadata as an empty Drive and repairs it", async () => {
+    connectWithValidToken();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ files: [{ id: "metadata-file", name: "sync_metadata.json" }] }))
+      .mockResolvedValueOnce(new Response("not-json", { status: 200 }))
+      .mockResolvedValueOnce(jsonResponse({ files: [] }))
+      .mockResolvedValueOnce(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { syncWithGoogleDrive } = await loadSyncModule();
+    await expect(syncWithGoogleDrive()).resolves.toEqual({ success: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[3][0]).toContain("upload/drive");
   });
 
   it("merges duplicate metadata files before deleting the stale copy", async () => {

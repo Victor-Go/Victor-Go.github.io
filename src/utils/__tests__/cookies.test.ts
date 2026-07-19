@@ -114,4 +114,11 @@ describe('cookies utility (resume slot storage)', () => {
     expect(result.error).toBe('Quota exceeded');
     expect(consoleSpy).toHaveBeenCalled();
   });
+
+  it('rejects a resume whose serialized payload exceeds 1 MiB', () => {
+    const result = saveResumeSlot('Large', 'x'.repeat(1024 * 1024), defaultStyles, 'classic');
+
+    expect(result).toEqual({ success: false, error: 'Resume data exceeds the 1 MiB sync limit.' });
+    expect(getSavedResumesList()).toEqual([]);
+  });
 });

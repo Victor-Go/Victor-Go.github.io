@@ -459,7 +459,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                 }}
               >
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
-                  {syncStatus === "syncing" && (
+                  {(syncStatus === "syncing" || syncStatus === "retrying") && (
                     <span
                       style={{
                         color: "#60a5fa",
@@ -471,7 +471,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                       }}
                     >
                       <RefreshCw size={14} className="animate-spin" />
-                      {t.syncStatus.syncing}
+                      {syncStatus === "retrying" ? `${t.syncStatus.syncing}…` : t.syncStatus.syncing}
                     </span>
                   )}
                   {syncStatus === "completed" && (
@@ -513,7 +513,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <button
                     type="button"
-                    disabled={syncStatus === "syncing"}
+                    disabled={syncStatus === "syncing" || syncStatus === "retrying"}
                     onClick={() => {
                       if (getAccessToken() && isGoogleDriveSdkInitialized()) {
                         void syncWithGoogleDrive();

@@ -123,16 +123,39 @@ describe("Google Drive synchronization", () => {
         styles: {},
         template: "classic",
         timestamp: 20,
-      }))
-      .mockResolvedValueOnce(jsonResponse({}));
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { syncWithGoogleDrive } = await loadSyncModule();
     const result = await syncWithGoogleDrive();
 
     expect(result).toEqual({ success: true });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(localStorage.getItem("saved_resume_slot_conflict")).toContain("# Remote");
+  });
+
+  it("does not rewrite metadata when local and remote payloads already match", async () => {
+    connectWithValidToken();
+    const resume = {
+      id: "same", name: "Same", template: "classic", timestamp: 20,
+      markdown: "# Same", styles: {},
+    };
+    localStorage.setItem("saved_resume_slot_same", JSON.stringify(resume));
+    localStorage.setItem("saved_resumes_master_list", JSON.stringify([{
+      id: "same", name: "Same", template: "classic", timestamp: 20,
+      hash: "same-hash", deleted: false,
+    }]));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ files: [{ id: "metadata-file", name: "sync_metadata.json" }] }))
+      .mockResolvedValueOnce(jsonResponse([{ id: "same", name: "Same", timestamp: 20, hash: "same-hash" }]))
+      .mockResolvedValueOnce(jsonResponse({ files: [{ id: "resume-file", name: "resume_same.json" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { syncWithGoogleDrive } = await loadSyncModule();
+    await expect(syncWithGoogleDrive()).resolves.toEqual({ success: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("upload/drive"))).toBe(false);
   });
 
   it("merges duplicate metadata files before deleting the stale copy", async () => {

@@ -25,6 +25,10 @@ export interface ResumeMetadata {
   timestamp: number;
   hash?: string;
   deleted?: boolean;
+  /** Monotonically increasing sync version. `timestamp` remains for legacy UI/data. */
+  logicalVersion?: number;
+  /** Stable random ID of the browser installation that wrote this version. */
+  writerDeviceId?: string;
 }
 
 export interface ResumeData {
@@ -39,6 +43,41 @@ export interface ResumeData {
 
 // Master Index LocalStorage Key
 const LIST_STORAGE_KEY = "saved_resumes_master_list";
+const DEVICE_ID_STORAGE_KEY = "gdrive_sync_device_id";
+const KNOWN_REMOTE_VERSIONS_STORAGE_KEY = "gdrive_known_remote_versions";
+
+export function getSyncDeviceId(): string {
+  let deviceId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, deviceId);
+  }
+  return deviceId;
+}
+
+function getKnownRemoteVersion(id: string): number {
+  try {
+    const values = JSON.parse(localStorage.getItem(KNOWN_REMOTE_VERSIONS_STORAGE_KEY) || "{}") as Record<string, number>;
+    return Number.isFinite(values[id]) ? values[id] : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Records a remote version so a later local mutation can never move backwards. */
+export function rememberRemoteLogicalVersion(id: string, version: number): void {
+  try {
+    const values = JSON.parse(localStorage.getItem(KNOWN_REMOTE_VERSIONS_STORAGE_KEY) || "{}") as Record<string, number>;
+    values[id] = Math.max(values[id] || 0, version);
+    localStorage.setItem(KNOWN_REMOTE_VERSIONS_STORAGE_KEY, JSON.stringify(values));
+  } catch {
+    // Sync correctness still has metadata conflict resolution if this small cache cannot be written.
+  }
+}
+
+function nextLogicalVersion(id: string, localVersion = 0): number {
+  return Math.max(Date.now(), localVersion + 1, getKnownRemoteVersion(id) + 1);
+}
 
 /**
  * Computes a fast synchronous 64-bit hash of the resume data content.
@@ -113,7 +152,8 @@ export function saveResumeSlot(
     const old_timestamp = existingSlot ? existingSlot.timestamp : 0;
     
     // Local Save Time-Skew Protection LWW
-    const timestamp = Math.max(Date.now(), old_timestamp + 1);
+    const logicalVersion = nextLogicalVersion(id, existingSlot?.logicalVersion ?? old_timestamp);
+    const timestamp = logicalVersion;
     const hash = computeResumeHash(markdown, styles, name, template);
 
     const resumeData: ResumeData = {
@@ -141,6 +181,8 @@ export function saveResumeSlot(
       timestamp,
       hash,
       deleted: false,
+      logicalVersion,
+      writerDeviceId: getSyncDeviceId(),
     });
 
     localStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(updatedList));
@@ -192,7 +234,8 @@ export function deleteResumeSlot(id: string): void {
     const list = getSavedResumesList();
     const existing = list.find((item) => item.id === id);
     const old_timestamp = existing ? existing.timestamp : 0;
-    const timestamp = Math.max(Date.now(), old_timestamp + 1);
+    const logicalVersion = nextLogicalVersion(id, existing?.logicalVersion ?? old_timestamp);
+    const timestamp = logicalVersion;
 
     const updatedList = list.filter((item) => item.id !== id);
     updatedList.push({
@@ -201,6 +244,8 @@ export function deleteResumeSlot(id: string): void {
       template: existing?.template || "classic",
       timestamp,
       deleted: true,
+      logicalVersion,
+      writerDeviceId: getSyncDeviceId(),
     });
     
     localStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(updatedList));

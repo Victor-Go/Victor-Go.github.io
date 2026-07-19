@@ -1,4 +1,4 @@
-import { getSavedResumesList, loadResumeSlot, computeResumeHash } from "./cookies";
+import { getSavedResumesList, loadResumeSlot, computeResumeHash, getSyncDeviceId, rememberRemoteLogicalVersion } from "./cookies";
 import type { ResumeMetadata } from "./cookies";
 import { extraTranslations } from "./translations";
 
@@ -10,6 +10,7 @@ const ACCESS_TOKEN_EXPIRY_STORAGE_KEY = "gdrive_access_token_expires_at";
 const LAST_SYNC_STORAGE_KEY = "gdrive_last_successful_sync_at";
 const TOKEN_EXPIRY_BUFFER_SECONDS = 5 * 60;
 export const GOOGLE_DRIVE_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const PAYLOAD_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
 
 export interface SyncResult {
   success: boolean;
@@ -22,12 +23,22 @@ export interface RemoteResumeMetadata {
   timestamp: number;
   name: string;
   deleted?: boolean;
+  /** Optional fields keep existing Drive backups readable during migration. */
+  logicalVersion?: number;
+  writerDeviceId?: string;
+  payloadFile?: string;
 }
 
 interface RemoteFile {
   id: string;
   name: string;
   modifiedTime?: string;
+  appProperties?: Record<string, string>;
+}
+
+interface RemoteMetadataDocument {
+  records: RemoteResumeMetadata[];
+  etag: string | null;
 }
 
 // Global state/listeners for sync status
@@ -296,6 +307,25 @@ async function findRemoteFiles(name: string): Promise<RemoteFile[]> {
   return data.files || [];
 }
 
+async function listAllRemoteFiles(): Promise<RemoteFile[]> {
+  const files: RemoteFile[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({
+      spaces: "appDataFolder",
+      pageSize: "1000",
+      fields: "nextPageToken,files(id,name,modifiedTime,appProperties)",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await apiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
+    if (!res.ok) throw new Error("Failed to list files in appDataFolder");
+    const page = await res.json() as { files?: RemoteFile[]; nextPageToken?: string };
+    files.push(...(page.files || []));
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+  return files;
+}
+
 function isRemoteMetadataList(value: unknown): value is RemoteResumeMetadata[] {
   return Array.isArray(value) && value.every((item) => {
     if (!item || typeof item !== "object") return false;
@@ -312,6 +342,27 @@ function getModifiedTime(file: RemoteFile): number {
   return Number.isFinite(time) ? time : 0;
 }
 
+function versionOf(record: Pick<RemoteResumeMetadata, "timestamp" | "logicalVersion">): number {
+  return record.logicalVersion ?? record.timestamp;
+}
+
+function payloadFileName(record: RemoteResumeMetadata): string {
+  return record.payloadFile || `resume_${record.id}.json`;
+}
+
+function createPayloadFileName(id: string, version: number, deviceId: string, hash: string): string {
+  return `resume_${id}_${version}_${deviceId}_${hash}.json`;
+}
+
+/** Returns positive when local is the deterministic winner. Legacy equal versions retain cloud priority. */
+function compareLocalToRemote(local: ResumeMetadata, remote: RemoteResumeMetadata): number {
+  const localVersion = versionOf(local);
+  const remoteVersion = versionOf(remote);
+  if (localVersion !== remoteVersion) return localVersion - remoteVersion;
+  if (!local.writerDeviceId || !remote.writerDeviceId) return -1;
+  return local.writerDeviceId.localeCompare(remote.writerDeviceId);
+}
+
 async function getFileContent(fileId: string): Promise<any> {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const res = await apiFetch(url);
@@ -319,7 +370,18 @@ async function getFileContent(fileId: string): Promise<any> {
   return res.json();
 }
 
-async function createRemoteFile(name: string, content: any): Promise<string> {
+async function getMetadataDocument(fileId: string): Promise<RemoteMetadataDocument> {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const res = await apiFetch(url);
+  if (!res.ok) throw new Error(`Failed to get file ${fileId}`);
+  const records = await res.json();
+  if (!isRemoteMetadataList(records)) {
+    throw new Error("Remote sync metadata is invalid; sync was stopped to protect backup data");
+  }
+  return { records, etag: res.headers.get("ETag") };
+}
+
+async function createRemoteFile(name: string, content: any, appProperties?: Record<string, string>): Promise<string> {
   // 1. Create file metadata
   const metadataUrl = "https://www.googleapis.com/drive/v3/files";
   const metaRes = await apiFetch(metadataUrl, {
@@ -330,6 +392,7 @@ async function createRemoteFile(name: string, content: any): Promise<string> {
     body: JSON.stringify({
       name,
       parents: ["appDataFolder"],
+      ...(appProperties ? { appProperties } : {}),
     }),
   });
   if (!metaRes.ok) throw new Error(`Failed to create remote file metadata for ${name}`);
@@ -341,15 +404,17 @@ async function createRemoteFile(name: string, content: any): Promise<string> {
   return fileId;
 }
 
-async function updateRemoteFileContent(fileId: string, content: any): Promise<void> {
+async function updateRemoteFileContent(fileId: string, content: any, etag?: string | null): Promise<void> {
   const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
   const res = await apiFetch(uploadUrl, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
+      ...(etag ? { "If-Match": etag } : {}),
     },
     body: JSON.stringify(content),
   });
+  if (res.status === 412) throw new Error("SYNC_METADATA_CONFLICT");
   if (!res.ok) throw new Error(`Failed to update remote file content for ${fileId}`);
 }
 
@@ -415,17 +480,17 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     let metadataFileId = metadataFiles[0]?.id ?? null;
     const duplicateFileIds = new Set(metadataFiles.slice(1).map((file) => file.id));
     const mergedMetadataMap = new Map<string, RemoteResumeMetadata>();
+    let metadataEtag: string | null = null;
+    let metadataNeedsCommit = metadataFileId === null || metadataFiles.length > 1;
 
     // Migrate legacy duplicate metadata files. The latest logical resume
     // timestamp wins; exact ties use the most recently modified metadata file.
     for (const metadataFile of metadataFiles) {
-      const remoteMetadata = await getFileContent(metadataFile.id);
-      if (!isRemoteMetadataList(remoteMetadata)) {
-        throw new Error("Remote sync metadata is invalid; sync was stopped to protect backup data");
-      }
-      remoteMetadata.forEach((item) => {
+      const document = await getMetadataDocument(metadataFile.id);
+      if (metadataFile.id === metadataFileId) metadataEtag = document.etag;
+      document.records.forEach((item) => {
         const existing = mergedMetadataMap.get(item.id);
-        if (!existing || item.timestamp > existing.timestamp) {
+        if (!existing || versionOf(item) > versionOf(existing)) {
           mergedMetadataMap.set(item.id, item);
         }
       });
@@ -435,10 +500,8 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     const localList = getSavedResumesList();
 
     // Map files on remote to avoid querying file names/IDs in a loop
-    const remoteFileListUrl = `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1000&fields=files(id,name,modifiedTime)`;
-    const fileListRes = await apiFetch(remoteFileListUrl);
-    if (!fileListRes.ok) throw new Error("Failed to list files in appDataFolder");
-    const fileList = await fileListRes.json();
+    const remoteFileList = await listAllRemoteFiles();
+    const fileList = { files: remoteFileList };
     const remoteFilesByName: Record<string, string> = {};
     if (fileList.files) {
       const filesByName = new Map<string, RemoteFile>();
@@ -470,57 +533,62 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
       const localItem = localMetadataMap.get(id);
       const remoteItem = mergedMetadataMap.get(id);
 
-      if (localItem && (!remoteItem || localItem.timestamp > remoteItem.timestamp)) {
-        // Local is newer or Local only
+      if (localItem && (!remoteItem || compareLocalToRemote(localItem, remoteItem) > 0)) {
+        // A local winner writes an immutable payload before metadata references it.
+        metadataNeedsCommit = true;
         if (localItem.deleted) {
-          // Local deleted: delete remote file if exists, update remote metadata
-          const fileName = `resume_${id}.json`;
-          const rFileId = remoteFilesByName[fileName];
-          if (rFileId) {
-            await deleteRemoteFile(rFileId);
-          }
           mergedMetadataMap.set(id, {
             id,
             hash: "",
-            timestamp: localItem.timestamp,
+            timestamp: versionOf(localItem),
+            logicalVersion: versionOf(localItem),
+            writerDeviceId: localItem.writerDeviceId || getSyncDeviceId(),
             name: localItem.name,
             deleted: true,
           });
         } else {
-          // Local is active: upload to remote
           const localData = loadResumeSlot(id);
           if (!localData) {
             throw new Error(`Local resume payload is missing for ${id}`);
           }
-          const fileName = `resume_${id}.json`;
-          const rFileId = remoteFilesByName[fileName];
-          if (rFileId) {
-            await updateRemoteFileContent(rFileId, localData);
-          } else {
-            await createRemoteFile(fileName, localData);
-          }
-          // Add or update in remote metadata
           const computedHash = localItem.hash || computeResumeHash(
             localData.markdown,
             localData.styles,
             localData.name,
             localData.template
           );
+          const version = versionOf(localItem);
+          const writerDeviceId = localItem.writerDeviceId || getSyncDeviceId();
+          const fileName = createPayloadFileName(id, version, writerDeviceId, computedHash);
+          if (!remoteFilesByName[fileName]) {
+            await createRemoteFile(fileName, localData, {
+              resumeId: id,
+              contentHash: computedHash,
+              logicalVersion: String(version),
+              writerDeviceId,
+            });
+          }
           mergedMetadataMap.set(id, {
             id,
             hash: computedHash,
-            timestamp: localItem.timestamp,
+            timestamp: version,
+            logicalVersion: version,
+            writerDeviceId,
             name: localItem.name,
+            payloadFile: fileName,
             deleted: false,
           });
         }
-      } else if (remoteItem && (!localItem || remoteItem.timestamp >= localItem.timestamp)) {
+      } else if (remoteItem) {
         // Remote is newer, remote-only, or the deterministic winner of a tie.
         if (remoteItem.deleted) {
-          // Remote deleted: delete local
-          // Delete slot payload
+          // Do not overwrite a save/delete that arrived after this sync snapshot.
+          const latest = getSavedResumesList().find((item) => item.id === id);
+          if (localItem && latest && versionOf(latest) !== versionOf(localItem)) {
+            syncQueuedAfterMutation = true;
+            continue;
+          }
           localStorage.removeItem(`saved_resume_slot_${id}`);
-          // Put tombstone in local metadata list if not already tombstoned
           if (!localItem || !localItem.deleted) {
             const list = getSavedResumesList();
             const updated = list.filter((x) => x.id !== id);
@@ -528,20 +596,47 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
               id,
               name: remoteItem.name,
               template: "classic",
-              timestamp: remoteItem.timestamp,
+              timestamp: versionOf(remoteItem),
               deleted: true,
+              logicalVersion: versionOf(remoteItem),
+              writerDeviceId: remoteItem.writerDeviceId,
             });
             localStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(updated));
+            rememberRemoteLogicalVersion(id, versionOf(remoteItem));
             localMasterListUpdated = true;
           }
         } else {
-          // Remote is active: download payload to local
-          const fileName = `resume_${id}.json`;
+          // Skip payload transfer when the local copy already has the same hash.
+          if (localItem && !localItem.deleted && localItem.hash === remoteItem.hash && loadResumeSlot(id)) {
+            if (versionOf(localItem) !== versionOf(remoteItem) || localItem.writerDeviceId !== remoteItem.writerDeviceId) {
+              const list = getSavedResumesList();
+              const updated = list.filter((item) => item.id !== id);
+              updated.push({
+                ...localItem,
+                name: remoteItem.name,
+                timestamp: versionOf(remoteItem),
+                logicalVersion: versionOf(remoteItem),
+                writerDeviceId: remoteItem.writerDeviceId,
+                hash: remoteItem.hash,
+                deleted: false,
+              });
+              localStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(updated));
+              localMasterListUpdated = true;
+            }
+            rememberRemoteLogicalVersion(id, versionOf(remoteItem));
+            continue;
+          }
+          const fileName = payloadFileName(remoteItem);
           const rFileId = remoteFilesByName[fileName];
           if (!rFileId) {
             throw new Error(`Remote resume payload is missing for ${id}`);
           }
           const remotePayload = await getFileContent(rFileId);
+          const latest = getSavedResumesList().find((item) => item.id === id);
+          if (localItem && latest && versionOf(latest) !== versionOf(localItem)) {
+            syncQueuedAfterMutation = true;
+            continue;
+          }
           // Save slot to local
           localStorage.setItem(`saved_resume_slot_${id}`, JSON.stringify(remotePayload));
 
@@ -552,21 +647,38 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
             id,
             name: remoteItem.name,
             template: remotePayload.template || "classic",
-            timestamp: remoteItem.timestamp,
+            timestamp: versionOf(remoteItem),
             hash: remoteItem.hash,
             deleted: false,
+            logicalVersion: versionOf(remoteItem),
+            writerDeviceId: remoteItem.writerDeviceId,
           });
           localStorage.setItem(LIST_STORAGE_KEY, JSON.stringify(updated));
+          rememberRemoteLogicalVersion(id, versionOf(remoteItem));
           localMasterListUpdated = true;
         }
       }
     }
 
-    // 3. Upload resolved sync_metadata.json back to Google Drive
+    // Do not commit an older snapshot over a local mutation that happened while
+    // its payload request was in flight. The queued pass will start fresh.
+    const latestLocalMap = new Map(getSavedResumesList().map((item) => [item.id, item]));
+    for (const [id, original] of localMetadataMap) {
+      const latest = latestLocalMap.get(id);
+      if (latest && versionOf(latest) !== versionOf(original)) {
+        syncQueuedAfterMutation = true;
+        result = { success: true };
+        terminalStatus = "completed";
+        return result;
+      }
+    }
+
+    // 3. Commit the resolved metadata. ETag makes concurrent device writes
+    // optimistic transactions: a conflict is retried from a new snapshot.
     const resolvedRemoteMetadata = Array.from(mergedMetadataMap.values());
-    if (metadataFileId) {
-      await updateRemoteFileContent(metadataFileId, resolvedRemoteMetadata);
-    } else {
+    if (metadataFileId && metadataNeedsCommit) {
+      await updateRemoteFileContent(metadataFileId, resolvedRemoteMetadata, metadataEtag);
+    } else if (!metadataFileId) {
       metadataFileId = await createRemoteFile("sync_metadata.json", resolvedRemoteMetadata);
     }
 
@@ -576,6 +688,18 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     duplicateFileIds.delete(metadataFileId);
     for (const duplicateFileId of duplicateFileIds) {
       await deleteRemoteFile(duplicateFileId);
+    }
+
+    // Retain orphaned immutable payloads for 31 days. Legacy payload names are
+    // intentionally not collected so old backups remain readable.
+    const referencedPayloads = new Set(resolvedRemoteMetadata.map(payloadFileName));
+    const cleanupBefore = Date.now() - PAYLOAD_RETENTION_MS;
+    for (const file of (fileList.files || []) as RemoteFile[]) {
+      if (!file.name.startsWith("resume_") || referencedPayloads.has(file.name)) continue;
+      if (!/^resume_.+_\d+_.+_[a-f0-9-]+_[a-f0-9]+\.json$/i.test(file.name)) continue;
+      if (getModifiedTime(file) > 0 && getModifiedTime(file) < cleanupBefore) {
+        await deleteRemoteFile(file.id);
+      }
     }
 
     // Update local list if we fetched remote changes
@@ -589,6 +713,14 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     terminalStatus = "completed";
   } catch (err: any) {
     console.error("Google Drive sync failed:", err);
+    if (err?.message === "SYNC_METADATA_CONFLICT") {
+      // Another device committed first. Re-read and merge from its new ETag;
+      // the shared single-flight queue prevents parallel retries locally.
+      syncQueuedAfterMutation = true;
+      result = { success: true };
+      terminalStatus = "completed";
+      return result;
+    }
     const isInteractionRequired = err?.error === "interaction_required" || err?.error === "consent_required";
     const isUnauthorized = err?.message === "Unauthorized: Google Drive access token expired";
     if (isInteractionRequired || isUnauthorized) {

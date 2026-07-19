@@ -45,6 +45,11 @@ export interface ResumeData {
 const LIST_STORAGE_KEY = "saved_resumes_master_list";
 const DEVICE_ID_STORAGE_KEY = "gdrive_sync_device_id";
 const KNOWN_REMOTE_VERSIONS_STORAGE_KEY = "gdrive_known_remote_versions";
+export const MAX_RESUME_PAYLOAD_BYTES = 1024 * 1024;
+
+function serializedPayloadSize(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
 
 export function getSyncDeviceId(): string {
   let deviceId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
@@ -165,6 +170,10 @@ export function saveResumeSlot(
       timestamp,
       fileName,
     };
+
+    if (serializedPayloadSize(resumeData) > MAX_RESUME_PAYLOAD_BYTES) {
+      return { success: false, error: "Resume data exceeds the 1 MiB sync limit." };
+    }
 
     // Serialize slot data
     const serializedData = JSON.stringify(resumeData);

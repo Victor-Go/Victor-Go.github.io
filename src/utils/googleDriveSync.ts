@@ -114,7 +114,7 @@ function startSyncWatchdog() {
       rejectTokenPromise?.(new Error(SYNC_TIMEOUT_ERROR));
       setSyncStatus("failed");
     }
-  }, 15_000);
+  }, 60_000);
 }
 
 // In-Memory Token management

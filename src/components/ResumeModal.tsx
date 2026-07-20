@@ -133,7 +133,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
 
     setLastSyncAt(getLastSuccessfulSyncAt());
     if (
-      getSyncStatus() !== "disconnected" &&
+      getSyncStatus() === "completed" &&
       isGoogleDriveSdkInitialized() &&
       shouldSyncGoogleDrive()
     ) {
@@ -141,7 +141,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
     }
 
     const handleOnline = () => {
-      if (getSyncStatus() !== "disconnected" && isGoogleDriveSdkInitialized()) {
+      if (getSyncStatus() === "completed" && isGoogleDriveSdkInitialized()) {
         void syncWithGoogleDrive();
       }
     };
@@ -155,8 +155,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
 
     const handleLocalResumeChange = () => {
       if (
-        getSyncStatus() !== "syncing" &&
-        getSyncStatus() !== "disconnected" &&
+        getSyncStatus() === "completed" &&
         isGoogleDriveSdkInitialized()
       ) {
         void syncWithGoogleDrive();
@@ -424,7 +423,7 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
               <Cloud size={14} />
               <span>{t.syncStatus.title}</span>
             </h3>
-            {syncStatus === "disconnected" ? (
+            {syncStatus === "disconnected" || syncStatus === "reauth_required" ? (
               <div style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
                 <button
                   type="button"
@@ -433,7 +432,9 @@ export const ResumeModal: React.FC<ResumeModalProps> = ({
                   style={{ display: "flex", alignItems: "center", gap: "6px" }}
                 >
                   <Cloud size={16} />
-                  {t.syncStatus.login}
+                  {syncStatus === "reauth_required"
+                    ? `${t.syncStatus.login} & ${t.syncStatus.syncNow}`
+                    : t.syncStatus.login}
                 </button>
                 <a
                   href="privacy.html"

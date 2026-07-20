@@ -159,6 +159,18 @@ describe("Google Drive synchronization", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("upload/drive"))).toBe(false);
   });
 
+  it("requires explicit authorization after a persisted token has expired", async () => {
+    localStorage.setItem("gdrive_sync_connected", "true");
+    localStorage.setItem("gdrive_access_token", "expired-token");
+    localStorage.setItem("gdrive_access_token_expires_at", String(Date.now() - 1));
+
+    const { getSyncStatus, getAccessToken } = await loadSyncModule();
+
+    expect(getSyncStatus()).toBe("reauth_required");
+    expect(getAccessToken()).toBeNull();
+    expect(localStorage.getItem("gdrive_sync_connected")).toBe("true");
+  });
+
   it("treats invalid metadata as an empty Drive and repairs it", async () => {
     connectWithValidToken();
     const fetchMock = vi.fn()

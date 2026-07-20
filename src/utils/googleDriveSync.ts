@@ -8,7 +8,10 @@ const SYNC_TIMEOUT_ERROR = "SYNC_TIMEOUT";
 const ACCESS_TOKEN_STORAGE_KEY = "gdrive_access_token";
 const ACCESS_TOKEN_EXPIRY_STORAGE_KEY = "gdrive_access_token_expires_at";
 const LAST_SYNC_STORAGE_KEY = "gdrive_last_successful_sync_at";
+const REAUTH_REQUIRED_STORAGE_KEY = "gdrive_reauth_required";
 const TOKEN_EXPIRY_BUFFER_SECONDS = 5 * 60;
+const TOKEN_SILENT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const METADATA_RECHECK_AFTER_MS = 3 * 60 * 1000;
 export const GOOGLE_DRIVE_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const PAYLOAD_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
 
@@ -38,24 +41,27 @@ interface RemoteFile {
 
 interface RemoteMetadataDocument {
   records: RemoteResumeMetadata[];
-  etag: string | null;
   invalid: boolean;
 }
 
 // Global state/listeners for sync status
-export type SyncStatusType = "completed" | "syncing" | "retrying" | "failed" | "disconnected";
-let currentSyncStatus: SyncStatusType = localStorage.getItem("gdrive_sync_connected") === "true" ? "completed" : "disconnected";
+export type SyncStatusType = "completed" | "syncing" | "retrying" | "reauth_required" | "failed" | "disconnected";
+const hasExpiredCachedToken = () => {
+  const expiry = Number(localStorage.getItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY));
+  return !Number.isFinite(expiry) || Date.now() >= expiry - TOKEN_EXPIRY_BUFFER_SECONDS * 1000;
+};
+let currentSyncStatus: SyncStatusType = localStorage.getItem("gdrive_sync_connected") !== "true"
+  ? "disconnected"
+  : localStorage.getItem(REAUTH_REQUIRED_STORAGE_KEY) === "true" || hasExpiredCachedToken()
+    ? "reauth_required"
+    : "completed";
 const listeners: ((status: SyncStatusType) => void)[] = [];
 let syncWatchdog: ReturnType<typeof setTimeout> | null = null;
 let currentSyncError: string | null = null;
 let syncAbortController: AbortController | null = null;
 let activeSyncPromise: Promise<SyncResult> | null = null;
 let syncQueuedAfterMutation = false;
-let metadataConflictRetryCount = 0;
-let metadataConflictRetryTimer: ReturnType<typeof setTimeout> | null = null;
-const METADATA_CONFLICT_RETRY_BASE_MS = 1_000;
-const METADATA_CONFLICT_RETRY_MAX_MS = 30_000;
-const METADATA_CONFLICT_MAX_RETRIES = 5;
+let tokenRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 export function getSyncStatus(): SyncStatusType {
   return currentSyncStatus;
@@ -98,34 +104,6 @@ function setSyncStatus(status: SyncStatusType) {
   [...listeners].forEach((listener) => listener(status));
 }
 
-function scheduleMetadataConflictRetry(): boolean {
-  if (metadataConflictRetryTimer) return true;
-  if (metadataConflictRetryCount >= METADATA_CONFLICT_MAX_RETRIES) return false;
-  const exponentialDelay = Math.min(
-    METADATA_CONFLICT_RETRY_MAX_MS,
-    METADATA_CONFLICT_RETRY_BASE_MS * 2 ** metadataConflictRetryCount
-  );
-  metadataConflictRetryCount += 1;
-  // A small jitter prevents multiple devices that collided once from retrying
-  // on the same cadence forever.
-  const delay = exponentialDelay + Math.floor(Math.random() * 250);
-  metadataConflictRetryTimer = setTimeout(() => {
-    metadataConflictRetryTimer = null;
-    if (isSyncConnected() && isGoogleDriveSdkInitialized()) {
-      void syncWithGoogleDrive();
-    }
-  }, delay);
-  return true;
-}
-
-function clearMetadataConflictRetry() {
-  metadataConflictRetryCount = 0;
-  if (metadataConflictRetryTimer) {
-    clearTimeout(metadataConflictRetryTimer);
-    metadataConflictRetryTimer = null;
-  }
-}
-
 function startSyncWatchdog() {
   if (syncWatchdog) clearTimeout(syncWatchdog);
   syncWatchdog = setTimeout(() => {
@@ -146,6 +124,7 @@ let tokenClient: any = null;
 let resolveTokenPromise: ((token: string | null) => void) | null = null;
 let rejectTokenPromise: ((err: any) => void) | null = null;
 let activeTokenRequest: Promise<string> | null = null;
+let activeTokenPrompt: "none" | "consent" | null = null;
 
 function isSyncConnected(): boolean {
   return localStorage.getItem("gdrive_sync_connected") === "true";
@@ -158,12 +137,32 @@ function clearCachedAccessToken() {
   localStorage.removeItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY);
 }
 
+function requireReauthorization() {
+  clearCachedAccessToken();
+  localStorage.setItem(REAUTH_REQUIRED_STORAGE_KEY, "true");
+  if (tokenRefreshTimer) {
+    clearInterval(tokenRefreshTimer);
+    tokenRefreshTimer = null;
+  }
+  setSyncStatus("reauth_required");
+}
+
+function startTokenRefreshTimer() {
+  if (tokenRefreshTimer) clearInterval(tokenRefreshTimer);
+  tokenRefreshTimer = setInterval(() => {
+    if (!isSyncConnected() || currentSyncStatus === "reauth_required") return;
+    void refreshAccessTokenSilently().catch(() => requireReauthorization());
+  }, TOKEN_SILENT_REFRESH_INTERVAL_MS);
+}
+
 function cacheAccessToken(token: string, expiresIn?: number) {
   accessToken = token;
   accessTokenExpiresAt = Date.now() + Math.max(0, expiresIn ?? 3600) * 1000;
   localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
   localStorage.setItem(ACCESS_TOKEN_EXPIRY_STORAGE_KEY, String(accessTokenExpiresAt));
   localStorage.setItem("gdrive_sync_connected", "true");
+  localStorage.removeItem(REAUTH_REQUIRED_STORAGE_KEY);
+  startTokenRefreshTimer();
 }
 
 function initTokenClientIfNeeded() {
@@ -195,8 +194,18 @@ function initTokenClientIfNeeded() {
   return tokenClient;
 }
 
-function requestToken(prompt: "none" | "consent"): Promise<string> {
-  if (activeTokenRequest) return activeTokenRequest;
+async function requestToken(prompt: "none" | "consent"): Promise<string> {
+  if (activeTokenRequest) {
+    if (prompt === "consent" && activeTokenPrompt === "none") {
+      try {
+        await activeTokenRequest;
+      } catch {
+        // A user-initiated authorization replaces a failed silent request.
+      }
+      return requestToken("consent");
+    }
+    return activeTokenRequest;
+  }
 
   const request = new Promise<string>((resolve, reject) => {
     const client = initTokenClientIfNeeded();
@@ -216,8 +225,10 @@ function requestToken(prompt: "none" | "consent"): Promise<string> {
     }
   });
 
+  activeTokenPrompt = prompt;
   activeTokenRequest = request.finally(() => {
     activeTokenRequest = null;
+    activeTokenPrompt = null;
     resolveTokenPromise = null;
     rejectTokenPromise = null;
   });
@@ -249,6 +260,8 @@ async function refreshAccessTokenSilently(): Promise<string> {
   return requestToken("none");
 }
 
+if (currentSyncStatus === "completed") startTokenRefreshTimer();
+
 export function isGoogleDriveSdkInitialized(): boolean {
   if (typeof window === "undefined") return false;
 
@@ -266,9 +279,9 @@ function syncAfterLocalResumeMutation() {
     return;
   }
 
-  if (isSyncConnected()) {
-    // Background sync can only make a non-interactive token request. On
-    // failure, it disconnects rather than opening an authorization dialog.
+  if (isSyncConnected() && currentSyncStatus === "completed") {
+    // Background sync only makes a non-interactive token request. A failure
+    // switches the UI to explicit reauthorization rather than opening a dialog.
     void syncWithGoogleDrive();
   }
 }
@@ -304,6 +317,11 @@ export async function loginToGDrive() {
 export function logoutFromGDrive() {
   clearCachedAccessToken();
   localStorage.removeItem("gdrive_sync_connected");
+  localStorage.removeItem(REAUTH_REQUIRED_STORAGE_KEY);
+  if (tokenRefreshTimer) {
+    clearInterval(tokenRefreshTimer);
+    tokenRefreshTimer = null;
+  }
   setSyncStatus("disconnected");
 }
 
@@ -412,12 +430,12 @@ async function getMetadataDocument(fileId: string): Promise<RemoteMetadataDocume
   try {
     const records = JSON.parse(text);
     if (isRemoteMetadataList(records)) {
-      return { records, etag: res.headers.get("ETag"), invalid: false };
+      return { records, invalid: false };
     }
   } catch {
     // Invalid metadata is deliberately treated as an uncommitted empty Drive.
   }
-  return { records: [], etag: res.headers.get("ETag"), invalid: true };
+  return { records: [], invalid: true };
 }
 
 async function createRemoteFile(name: string, content: any, appProperties?: Record<string, string>): Promise<string> {
@@ -461,17 +479,15 @@ function payloadHash(payload: { markdown: string; styles: any; name: string; tem
   return computeResumeHash(payload.markdown, payload.styles, payload.name, payload.template);
 }
 
-async function updateRemoteFileContent(fileId: string, content: any, etag?: string | null): Promise<void> {
+async function updateRemoteFileContent(fileId: string, content: any): Promise<void> {
   const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
   const res = await apiFetch(uploadUrl, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      ...(etag ? { "If-Match": etag } : {}),
     },
     body: JSON.stringify(content),
   });
-  if (res.status === 412) throw new Error("SYNC_METADATA_CONFLICT");
   if (!res.ok) throw new Error(`Failed to update remote file content for ${fileId}`);
 }
 
@@ -519,15 +535,13 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     setSyncStatus("syncing");
     startSyncWatchdog();
 
-    // Background refresh may only use prompt="none", which never displays an
-    // OAuth screen. If it cannot obtain a token, disconnect instead of falling
-    // back to an interactive flow.
+    // Background refresh may only use prompt="none". If it cannot obtain a
+    // token, wait for the user to explicitly authorize and sync again.
     try {
       await refreshAccessTokenSilently();
     } catch (error) {
-      clearCachedAccessToken();
-      localStorage.removeItem("gdrive_sync_connected");
-      terminalStatus = "disconnected";
+      requireReauthorization();
+      terminalStatus = "reauth_required";
       throw error;
     }
 
@@ -537,14 +551,12 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     let metadataFileId = metadataFiles[0]?.id ?? null;
     const duplicateFileIds = new Set(metadataFiles.slice(1).map((file) => file.id));
     const mergedMetadataMap = new Map<string, RemoteResumeMetadata>();
-    let metadataEtag: string | null = null;
     let metadataNeedsCommit = metadataFileId === null || metadataFiles.length > 1;
 
     // Migrate legacy duplicate metadata files. The latest logical resume
     // timestamp wins; exact ties use the most recently modified metadata file.
     for (const metadataFile of metadataFiles) {
       const document = await getMetadataDocument(metadataFile.id);
-      if (metadataFile.id === metadataFileId) metadataEtag = document.etag;
       if (document.invalid) metadataNeedsCommit = true;
       document.records.forEach((item) => {
         const existing = mergedMetadataMap.get(item.id);
@@ -586,6 +598,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
     const allIds = new Set([...mergedMetadataMap.keys(), ...localMetadataMap.keys()]);
 
     let localMasterListUpdated = false;
+    let firstPayloadUploadedAt: number | null = null;
 
     for (const id of allIds) {
       const localItem = localMetadataMap.get(id);
@@ -624,6 +637,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
             const existingPayload = await getFileContent(existingFileId);
             if (payloadHash(existingPayload) !== computedHash) {
               await updateRemoteFileContent(existingFileId, localData);
+              firstPayloadUploadedAt ??= Date.now();
             }
           } else {
             await createRemoteFile(fileName, localData, {
@@ -632,6 +646,7 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
               logicalVersion: String(version),
               writerDeviceId,
             });
+            firstPayloadUploadedAt ??= Date.now();
           }
           mergedMetadataMap.set(id, {
             id,
@@ -740,11 +755,29 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
       }
     }
 
-    // 3. Commit the resolved metadata. ETag makes concurrent device writes
-    // optimistic transactions: a conflict is retried from a new snapshot.
+    // A long payload transfer may have allowed another device to update the
+    // shared metadata. Re-read and merge before writing in that case.
+    if (firstPayloadUploadedAt && Date.now() - firstPayloadUploadedAt >= METADATA_RECHECK_AFTER_MS) {
+      const freshMetadataFiles = (await findRemoteFiles("sync_metadata.json"))
+        .sort((a, b) => getModifiedTime(b) - getModifiedTime(a));
+      metadataFileId = freshMetadataFiles[0]?.id ?? metadataFileId;
+      freshMetadataFiles.slice(1).forEach((file) => duplicateFileIds.add(file.id));
+      for (const metadataFile of freshMetadataFiles) {
+        const document = await getMetadataDocument(metadataFile.id);
+        if (document.invalid) continue;
+        document.records.forEach((item) => {
+          const existing = mergedMetadataMap.get(item.id);
+          if (!existing || versionOf(item) > versionOf(existing)) {
+            mergedMetadataMap.set(item.id, item);
+          }
+        });
+      }
+    }
+
+    // 3. Commit the resolved metadata without relying on Drive v2 ETags.
     const resolvedRemoteMetadata = Array.from(mergedMetadataMap.values());
     if (metadataFileId && metadataNeedsCommit) {
-      await updateRemoteFileContent(metadataFileId, resolvedRemoteMetadata, metadataEtag);
+      await updateRemoteFileContent(metadataFileId, resolvedRemoteMetadata);
     } else if (!metadataFileId) {
       metadataFileId = await createRemoteFile("sync_metadata.json", resolvedRemoteMetadata);
     }
@@ -777,30 +810,14 @@ async function performGoogleDriveSync(): Promise<SyncResult> {
 
     result = { success: true };
     localStorage.setItem(LAST_SYNC_STORAGE_KEY, String(Date.now()));
-    clearMetadataConflictRetry();
     terminalStatus = "completed";
   } catch (err: any) {
     console.error("Google Drive sync failed:", err);
-    if (err?.message === "SYNC_METADATA_CONFLICT") {
-      // Another device committed first. Re-read and merge from its new ETag;
-      // backoff and jitter prevent two devices from immediately colliding again.
-      if (!scheduleMetadataConflictRetry()) {
-        currentSyncError = "Google Drive kept changing; please try syncing again.";
-        result = { success: false, error: currentSyncError };
-        terminalStatus = "failed";
-        return result;
-      }
-      setSyncStatus("retrying");
-      result = { success: true };
-      terminalStatus = "retrying";
-      return result;
-    }
     const isInteractionRequired = err?.error === "interaction_required" || err?.error === "consent_required";
     const isUnauthorized = err?.message === "Unauthorized: Google Drive access token expired";
     if (isInteractionRequired || isUnauthorized) {
-      clearCachedAccessToken();
-      localStorage.removeItem("gdrive_sync_connected");
-      terminalStatus = "disconnected";
+      requireReauthorization();
+      terminalStatus = "reauth_required";
     }
     const error = err?.error || err?.message || "Sync failed";
     currentSyncError ??= error;

@@ -1,9 +1,13 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { marked } from "marked";
+import markedKatex from "marked-katex-extension";
+import "katex/dist/katex.min.css";
 import { Eye, Maximize2, FileText } from "lucide-react";
 import type { AppStyles } from "../utils/storage";
 import type { ResumeTemplate } from "../utils/cookies";
 import { translations } from "../utils/translations";
+
+marked.use(markedKatex({ throwOnError: false, trust: false, nonStandard: true }));
 
 interface PreviewProps {
   markdown: string;

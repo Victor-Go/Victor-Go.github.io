@@ -908,6 +908,20 @@ body {
 }
 
 /* Override Fallbacks Chain: Element Specific Override -> Global Override -> Template Default */
+#preview-container .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+@media print {
+  #preview-container .katex-display {
+    overflow: visible;
+  }
+}
+
 #preview-container h1 {
   font-size: var(--preview-h1-size, var(--template-h1-size, 28px));
   color: var(--preview-h1-color, var(--preview-global-color, var(--template-h1-color, #111827)));
@@ -999,6 +1013,13 @@ body {
   margin-bottom: 0.8em;
 }
 
+#preview-container ol {
+  padding-left: 2.5em;
+  margin-bottom: 0.8em;
+  font-size: var(--preview-body-size, var(--template-body-size, 15px));
+  list-style-position: outside;
+}
+
 #preview-container li {
   margin-bottom: 0.3em;
   font-size: var(--preview-body-size, var(--template-body-size, 15px));
@@ -1006,6 +1027,42 @@ body {
   font-family: var(--preview-p-font, var(--preview-global-font, var(--template-p-font, inherit)));
   font-weight: var(--preview-p-weight, var(--preview-global-weight, var(--template-p-weight, normal)));
   font-style: var(--preview-p-style, var(--preview-global-style, var(--template-p-style, normal)));
+}
+
+#preview-container table {
+  width: 100%;
+  margin: 0.8em 0;
+  border-collapse: collapse;
+  font-size: var(--preview-body-size, var(--template-body-size, 15px));
+  font-family: var(--preview-p-font, var(--preview-global-font, var(--template-p-font, inherit)));
+  color: var(--preview-p-color, var(--preview-global-color, var(--template-p-color, #4b5563)));
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+#preview-container th,
+#preview-container td {
+  border: 1px solid #cbd5e1;
+  padding: 0.5em 0.75em;
+  vertical-align: top;
+  /* Markdown column alignment is emitted as an inline style and takes precedence. */
+  text-align: inherit;
+}
+
+#preview-container th {
+  background-color: #f1f5f9;
+  font-weight: bold;
+}
+
+@media print {
+  #preview-container thead {
+    display: table-header-group;
+  }
+
+  #preview-container tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }
 
 #preview-container hr {

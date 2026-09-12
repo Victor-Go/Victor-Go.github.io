@@ -40,6 +40,38 @@ describe('Preview Component', () => {
     expect(item?.querySelector('h3')).toHaveTextContent('Experience');
   });
 
+  it('renders inline and display math within the printable resume structure', () => {
+    const { container } = render(<Preview {...defaultProps} markdown={String.raw`# Math
+
+中文公式$E=mc^2$正常显示。
+
+## Equations
+
+$$ \frac{a_1}{b^2} $$
+
+$$
+\begin{aligned}
+x &= 1 \\
+y &= \sqrt{2}
+\end{aligned}
+$$`} />);
+    const preview = container.querySelector('#preview-container')!;
+    expect(preview.querySelector('.resume-header .katex')).toBeInTheDocument();
+    expect(preview.querySelectorAll('.resume-section .katex-display')).toHaveLength(2);
+    expect(preview.querySelectorAll('math')).toHaveLength(3);
+    expect(preview.querySelector('.katex-error')).not.toBeInTheDocument();
+  });
+
+  it('preserves code and escaped dollars and tolerates invalid formulas', () => {
+    const markdown = '`$x$`\n\n```latex\n$$ x $$\n```\n\n\\$20\n\n$$ \\frac{ $$\n\nStill **readable**';
+    const { container } = render(<Preview {...defaultProps} markdown={markdown} />);
+    expect(container.querySelectorAll('code')).toHaveLength(2);
+    expect(container.querySelector('code .katex')).not.toBeInTheDocument();
+    expect(container.querySelector('.katex-error')).toBeInTheDocument();
+    expect(container.querySelector('strong')).toHaveTextContent('readable');
+    expect(container.querySelector('#preview-container')).toHaveTextContent('$20');
+  });
+
   it('applies styles and custom classes correctly', () => {
     const customStyles = {
       ...defaultStyles,

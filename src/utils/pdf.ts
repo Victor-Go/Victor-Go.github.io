@@ -13,6 +13,10 @@ export async function generateResumePDF(
     throw new Error(`Element #${elementId} not found.`);
   }
 
+  // Flush layout so newly rendered formula fonts are requested before printing.
+  element.getBoundingClientRect();
+  await document.fonts?.ready;
+
   // Use document title temporarily to set default PDF filename in browser print dialog
   const originalTitle = document.title;
   const cleanTitle = filename.endsWith(".pdf") ? filename.slice(0, -4) : filename;

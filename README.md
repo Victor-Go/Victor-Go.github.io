@@ -9,6 +9,7 @@ A premium, high-fidelity, client-side Markdown resume generator. Design and writ
 ## ✨ Features
 
 - 🖋️ **Interactive Markdown Editor:** Real-time side-by-side editing and rendering using split panel resizers.
+- **LaTeX formulas:** Use `$E = mc^2$` inline or `$$ ... $$` for display equations (also supports multiline blocks). KaTeX styles and fonts are bundled for preview and PDF printing. Invalid formulas remain visible without breaking the rest of the document. Supported syntax follows [KaTeX](https://katex.org/docs/supported.html).
 - 🎨 **Deep Customization Sidebar:**
   - Font choices (Outfit, Roboto, Lora, Merriweather, Open Sans, JetBrains Mono, Source Code Pro, and system defaults).
   - Component-specific sizing sliders (H1, H2, H3, H4, H5, H6, Body/Paragraph).

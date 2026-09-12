@@ -7,6 +7,9 @@
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
+    "paths": {
+      "marked-katex-extension": ["./src/types/marked-katex-extension.d.ts"]
+    },
 
     /* Bundler mode */
     "moduleResolution": "bundler",

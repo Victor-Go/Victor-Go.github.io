@@ -8,7 +8,7 @@ import {
 } from "../crypto/kem";
 import { Field, Output, Tabs } from "./Fields";
 import { errorText } from "./errorText";
-import { generatePassword } from "../crypto/passwordGen";
+import { generateMnemonicPassword } from "../crypto/mnemonic";
 
 type Tab = "generate" | "encrypt" | "decrypt";
 
@@ -88,7 +88,7 @@ function Encrypt({ m }: { m: Messages }) {
             type="button"
             className="c-link"
             onClick={() => {
-              setText(generatePassword());
+              setText(generateMnemonicPassword());
               setGenerated(true);
             }}
           >

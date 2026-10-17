@@ -119,6 +119,7 @@ The page does not store or upload your content, and closing it clears everything
 | --- | --- | --- |
 | `@noble/post-quantum` | 0.7.1 | MIT |
 | `@noble/hashes` | 2.4.0 | MIT |
+| `@scure/bip39` | 2.4.0 | MIT |
 | `dompurify` (main site Markdown sanitizing) | 3.4.17 | MPL-2.0 OR Apache-2.0 (dual; used under Apache-2.0, compatible with MIT) |
 
 `@noble/post-quantum` ships X-Wing as `ml_kem768_x25519`; the crypto layer is validated against the official X-Wing test vectors.

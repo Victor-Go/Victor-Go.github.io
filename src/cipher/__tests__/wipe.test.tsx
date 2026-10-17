@@ -146,7 +146,7 @@ describe('page hardening', () => {
     expect(ct.value.startsWith('cipher1-kx.')).toBe(true);
     const ctVal = ct.value;
     fireEvent.click(screen.getByRole('tab', { name: 'Decrypt' }));
-    typeInto(/Your private key/, priv);
+    expect(field(/Your private key/).value).toBe(priv); // auto-filled when the pair was generated
     typeInto('Ciphertext', ctVal);
     fireEvent.click(screen.getByRole('button', { name: 'Decrypt' }));
     await waitFor(() => expect(field('Result').value).toBe('hello 你好'));

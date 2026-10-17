@@ -32,10 +32,12 @@ function useAction(m: Messages) {
 
 export function KeyExchange({ m }: { m: Messages }) {
   const [tab, setTab] = useState<Tab>("generate");
+  // Lifted so a freshly generated private key can be dropped into the Decrypt tab once.
+  const [priv, setPriv] = useState("");
   const tabs = [
-    { id: "generate", label: m.tabGenerate, content: <Generate m={m} /> },
+    { id: "generate", label: m.tabGenerate, content: <Generate m={m} onGenerated={(p) => setPriv(p.privateText)} /> },
     { id: "encrypt", label: m.tabEncrypt, content: <Encrypt m={m} /> },
-    { id: "decrypt", label: m.tabDecrypt, content: <Decrypt m={m} /> },
+    { id: "decrypt", label: m.tabDecrypt, content: <Decrypt m={m} priv={priv} setPriv={setPriv} /> },
   ];
   return (
     <section>
@@ -45,12 +47,18 @@ export function KeyExchange({ m }: { m: Messages }) {
   );
 }
 
-function Generate({ m }: { m: Messages }) {
+function Generate({ m, onGenerated }: { m: Messages; onGenerated: (pair: KeyPair) => void }) {
   const [pair, setPair] = useState<KeyPair | null>(null);
   const { busy, error, run } = useAction(m);
   return (
     <div>
-      <button type="button" className="c-primary" disabled={busy} onClick={() => run(async () => setPair(await generateKeyPair()))}>
+      <button type="button" className="c-primary" disabled={busy} onClick={() =>
+          run(async () => {
+            const p = await generateKeyPair();
+            setPair(p);
+            onGenerated(p);
+          })
+        }>
         {m.generate}
       </button>
       {error && <p role="alert" className="c-error">{error}</p>}
@@ -58,6 +66,7 @@ function Generate({ m }: { m: Messages }) {
         <>
           <Output label={m.publicKey} value={pair.publicText} m={m} rows={6} />
           <Output label={m.privateKey} value={pair.privateText} m={m} secret rows={3} />
+          <p className="c-hint" role="status">{m.privateAutofilled}</p>
           <p className="c-warn">{m.privateWarn}</p>
         </>
       )}
@@ -111,8 +120,7 @@ function Encrypt({ m }: { m: Messages }) {
   );
 }
 
-function Decrypt({ m }: { m: Messages }) {
-  const [priv, setPriv] = useState("");
+function Decrypt({ m, priv, setPriv }: { m: Messages; priv: string; setPriv: (v: string) => void }) {
   const [ct, setCt] = useState("");
   const [out, setOut] = useState<string | null>(null);
   const { busy, error, run, setError } = useAction(m);

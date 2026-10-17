@@ -25,6 +25,7 @@ const zh = {
   generate: "生成密钥对",
   publicKey: "公钥(可公开)",
   privateKey: "私钥(务必保密)",
+  privateAutofilled: "私钥已自动填入“解密”页,可直接使用;之后你仍可在那里修改。",
   privateWarn: "私钥不提供下载,仅显示在此处。请自行离线保管;关闭页面后无法找回。",
   recipientPublicKey: "对方公钥",
   yourPrivateKey: "你的私钥",
@@ -77,6 +78,7 @@ const en: typeof zh = {
   generate: "Generate key pair",
   publicKey: "Public key (shareable)",
   privateKey: "Private key (keep secret)",
+  privateAutofilled: "The private key was filled into the Decrypt tab for you; you can still edit it there.",
   privateWarn:
     "The private key cannot be downloaded and is shown only here. Store it offline yourself; it cannot be recovered after closing the page.",
   recipientPublicKey: "Recipient's public key",

@@ -106,7 +106,7 @@ describe('page hardening', () => {
     Object.defineProperty(window, 'opener', { value: {}, configurable: true });
     try {
       render(<App />);
-      expect(screen.getByRole('alert')).toHaveTextContent(/拒绝在 iframe/);
+      expect(screen.getByRole('alert')).toHaveTextContent(/拒绝在 iframe|refuses to run inside an iframe/);
       expect(document.querySelectorAll('textarea').length).toBe(0);
     } finally {
       if (original) Object.defineProperty(window, 'opener', original);

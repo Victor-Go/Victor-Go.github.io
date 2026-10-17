@@ -40,6 +40,6 @@ describe('best-effort clipboard clearing', () => {
       readText: vi.fn(async () => { throw new Error('denied'); }),
     } });
     expect(await copyText('secret')).toBe(true);
-    await expect(vi.advanceTimersByTimeAsync(30_000)).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(30_000);
   });
 });

@@ -3,7 +3,7 @@ import { KeyExchange } from "./components/KeyExchange";
 import { PasswordCrypto } from "./components/PasswordCrypto";
 import { Tabs } from "./components/Fields";
 import { wipeTracked } from "./crypto/secrets";
-import { detectLang, messages, type Lang } from "./i18n";
+import { DEFAULT_LANG, messages, type Lang } from "./i18n";
 import { isEmbeddedOrOpened } from "./isolation";
 import { useWipeTriggers } from "./wipe";
 
@@ -25,7 +25,7 @@ function Workspace({ lang }: { lang: Lang }) {
 }
 
 export function App() {
-  const [lang, setLang] = useState<Lang>(() => detectLang());
+  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
   const [epoch, setEpoch] = useState(0);
   const [clearedNote, setClearedNote] = useState(false);
   const m = messages[lang];

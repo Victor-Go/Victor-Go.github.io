@@ -4,6 +4,12 @@ import { App } from '../App';
 import { attachWipeListeners, IDLE_MS } from '../wipe';
 import { track, trackedCount, wipeTracked } from '../crypto/secrets';
 
+/** The app starts in Chinese; most assertions below use the English labels. */
+function renderEn() {
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
+}
+
 function typeInto(label: RegExp | string, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
@@ -29,7 +35,7 @@ afterEach(() => {
 
 describe('wipe on page lifecycle', () => {
   function fill() {
-    render(<App />);
+    renderEn();
     openEncryptTab();
     typeInto(/Recipient/, 'cipher1-pub.AAAA');
     typeInto('Plaintext', 'top secret');
@@ -59,7 +65,7 @@ describe('wipe on page lifecycle', () => {
   });
 
   it('clears generated keys and zeroes tracked buffers on wipe', async () => {
-    render(<App />);
+    renderEn();
     fireEvent.click(screen.getByRole('button', { name: 'Generate key pair' }));
     const priv = await screen.findByLabelText(/Private key/);
     expect((priv as HTMLTextAreaElement).value.startsWith('cipher1-priv.')).toBe(true);
@@ -92,7 +98,7 @@ describe('page hardening', () => {
     Object.defineProperty(window, 'opener', { value: {}, configurable: true });
     try {
       render(<App />);
-      expect(screen.getByRole('alert')).toHaveTextContent(/refuses to run/);
+      expect(screen.getByRole('alert')).toHaveTextContent(/拒绝在 iframe/);
       expect(document.querySelectorAll('textarea').length).toBe(0);
     } finally {
       if (original) Object.defineProperty(window, 'opener', original);
@@ -101,7 +107,7 @@ describe('page hardening', () => {
   });
 
   it('uses no form element, only type=button buttons and autofill-proof textareas', () => {
-    render(<App />);
+    renderEn();
     openEncryptTab();
     expect(document.querySelector('form')).toBeNull();
     expect(document.querySelector('input')).toBeNull();
@@ -115,7 +121,7 @@ describe('page hardening', () => {
   });
 
   it('masks password fields without type=password and flags password managers off', () => {
-    render(<App />);
+    renderEn();
     fireEvent.click(screen.getByRole('tab', { name: 'Password' }));
     const pw = screen.getByRole('textbox', { name: 'Password' }) as HTMLTextAreaElement;
     expect(pw.tagName).toBe('TEXTAREA');
@@ -124,7 +130,7 @@ describe('page hardening', () => {
   });
 
   it('round-trips through the key-exchange UI', async () => {
-    render(<App />);
+    renderEn();
     fireEvent.click(screen.getByRole('button', { name: 'Generate key pair' }));
     const pub = (await screen.findByLabelText(/Public key/)) as HTMLTextAreaElement;
     const priv = (screen.getByLabelText(/Private key/) as HTMLTextAreaElement).value;
@@ -141,5 +147,15 @@ describe('page hardening', () => {
     typeInto('Ciphertext', ctVal);
     fireEvent.click(screen.getByRole('button', { name: 'Decrypt' }));
     expect(((await screen.findByLabelText('Result')) as HTMLTextAreaElement).value).toBe('hello 你好');
+  });
+});
+
+describe('default language', () => {
+  it('starts in Chinese regardless of browser language and can switch to English', () => {
+    render(<App />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher 加密工具');
+    expect(document.documentElement.lang).toBe('zh-CN');
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher');
   });
 });

@@ -143,9 +143,13 @@ src/cipher/workers/       Argon2id Web Worker + client
 
 ### CSP and build
 
-`default-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'none'; img-src 'self'; font-src 'none'; form-action 'none'; base-uri 'none'`. `img-src 'self'` (rather than `'none'`) is required because Chromium applies `img-src` to the same-origin favicon. Vite's modulepreload polyfill is disabled because it issues network requests. For `vite dev` only, the CSP meta is stripped (React refresh injects an inline script); test CSP with `npm run build && npm run preview`.
+`default-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'none'; img-src 'self'; font-src 'none'; manifest-src 'self'; form-action 'none'; base-uri 'none'`. `img-src 'self'` (rather than `'none'`) is required because Chromium applies `img-src` to the same-origin favicon, and `manifest-src 'self'` lets the same-origin web app manifest load. Vite's modulepreload polyfill is disabled because it issues network requests. For `vite dev` only, the CSP meta is stripped (React refresh injects an inline script); test CSP with `npm run build && npm run preview`.
 
 `build.guard.test.ts` builds the site and scans everything the cipher page loads for forbidden APIs (cookies, storage, IndexedDB, caches, service workers, network APIs, beacons, analytics, `console.log`, `Math.random`), checks the CSP, and rejects inline scripts. The only allowed `Math.random` is React DOM's internal property-key suffix.
+
+### App-like mode
+
+The page is laid out like a mobile app: full-height shell with only the active panel scrolling, the module switch as a bottom tab bar on phones, safe-area insets, 16px inputs (prevents iOS focus-zoom), `touch-action: manipulation`, and a viewport with `user-scalable=no` plus a `gesturestart` guard for iOS Safari. A web app manifest (`display: standalone`, scoped to `/cipher/`) and the Apple/Chrome standalone meta tags allow "Add to Home Screen". There is deliberately no service worker, so it does not work offline and nothing is cached by the app. Disabling zoom reduces accessibility for low-vision users.
 
 ### Threat model
 

@@ -1,7 +1,8 @@
 export type Lang = "zh" | "en";
 
-/** The UI always starts in Chinese; the language toggle is never persisted. */
-export const DEFAULT_LANG: Lang = "zh";
+/** Use the browser language on each fresh visit; never persist a selection. */
+export const getDefaultLang = (): Lang =>
+  typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
 
 const zh = {
   title: "Cipher 加密工具",

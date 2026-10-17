@@ -125,3 +125,51 @@ $$`} />);
     consoleSpy.mockRestore();
   });
 });
+
+describe('Preview sanitization', () => {
+  const props = {
+    markdown: '',
+    styles: defaultStyles,
+    lang: 'en' as const,
+    template: 'modernist' as const,
+    avoidPageBreak: false,
+    avoidPageBreakLevels: ['h2', 'h3'],
+  };
+
+  it('removes event-handler attributes, scripts and javascript: links', () => {
+    const markdown = [
+      '# Name',
+      '',
+      '<img src=x onerror="window.__xss=1">',
+      '',
+      '<script>window.__xss=2</script>',
+      '',
+      '[click](javascript:alert(1))',
+      '',
+      '<a href="javascript:alert(2)">raw</a>',
+      '',
+      '## Section',
+      '',
+      '<div onclick="alert(3)">hi</div>',
+    ].join('\n');
+    const { container } = render(<Preview {...props} markdown={markdown} />);
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('[onerror]')).toBeNull();
+    expect(container.querySelector('[onclick]')).toBeNull();
+    container.querySelectorAll('a').forEach((a) => {
+      expect(a.getAttribute('href') ?? '').not.toMatch(/^\s*javascript:/i);
+    });
+    expect((window as unknown as { __xss?: number }).__xss).toBeUndefined();
+  });
+
+  it('keeps normal resume content, links and KaTeX output', () => {
+    const markdown = '# Jane\n\n[site](https://example.com)\n\n## Math\n\n$E=mc^2$\n\n$$ \frac{a}{b} $$';
+    const { container } = render(<Preview {...props} markdown={markdown} />);
+    expect(container.querySelector('a[href="https://example.com"]')).toBeInTheDocument();
+    expect(container.querySelector('.katex')).toBeInTheDocument();
+    expect(container.querySelector('.katex-display')).toBeInTheDocument();
+    expect(container.querySelector('.katex-mathml')).toBeInTheDocument();
+    expect(container.querySelector('.katex-html')).toBeInTheDocument();
+    expect(container.querySelector('h1')).toHaveTextContent('Jane');
+  });
+});

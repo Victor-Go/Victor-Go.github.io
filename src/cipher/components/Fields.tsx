@@ -1,6 +1,6 @@
 import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Messages } from "../i18n";
-import { copyWithAutoClear, downloadText } from "../output";
+import { copyText, downloadText } from "../output";
 
 /** Attributes that keep browsers, password managers and spellcheckers away from the content. */
 const NO_AUTOFILL = {
@@ -73,7 +73,7 @@ export function Output({ label, value, m, secret, downloadName, rows = 5 }: Outp
   const [reveal, setReveal] = useState(false);
   if (!value) return null;
   const masked = secret && !reveal;
-  const copy = async () => setStatus((await copyWithAutoClear(value)) ? m.copied : m.copyFailed);
+  const copy = async () => setStatus((await copyText(value)) ? m.copied : m.copyFailed);
   return (
     <div className="c-field c-output">
       <div className="c-field-head">
@@ -113,6 +113,8 @@ export function Output({ label, value, m, secret, downloadName, rows = 5 }: Outp
 interface TabDef {
   id: string;
   label: string;
+  /** Stays mounted (just hidden) while another tab is active, so typed content survives tab switches. */
+  content: ReactNode;
 }
 
 interface TabsProps {
@@ -120,11 +122,10 @@ interface TabsProps {
   tabs: TabDef[];
   active: string;
   onChange: (id: string) => void;
-  children: ReactNode;
   className?: string;
 }
 
-export function Tabs({ label, tabs, active, onChange, children, className }: TabsProps) {
+export function Tabs({ label, tabs, active, onChange, className }: TabsProps) {
   const base = useId();
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
@@ -144,7 +145,7 @@ export function Tabs({ label, tabs, active, onChange, children, className }: Tab
             role="tab"
             id={`${base}-tab-${t.id}`}
             aria-selected={active === t.id}
-            aria-controls={`${base}-panel`}
+            aria-controls={`${base}-panel-${t.id}`}
             tabIndex={active === t.id ? 0 : -1}
             className="c-tab"
             onClick={() => onChange(t.id)}
@@ -154,9 +155,18 @@ export function Tabs({ label, tabs, active, onChange, children, className }: Tab
           </button>
         ))}
       </div>
-      <div role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-tab-${active}`} className="c-panel">
-        {children}
-      </div>
+      {tabs.map((t) => (
+        <div
+          key={t.id}
+          role="tabpanel"
+          id={`${base}-panel-${t.id}`}
+          aria-labelledby={`${base}-tab-${t.id}`}
+          hidden={active !== t.id}
+          className="c-panel"
+        >
+          {t.content}
+        </div>
+      ))}
     </div>
   );
 }

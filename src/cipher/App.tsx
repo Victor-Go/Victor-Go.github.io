@@ -14,13 +14,11 @@ function Workspace({ lang }: { lang: Lang }) {
   const m = messages[lang];
   const [mode, setMode] = useState<Mode>("kx");
   const modes = [
-    { id: "kx", label: m.moduleKx },
-    { id: "pw", label: m.modulePw },
+    { id: "kx", label: m.moduleKx, content: <KeyExchange m={m} /> },
+    { id: "pw", label: m.modulePw, content: <PasswordCrypto m={m} /> },
   ];
   return (
-    <Tabs label={m.modules} tabs={modes} active={mode} onChange={(t) => setMode(t as Mode)} className="c-modes">
-      {mode === "kx" ? <KeyExchange m={m} /> : <PasswordCrypto m={m} />}
-    </Tabs>
+    <Tabs label={m.modules} tabs={modes} active={mode} onChange={(t) => setMode(t as Mode)} className="c-modes" />
   );
 }
 
@@ -70,7 +68,7 @@ export function App() {
       </header>
       <p className="c-tagline">{m.tagline}</p>
       <p className="c-notice" role="note">
-        {m.notice} {m.idleNote}
+        {m.notice}
       </p>
       {clearedNote && <p role="status" className="c-hint">{m.cleared}</p>}
       <Workspace key={epoch} lang={lang} />

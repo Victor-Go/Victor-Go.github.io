@@ -1,32 +1,19 @@
 import { useEffect, useRef } from "react";
 
-export const IDLE_MS = 5 * 60 * 1000;
-
-const ACTIVITY_EVENTS = ["keydown", "pointerdown", "pointermove", "input", "wheel", "touchstart"] as const;
-
 /**
- * Calls `onWipe` on page hide, on bfcache restore (pageshow with persisted) and after
- * IDLE_MS without user activity. Returns a cleanup function.
+ * Calls `onWipe` on page hide and on bfcache restore (pageshow with persisted).
+ * There is deliberately no idle timer. Returns a cleanup function.
  */
-export function attachWipeListeners(onWipe: () => void, target: Window = window, idleMs = IDLE_MS): () => void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const arm = () => {
-    clearTimeout(timer);
-    timer = setTimeout(onWipe, idleMs);
-  };
+export function attachWipeListeners(onWipe: () => void, target: Window = window): () => void {
   const onPageHide = () => onWipe();
   const onPageShow = (e: Event) => {
     if ((e as PageTransitionEvent).persisted) onWipe();
   };
   target.addEventListener("pagehide", onPageHide);
   target.addEventListener("pageshow", onPageShow);
-  for (const ev of ACTIVITY_EVENTS) target.addEventListener(ev, arm, { passive: true, capture: true });
-  arm();
   return () => {
-    clearTimeout(timer);
     target.removeEventListener("pagehide", onPageHide);
     target.removeEventListener("pageshow", onPageShow);
-    for (const ev of ACTIVITY_EVENTS) target.removeEventListener(ev, arm, { capture: true });
   };
 }
 

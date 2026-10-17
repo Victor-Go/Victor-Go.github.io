@@ -230,3 +230,7 @@ textarea:focus-visible {
     flex: 1 1 auto;
   }
 }
+
+[hidden] {
+  display: none !important;
+}

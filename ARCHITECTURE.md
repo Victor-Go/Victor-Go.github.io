@@ -135,9 +135,9 @@ src/cipher/workers/       Argon2id Web Worker + client
 - **Key exchange:** X-Wing (`ml_kem768_x25519` in `@noble/post-quantum`, draft-connolly-cfrg-xwing-kem; 32-byte seed private key, 1216-byte public key, 1120-byte KEM ciphertext). Encrypt: encapsulate to the recipient key (anonymous sender), `HKDF-SHA256(ss, info = "cipher/v1" ‖ kem_ct)` → AES-256 key + 12-byte nonce, AES-256-GCM with `header ‖ kem_ct` as AAD. The AES key is imported as a non-extractable `CryptoKey`.
 - **Password:** Argon2id (64 MiB, t=3, p=1) in a Web Worker; parameters, salt and nonce live in the ciphertext header, which is also the AAD. Parameters read from untrusted headers are bounded before use.
 - **Errors:** every decryption failure maps to the same message; errors never contain input.
-- **State:** React `useState` only. `Workspace` is remounted on wipe, and tracked `Uint8Array` secrets are `fill(0)`-ed. Wipe fires on `pagehide`, on `pageshow` with `persisted` (bfcache), after 5 idle minutes and from the clear button. Nothing goes in the URL.
+- **State:** React `useState` only. `Workspace` is remounted on wipe, and tracked `Uint8Array` secrets are `fill(0)`-ed. Wipe fires on `pagehide`, on `pageshow` with `persisted` (bfcache), and from the clear button (no idle timer). Nothing goes in the URL.
 - **Inputs:** textareas only (no `<form>`, no `type=password`), `autocomplete/autocorrect/autocapitalize=off`, `spellcheck=false`, password-manager opt-out attributes; secrets are masked with `-webkit-text-security` (engines without it hide the glyphs and show a character count). Chromium does not restore textarea content on reload or back navigation here because the fields are created after load; `contenteditable` was therefore not needed.
-- **Output:** no auto-copy; manual copy then a best-effort clipboard clear after 30 s. Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
+- **Output:** no auto-copy; manual copy only; the clipboard is never cleared automatically. Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
 - **Isolation:** the page refuses to run when `window.opener` is set or when framed.
 
 ### CSP and build
@@ -153,7 +153,7 @@ Protects against: content persisting in the page's own storage, content being se
 Residual traces the page cannot eliminate:
 
 - GitHub Pages access logs and the visit appearing in browser history and caches.
-- Clipboard and OS clipboard history (clearing after 30 s is best effort).
+- Clipboard and OS clipboard history (the page never clears it; clear it yourself).
 - Browser extensions, AI side panels, screen recorders and accessibility tools.
 - Memory paging/swap and JavaScript strings, which cannot be zeroed.
 - A tampered or replaced page: the code is delivered by GitHub Pages on every visit, so a compromised deployment or CDN could ship malicious code.

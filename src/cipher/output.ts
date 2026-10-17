@@ -1,19 +1,11 @@
-const CLIPBOARD_CLEAR_MS = 30_000;
-
-let clearTimer: ReturnType<typeof setTimeout> | undefined;
-
-/** Manual copy only. Afterwards, best-effort clipboard clearing; failures are silent. */
-export async function copyWithAutoClear(text: string): Promise<boolean> {
+/** Manual copy only. The clipboard is never cleared or touched afterwards. */
+export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
+    return true;
   } catch {
     return false;
   }
-  clearTimeout(clearTimer);
-  clearTimer = setTimeout(() => {
-    navigator.clipboard.writeText("").catch(() => {});
-  }, CLIPBOARD_CLEAR_MS);
-  return true;
 }
 
 /** Saves ciphertext text as a file. Callers must warn that the file persists on disk. */

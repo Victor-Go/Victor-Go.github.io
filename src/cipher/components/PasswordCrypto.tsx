@@ -12,15 +12,13 @@ const options: PasswordOptions = { kdf: workerKdf };
 export function PasswordCrypto({ m }: { m: Messages }) {
   const [tab, setTab] = useState<Tab>("encrypt");
   const tabs = [
-    { id: "encrypt", label: m.tabEncrypt },
-    { id: "decrypt", label: m.tabDecrypt },
+    { id: "encrypt", label: m.tabEncrypt, content: <Encrypt m={m} /> },
+    { id: "decrypt", label: m.tabDecrypt, content: <Decrypt m={m} /> },
   ];
   return (
     <section>
       <p className="c-intro">{m.pwIntro}</p>
-      <Tabs label={m.modulePw} tabs={tabs} active={tab} onChange={(t) => setTab(t as Tab)}>
-        {tab === "encrypt" ? <Encrypt m={m} /> : <Decrypt m={m} />}
-      </Tabs>
+      <Tabs label={m.modulePw} tabs={tabs} active={tab} onChange={(t) => setTab(t as Tab)} />
     </section>
   );
 }

@@ -297,12 +297,12 @@ textarea:focus-visible {
     margin-bottom: 8px;
     font-size: 0.78rem;
   }
-  /* Module switch becomes a bottom tab bar, above the home indicator. */
+  /* Module switch stays at the top on phones and desktops. */
   .c-modes > .c-tablist {
-    order: 2;
-    border-bottom: none;
-    border-top: 1px solid var(--c-border);
-    padding-top: 6px;
+    order: 0;
+    border-bottom: 1px solid var(--c-border);
+    border-top: none;
+    padding-top: 0;
   }
   .c-modes > .c-tablist .c-tab {
     min-height: 48px;
@@ -314,8 +314,8 @@ textarea:focus-visible {
   }
   .c-modes > .c-panel {
     order: 1;
-    border-top: 1px solid var(--c-border);
-    border-radius: 8px;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
   }
 }
 

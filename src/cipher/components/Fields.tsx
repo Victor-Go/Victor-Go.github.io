@@ -24,9 +24,11 @@ interface FieldProps {
   /** Single-line semantics: Enter is swallowed (passwords). */
   singleLine?: boolean;
   rows?: number;
+  /** Extra control shown in the label row. */
+  action?: ReactNode;
 }
 
-export function Field({ label, value, onChange, m, secret, singleLine, rows = 4 }: FieldProps) {
+export function Field({ label, value, onChange, m, secret, singleLine, rows = 4, action }: FieldProps) {
   const id = useId();
   const [reveal, setReveal] = useState(false);
   const masked = secret && !reveal;
@@ -37,11 +39,14 @@ export function Field({ label, value, onChange, m, secret, singleLine, rows = 4 
     <div className="c-field">
       <div className="c-field-head">
         <label htmlFor={id}>{label}</label>
-        {secret && (
-          <button type="button" className="c-link" aria-pressed={reveal} onClick={() => setReveal((r) => !r)}>
-            {reveal ? m.hide : m.show}
-          </button>
-        )}
+        <span className="c-field-tools">
+          {action}
+          {secret && (
+            <button type="button" className="c-link" aria-pressed={reveal} onClick={() => setReveal((r) => !r)}>
+              {reveal ? m.hide : m.show}
+            </button>
+          )}
+        </span>
       </div>
       <textarea
         id={id}

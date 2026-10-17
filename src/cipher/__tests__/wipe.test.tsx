@@ -187,3 +187,16 @@ describe('tab switching', () => {
     expect(allTextareaValues()).toContain('still here');
   });
 });
+
+describe('random password button', () => {
+  it('fills the plaintext with a 256-bit password in the key-exchange encrypt tab', () => {
+    renderEn();
+    openEncryptTab();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate 256-bit random password' }));
+    const v = field('Plaintext').value;
+    expect(v).toHaveLength(40);
+    expect(screen.getByRole('status')).toHaveTextContent(/262 bits/);
+    typeInto('Plaintext', v + 'x');
+    expect(screen.queryByText(/262 bits/)).toBeNull();
+  });
+});

@@ -69,6 +69,16 @@ body {
   gap: 8px;
 }
 
+.c-actions {
+  margin-top: 12px;
+}
+
+.c-actions button {
+  height: auto;
+  padding: 8px 14px;
+  text-align: left;
+}
+
 .c-tagline {
   color: var(--c-muted);
   margin: 4px 0 12px;

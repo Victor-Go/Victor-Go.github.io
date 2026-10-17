@@ -114,3 +114,47 @@ When viewport width falls below `1125px`, the layout transitions from a multi-pa
 1. Side-by-side pane split width controls and resizing handles are disabled.
 2. A sticky mobile navigation tab-bar appears below the header (Tabs: **Styles**, **Editor**, **Preview**).
 3. The header action buttons collapse and hide text contents, transforming gracefully into compact icon-only actions on screen sizes under `768px`.
+
+---
+
+## 🔐 /cipher Encryption Tool
+
+A second Vite entry (`cipher/index.html`, `src/cipher/`) served at `/cipher/`. It shares only the origin with the resume tool: `src/cipher/` may not import from any other `src/` directory (enforced by `src/cipher/__tests__/guards.test.ts`), has its own stylesheet, and ships none of the analytics, stores, cookies, storage or Drive code.
+
+### Architecture
+
+```
+cipher/index.html         strict CSP meta, no inline script
+src/cipher/main.tsx       React root
+src/cipher/App.tsx        module switch, language, wipe triggers, same-origin isolation check
+src/cipher/components/    tabs, textarea fields, key exchange and password modules
+src/cipher/crypto/        encoding (prefixed base64url), kem (X-Wing), password (Argon2id), aead (AES-GCM), secrets
+src/cipher/workers/       Argon2id Web Worker + client
+```
+
+- **Key exchange:** X-Wing (`ml_kem768_x25519` in `@noble/post-quantum`, draft-connolly-cfrg-xwing-kem; 32-byte seed private key, 1216-byte public key, 1120-byte KEM ciphertext). Encrypt: encapsulate to the recipient key (anonymous sender), `HKDF-SHA256(ss, info = "cipher/v1" ‖ kem_ct)` → AES-256 key + 12-byte nonce, AES-256-GCM with `header ‖ kem_ct` as AAD. The AES key is imported as a non-extractable `CryptoKey`.
+- **Password:** Argon2id (64 MiB, t=3, p=1) in a Web Worker; parameters, salt and nonce live in the ciphertext header, which is also the AAD. Parameters read from untrusted headers are bounded before use.
+- **Errors:** every decryption failure maps to the same message; errors never contain input.
+- **State:** React `useState` only. `Workspace` is remounted on wipe, and tracked `Uint8Array` secrets are `fill(0)`-ed. Wipe fires on `pagehide`, on `pageshow` with `persisted` (bfcache), after 5 idle minutes and from the clear button. Nothing goes in the URL.
+- **Inputs:** textareas only (no `<form>`, no `type=password`), `autocomplete/autocorrect/autocapitalize=off`, `spellcheck=false`, password-manager opt-out attributes; secrets are masked with `-webkit-text-security` (engines without it hide the glyphs and show a character count). Chromium does not restore textarea content on reload or back navigation here because the fields are created after load; `contenteditable` was therefore not needed.
+- **Output:** no auto-copy; manual copy then a best-effort clipboard clear after 30 s. Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
+- **Isolation:** the page refuses to run when `window.opener` is set or when framed.
+
+### CSP and build
+
+`default-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'none'; img-src 'self'; font-src 'none'; form-action 'none'; base-uri 'none'`. `img-src 'self'` (rather than `'none'`) is required because Chromium applies `img-src` to the same-origin favicon. Vite's modulepreload polyfill is disabled because it issues network requests. For `vite dev` only, the CSP meta is stripped (React refresh injects an inline script); test CSP with `npm run build && npm run preview`.
+
+`build.guard.test.ts` builds the site and scans everything the cipher page loads for forbidden APIs (cookies, storage, IndexedDB, caches, service workers, network APIs, beacons, analytics, `console.log`, `Math.random`), checks the CSP, and rejects inline scripts. The only allowed `Math.random` is React DOM's internal property-key suffix.
+
+### Threat model
+
+Protects against: content persisting in the page's own storage, content being sent by the page, autofill/password-manager capture, other tabs of the same origin reading the page (opener/frame refusal), and stale content surfacing after close/bfcache.
+
+Residual traces the page cannot eliminate:
+
+- GitHub Pages access logs and the visit appearing in browser history and caches.
+- Clipboard and OS clipboard history (clearing after 30 s is best effort).
+- Browser extensions, AI side panels, screen recorders and accessibility tools.
+- Memory paging/swap and JavaScript strings, which cannot be zeroed.
+- A tampered or replaced page: the code is delivered by GitHub Pages on every visit, so a compromised deployment or CDN could ship malicious code.
+- Same-origin risk from the resume tool: an XSS there would reach `/cipher`, hence the DOMPurify fix; the opener/frame check does not stop a script running in another same-origin tab.

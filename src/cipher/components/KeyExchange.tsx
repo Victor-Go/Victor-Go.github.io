@@ -8,6 +8,7 @@ import {
 } from "../crypto/kem";
 import { Field, Output, Tabs } from "./Fields";
 import { errorText } from "./errorText";
+import { generatePassword } from "../crypto/passwordGen";
 
 type Tab = "generate" | "encrypt" | "decrypt";
 
@@ -68,11 +69,34 @@ function Encrypt({ m }: { m: Messages }) {
   const [pub, setPub] = useState("");
   const [text, setText] = useState("");
   const [out, setOut] = useState("");
+  const [generated, setGenerated] = useState(false);
   const { busy, error, run } = useAction(m);
   return (
     <div>
       <Field label={m.recipientPublicKey} value={pub} onChange={setPub} m={m} rows={4} />
-      <Field label={m.plaintext} value={text} onChange={setText} m={m} rows={5} />
+      <Field
+        label={m.plaintext}
+        value={text}
+        onChange={(v) => {
+          setText(v);
+          setGenerated(false);
+        }}
+        m={m}
+        rows={5}
+        action={
+          <button
+            type="button"
+            className="c-link"
+            onClick={() => {
+              setText(generatePassword());
+              setGenerated(true);
+            }}
+          >
+            {m.genPassword}
+          </button>
+        }
+      />
+      {generated && <p className="c-hint" role="status">{m.genPasswordDone}</p>}
       <button
         type="button"
         className="c-primary"

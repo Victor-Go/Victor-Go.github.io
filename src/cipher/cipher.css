@@ -244,3 +244,10 @@ textarea:focus-visible {
 [hidden] {
   display: none !important;
 }
+
+.c-field-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}

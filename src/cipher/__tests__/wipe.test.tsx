@@ -7,7 +7,8 @@ import { track, trackedCount, wipeTracked } from '../crypto/secrets';
 /** The app starts in Chinese; most assertions below use the English labels. */
 function renderEn() {
   render(<App />);
-  fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
+  const switchToEnglish = screen.queryByRole('button', { name: 'Switch to English' });
+  if (switchToEnglish) fireEvent.click(switchToEnglish);
 }
 
 /** Panels of inactive tabs stay mounted but hidden; only the visible match counts. */
@@ -85,12 +86,16 @@ describe('wipe on page lifecycle', () => {
     expect(trackedCount()).toBe(0);
   });
 
-  it('never wipes on a timer', () => {
+  it('wipes after five minutes of inactivity and resets on interaction', () => {
     vi.useFakeTimers();
     const onWipe = vi.fn();
     const detach = attachWipeListeners(onWipe);
-    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    vi.advanceTimersByTime(4 * 60 * 1000);
+    window.dispatchEvent(new Event('pointerdown'));
+    vi.advanceTimersByTime(4 * 60 * 1000);
     expect(onWipe).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(60 * 1000);
+    expect(onWipe).toHaveBeenCalledTimes(1);
     detach();
   });
 });
@@ -154,12 +159,26 @@ describe('page hardening', () => {
 });
 
 describe('default language', () => {
-  it('starts in Chinese regardless of browser language and can switch to English', () => {
-    render(<App />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher 加密工具');
-    expect(document.documentElement.lang).toBe('zh-CN');
-    fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher');
+  it('starts in Chinese for Chinese browsers and allows switching without persistence', () => {
+    const lang = vi.spyOn(navigator, 'language', 'get').mockReturnValue('zh-CN');
+    try {
+      render(<App />);
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher 加密工具');
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher');
+    } finally {
+      lang.mockRestore();
+    }
+  });
+  it('starts in English for non-Chinese browsers', () => {
+    const lang = vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-CA');
+    try {
+      render(<App />);
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher');
+      expect(document.documentElement.lang).toBe('en');
+    } finally {
+      lang.mockRestore();
+    }
   });
 });
 

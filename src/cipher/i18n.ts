@@ -1,0 +1,111 @@
+export type Lang = "zh" | "en";
+
+/** Picks the initial UI language from the browser. Never persisted. */
+export function detectLang(nav: Pick<Navigator, "language"> = navigator): Lang {
+  return /^zh\b/i.test(nav.language ?? "") ? "zh" : "en";
+}
+
+const zh = {
+  title: "Cipher 加密工具",
+  tagline: "页面不存储、不上传内容,关闭即清空。",
+  notice:
+    "剪贴板历史、浏览器扩展、AI 侧栏、系统录屏等不在本页面的控制范围内。建议使用隐私窗口,并在使用后关闭标签页。",
+  langSwitch: "English",
+  langSwitchLabel: "Switch to English",
+  clearAll: "一键清空",
+  cleared: "已清空所有内容。",
+  idleNote: "空闲 5 分钟将自动清空。",
+  refused: "为保护内容,本页面拒绝在 iframe 或由其他页面打开的窗口中运行。请在独立标签页中直接访问。",
+  modules: "功能",
+  moduleKx: "密钥交换",
+  modulePw: "密码加密",
+  tabGenerate: "生成密钥",
+  tabEncrypt: "加密",
+  tabDecrypt: "解密",
+  kxIntro:
+    "混合后量子密钥交换(X-Wing:X25519 + ML-KEM-768)。把公钥发给对方,对方用它加密;只有持有私钥的人能解密。",
+  pwIntro: "用密码加密(AES-256-GCM,Argon2id 派生密钥)。密码丢失后无法恢复内容。",
+  generate: "生成密钥对",
+  publicKey: "公钥(可公开)",
+  privateKey: "私钥(务必保密)",
+  privateWarn: "私钥不提供下载,仅显示在此处。请自行离线保管;关闭页面后无法找回。",
+  recipientPublicKey: "对方公钥",
+  yourPrivateKey: "你的私钥",
+  plaintext: "明文",
+  ciphertext: "密文",
+  password: "密码",
+  passwordRepeat: "再次输入密码",
+  encryptBtn: "加密",
+  decryptBtn: "解密",
+  result: "结果",
+  copy: "手动复制",
+  copied: "已复制。将在 30 秒后尝试清空剪贴板。",
+  copyFailed: "复制失败,请手动选中复制。",
+  download: "下载密文",
+  downloadWarn: "注意:下载的文件会留在磁盘上。",
+  show: "显示",
+  hide: "隐藏",
+  chars: (n: number) => `${n} 个字符`,
+  working: "处理中……(密码加密需要几秒钟)",
+  mismatch: "两次输入的密码不一致。",
+  emptyPassword: "请输入密码。",
+  badFormat: "输入格式无效,请检查是否完整粘贴。",
+  wrongKind: "粘贴的内容类型不对(例如把公钥当成了私钥或密文)。",
+  decryptFailed: "解密失败(密码/密钥错误或数据被篡改)",
+  failed: "操作失败。",
+};
+
+const en: typeof zh = {
+  title: "Cipher",
+  tagline: "This page does not store or upload your content. Closing it clears everything.",
+  notice:
+    "Clipboard history, browser extensions, AI side panels and screen recorders are outside this page's control. Use a private window and close the tab when done.",
+  langSwitch: "中文",
+  langSwitchLabel: "切换到中文",
+  clearAll: "Clear everything",
+  cleared: "Everything has been cleared.",
+  idleNote: "Auto-clears after 5 minutes idle.",
+  refused:
+    "To protect your content this page refuses to run inside an iframe or a window opened by another page. Open it directly in its own tab.",
+  modules: "Mode",
+  moduleKx: "Key exchange",
+  modulePw: "Password",
+  tabGenerate: "Generate keys",
+  tabEncrypt: "Encrypt",
+  tabDecrypt: "Decrypt",
+  kxIntro:
+    "Hybrid post-quantum key exchange (X-Wing: X25519 + ML-KEM-768). Send your public key to the other party; only the private key holder can decrypt.",
+  pwIntro: "Encrypt with a password (AES-256-GCM, key derived with Argon2id). Content cannot be recovered if the password is lost.",
+  generate: "Generate key pair",
+  publicKey: "Public key (shareable)",
+  privateKey: "Private key (keep secret)",
+  privateWarn:
+    "The private key cannot be downloaded and is shown only here. Store it offline yourself; it cannot be recovered after closing the page.",
+  recipientPublicKey: "Recipient's public key",
+  yourPrivateKey: "Your private key",
+  plaintext: "Plaintext",
+  ciphertext: "Ciphertext",
+  password: "Password",
+  passwordRepeat: "Repeat password",
+  encryptBtn: "Encrypt",
+  decryptBtn: "Decrypt",
+  result: "Result",
+  copy: "Copy manually",
+  copied: "Copied. Will try to clear the clipboard in 30 seconds.",
+  copyFailed: "Copy failed; please select and copy manually.",
+  download: "Download ciphertext",
+  downloadWarn: "Note: the downloaded file stays on disk.",
+  show: "Show",
+  hide: "Hide",
+  chars: (n: number) => `${n} characters`,
+  working: "Working… (password encryption takes a few seconds)",
+  mismatch: "The two passwords do not match.",
+  emptyPassword: "Please enter a password.",
+  badFormat: "Invalid input format; check that you pasted all of it.",
+  wrongKind: "Wrong kind of input (e.g. a public key where a private key or ciphertext is expected).",
+  decryptFailed: "Decryption failed (wrong password/key, or the data was tampered with)",
+  failed: "Operation failed.",
+};
+
+export const messages: Record<Lang, typeof zh> = { zh, en };
+export type Messages = typeof zh;

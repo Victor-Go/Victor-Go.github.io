@@ -1,22 +1,232 @@
 :root {
   color-scheme: light dark;
   --c-bg: #f8fafc;
+  --c-surface: #ffffff;
   --c-fg: #0f172a;
+  --c-muted: #475569;
+  --c-border: #cbd5e1;
+  --c-accent: #4f46e5;
+  --c-accent-fg: #ffffff;
+  --c-error: #b91c1c;
+  --c-warn-bg: #fef3c7;
+  --c-warn-fg: #78350f;
+  --c-notice-bg: #e0e7ff;
+  --c-notice-fg: #1e1b4b;
 }
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --c-bg: #0f172a;
+    --c-bg: #0b1220;
+    --c-surface: #131c2f;
     --c-fg: #e2e8f0;
+    --c-muted: #94a3b8;
+    --c-border: #334155;
+    --c-accent: #818cf8;
+    --c-accent-fg: #0b1220;
+    --c-error: #fca5a5;
+    --c-warn-bg: #422006;
+    --c-warn-fg: #fde68a;
+    --c-notice-bg: #1e293b;
+    --c-notice-fg: #c7d2fe;
   }
 }
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   background: var(--c-bg);
   color: var(--c-fg);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+  line-height: 1.5;
 }
+
 .c-shell {
   max-width: 760px;
   margin: 0 auto;
   padding: 16px;
+}
+
+.c-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.c-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.c-header-actions,
+.c-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.c-tagline {
+  color: var(--c-muted);
+  margin: 4px 0 12px;
+}
+
+.c-notice {
+  background: var(--c-notice-bg);
+  color: var(--c-notice-fg);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin: 0 0 16px;
+}
+
+.c-intro {
+  color: var(--c-muted);
+  margin: 8px 0 12px;
+}
+
+button {
+  font: inherit;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-fg);
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+button:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+.c-primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-accent-fg);
+  font-weight: 600;
+  margin: 4px 0 8px;
+}
+
+.c-link {
+  min-height: 32px;
+  border: none;
+  background: none;
+  color: var(--c-accent);
+  text-decoration: underline;
+  padding: 0 4px;
+}
+
+.c-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.c-tab {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+  background: transparent;
+}
+
+.c-tab[aria-selected="true"] {
+  background: var(--c-surface);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+.c-modes > .c-tablist {
+  margin-bottom: 0;
+}
+
+.c-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 12px;
+}
+
+.c-field {
+  margin: 0 0 12px;
+}
+
+.c-field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.c-field label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.c-input {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg);
+  color: var(--c-fg);
+  font: 0.85rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  word-break: break-all;
+}
+
+/* Passwords and private keys are plain textareas (no password-manager hooks), masked in CSS. */
+.c-masked {
+  -webkit-text-security: disc;
+}
+
+@supports not (-webkit-text-security: disc) {
+  /* Engines without text-security: hide the glyphs; the character count below stays visible. */
+  .c-masked {
+    color: transparent;
+    caret-color: var(--c-fg);
+    text-shadow: none;
+  }
+}
+
+.c-hint {
+  color: var(--c-muted);
+  font-size: 0.8rem;
+  min-height: 1.2em;
+}
+
+.c-error {
+  color: var(--c-error);
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.c-warn {
+  background: var(--c-warn-bg);
+  color: var(--c-warn-fg);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 480px) {
+  .c-shell {
+    padding: 12px;
+  }
+  .c-tab {
+    flex: 1 1 auto;
+  }
 }

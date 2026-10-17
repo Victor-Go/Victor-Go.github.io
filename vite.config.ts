@@ -16,6 +16,9 @@ const cipherDevWithoutCsp = (): Plugin => ({
 export default defineConfig({
   plugins: [react(), cipherDevWithoutCsp()],
   build: {
+    // The polyfill issues network requests for modulepreload links, which /cipher's CSP forbids;
+    // every supported browser has native modulepreload.
+    modulePreload: { polyfill: false },
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),

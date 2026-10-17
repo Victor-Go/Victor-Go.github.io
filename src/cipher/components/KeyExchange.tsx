@@ -32,18 +32,14 @@ function useAction(m: Messages) {
 export function KeyExchange({ m }: { m: Messages }) {
   const [tab, setTab] = useState<Tab>("generate");
   const tabs = [
-    { id: "generate", label: m.tabGenerate },
-    { id: "encrypt", label: m.tabEncrypt },
-    { id: "decrypt", label: m.tabDecrypt },
+    { id: "generate", label: m.tabGenerate, content: <Generate m={m} /> },
+    { id: "encrypt", label: m.tabEncrypt, content: <Encrypt m={m} /> },
+    { id: "decrypt", label: m.tabDecrypt, content: <Decrypt m={m} /> },
   ];
   return (
     <section>
       <p className="c-intro">{m.kxIntro}</p>
-      <Tabs label={m.moduleKx} tabs={tabs} active={tab} onChange={(t) => setTab(t as Tab)}>
-        {tab === "generate" && <Generate m={m} />}
-        {tab === "encrypt" && <Encrypt m={m} />}
-        {tab === "decrypt" && <Decrypt m={m} />}
-      </Tabs>
+      <Tabs label={m.moduleKx} tabs={tabs} active={tab} onChange={(t) => setTab(t as Tab)} />
     </section>
   );
 }

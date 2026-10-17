@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { App } from '../App';
-import { attachWipeListeners, IDLE_MS } from '../wipe';
+import { attachWipeListeners } from '../wipe';
 import { track, trackedCount, wipeTracked } from '../crypto/secrets';
 
 /** The app starts in Chinese; most assertions below use the English labels. */
@@ -10,8 +10,15 @@ function renderEn() {
   fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
 }
 
+/** Panels of inactive tabs stay mounted but hidden; only the visible match counts. */
+function field(label: RegExp | string): HTMLTextAreaElement {
+  const visible = screen.getAllByLabelText(label).filter((el) => !el.closest('[hidden]'));
+  expect(visible).toHaveLength(1);
+  return visible[0] as HTMLTextAreaElement;
+}
+
 function typeInto(label: RegExp | string, value: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  fireEvent.change(field(label), { target: { value } });
 }
 
 function openEncryptTab() {
@@ -67,27 +74,23 @@ describe('wipe on page lifecycle', () => {
   it('clears generated keys and zeroes tracked buffers on wipe', async () => {
     renderEn();
     fireEvent.click(screen.getByRole('button', { name: 'Generate key pair' }));
-    const priv = await screen.findByLabelText(/Private key/);
-    expect((priv as HTMLTextAreaElement).value.startsWith('cipher1-priv.')).toBe(true);
+    const priv = await waitFor(() => field(/Private key/));
+    expect(priv.value.startsWith('cipher1-priv.')).toBe(true);
     const buf = track(Uint8Array.of(1, 2, 3));
     act(() => {
       window.dispatchEvent(new Event('pagehide'));
     });
-    expect(screen.queryByLabelText(/Private key/)).toBeNull();
+    expect(allTextareaValues().some((v) => v.startsWith('cipher1-priv.'))).toBe(false);
     expect(Array.from(buf)).toEqual([0, 0, 0]);
     expect(trackedCount()).toBe(0);
   });
 
-  it('wipes after five idle minutes, and activity postpones it', () => {
+  it('never wipes on a timer', () => {
     vi.useFakeTimers();
     const onWipe = vi.fn();
     const detach = attachWipeListeners(onWipe);
-    vi.advanceTimersByTime(IDLE_MS - 1000);
-    window.dispatchEvent(new Event('keydown'));
-    vi.advanceTimersByTime(IDLE_MS - 1000);
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
     expect(onWipe).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1500);
-    expect(onWipe).toHaveBeenCalledTimes(1);
     detach();
   });
 });
@@ -132,21 +135,21 @@ describe('page hardening', () => {
   it('round-trips through the key-exchange UI', async () => {
     renderEn();
     fireEvent.click(screen.getByRole('button', { name: 'Generate key pair' }));
-    const pub = (await screen.findByLabelText(/Public key/)) as HTMLTextAreaElement;
-    const priv = (screen.getByLabelText(/Private key/) as HTMLTextAreaElement).value;
+    const pub = await waitFor(() => field(/Public key/));
+    const priv = field(/Private key/).value;
     const pubVal = pub.value;
     openEncryptTab();
     typeInto(/Recipient/, pubVal);
     typeInto('Plaintext', 'hello 你好');
     fireEvent.click(screen.getByRole('button', { name: 'Encrypt' }));
-    const ct = (await screen.findByLabelText('Ciphertext')) as HTMLTextAreaElement;
+    const ct = await waitFor(() => field('Ciphertext'));
     expect(ct.value.startsWith('cipher1-kx.')).toBe(true);
     const ctVal = ct.value;
     fireEvent.click(screen.getByRole('tab', { name: 'Decrypt' }));
     typeInto(/Your private key/, priv);
     typeInto('Ciphertext', ctVal);
     fireEvent.click(screen.getByRole('button', { name: 'Decrypt' }));
-    expect(((await screen.findByLabelText('Result')) as HTMLTextAreaElement).value).toBe('hello 你好');
+    await waitFor(() => expect(field('Result').value).toBe('hello 你好'));
   });
 });
 
@@ -157,5 +160,30 @@ describe('default language', () => {
     expect(document.documentElement.lang).toBe('zh-CN');
     fireEvent.click(screen.getByRole('button', { name: 'Switch to English' }));
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher');
+  });
+});
+
+describe('tab switching', () => {
+  it('keeps typed content and generated keys when switching tabs and modules', async () => {
+    renderEn();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate key pair' }));
+    const pub = (await waitFor(() => field(/Public key/))).value;
+    openEncryptTab();
+    typeInto('Plaintext', 'keep me');
+    fireEvent.click(screen.getByRole('tab', { name: 'Decrypt' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Password' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Key exchange' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Encrypt' }));
+    expect(field('Plaintext').value).toBe('keep me');
+    fireEvent.click(screen.getByRole('tab', { name: 'Generate keys' }));
+    expect(field(/Public key/).value).toBe(pub);
+  });
+
+  it('keeps content when switching language', () => {
+    renderEn();
+    openEncryptTab();
+    typeInto('Plaintext', 'still here');
+    fireEvent.click(screen.getByRole('button', { name: '切换到中文' }));
+    expect(allTextareaValues()).toContain('still here');
   });
 });

@@ -12,9 +12,28 @@ const cipherDevWithoutCsp = (): Plugin => ({
   },
 })
 
+// GitHub Pages already redirects /cipher to /cipher/; mirror that for dev and preview servers.
+const cipherTrailingSlash = (): Plugin => {
+  const redirect = (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
+    const [path, query = ''] = (req.url ?? '').split('?')
+    if (path === '/cipher') {
+      res.statusCode = 301
+      res.setHeader('Location', '/cipher/' + (query ? '?' + query : ''))
+      res.end()
+      return
+    }
+    next()
+  }
+  return {
+    name: 'cipher-trailing-slash',
+    configureServer: (server) => void server.middlewares.use(redirect),
+    configurePreviewServer: (server) => void server.middlewares.use(redirect),
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), cipherDevWithoutCsp()],
+  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash()],
   build: {
     // The polyfill issues network requests for modulepreload links, which /cipher's CSP forbids;
     // every supported browser has native modulepreload.

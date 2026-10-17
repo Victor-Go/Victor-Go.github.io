@@ -18,6 +18,7 @@ const REQUIRED_CSP = [
   "connect-src 'none'",
   "img-src 'self'",
   "font-src 'none'",
+  "manifest-src 'self'",
   "form-action 'none'",
   "base-uri 'none'",
 ];
@@ -65,6 +66,17 @@ describe('build guard for dist/cipher', () => {
     expect(html).toContain('<meta name="referrer" content="no-referrer"');
     expect(html).toContain('<meta name="google" content="notranslate"');
     expect(html).toMatch(/<html[^>]*translate="no"/);
+  });
+
+  it('is app-like: no zoom, safe-area viewport, manifest and standalone meta tags', () => {
+    expect(html).toMatch(/name="viewport"[^>]*user-scalable=no/);
+    expect(html).toMatch(/name="viewport"[^>]*maximum-scale=1/);
+    expect(html).toMatch(/name="viewport"[^>]*viewport-fit=cover/);
+    expect(html).toContain('rel="manifest" href="/cipher/manifest.webmanifest"');
+    expect(html).toContain('name="apple-mobile-web-app-capable"');
+    const manifest = JSON.parse(readFileSync(join(outDir, 'cipher/manifest.webmanifest'), 'utf8'));
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.scope).toBe('/cipher/');
   });
 
   it('has no inline scripts, inline styles or external resources', () => {

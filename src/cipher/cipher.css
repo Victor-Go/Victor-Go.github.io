@@ -35,8 +35,21 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   background: var(--c-bg);
   color: var(--c-fg);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
@@ -45,8 +58,47 @@ body {
 
 .c-shell {
   max-width: 760px;
+  height: 100dvh;
   margin: 0 auto;
-  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+    calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+}
+
+.c-shell > * {
+  flex: none;
+}
+
+/* App layout: only the active panel scrolls; the module switch stays put like a tab bar. */
+.c-shell > .c-modes {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-modes > .c-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.c-modes > .c-panel[hidden] {
+  display: none !important;
+}
+
+/* Text the user types or must copy stays selectable. */
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+button {
+  touch-action: manipulation;
 }
 
 .c-header {
@@ -194,7 +246,7 @@ textarea:focus-visible {
   border-radius: 8px;
   background: var(--c-bg);
   color: var(--c-fg);
-  font: 0.85rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font: 1rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
   word-break: break-all;
 }
 
@@ -232,12 +284,38 @@ textarea:focus-visible {
   font-size: 0.85rem;
 }
 
-@media (max-width: 480px) {
-  .c-shell {
-    padding: 12px;
-  }
+@media (max-width: 640px) {
   .c-tab {
     flex: 1 1 auto;
+  }
+  .c-tagline {
+    margin: 2px 0 8px;
+    font-size: 0.85rem;
+  }
+  .c-notice {
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+  }
+  /* Module switch becomes a bottom tab bar, above the home indicator. */
+  .c-modes > .c-tablist {
+    order: 2;
+    border-bottom: none;
+    border-top: 1px solid var(--c-border);
+    padding-top: 6px;
+  }
+  .c-modes > .c-tablist .c-tab {
+    min-height: 48px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+  }
+  .c-modes > .c-tablist .c-tab[aria-selected="true"] {
+    border-color: var(--c-accent);
+  }
+  .c-modes > .c-panel {
+    order: 1;
+    border-top: 1px solid var(--c-border);
+    border-radius: 8px;
   }
 }
 

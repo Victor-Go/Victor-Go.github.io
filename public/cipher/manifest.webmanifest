@@ -1,0 +1,12 @@
+{
+  "name": "Cipher",
+  "short_name": "Cipher",
+  "description": "Encrypt text in your browser. Nothing is stored or uploaded.",
+  "start_url": "/cipher/",
+  "scope": "/cipher/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#f8fafc",
+  "icons": [{ "src": "/cipher/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -188,15 +188,16 @@ describe('tab switching', () => {
   });
 });
 
-describe('random password button', () => {
-  it('fills the plaintext with a 256-bit password in the key-exchange encrypt tab', () => {
+describe('mnemonic button', () => {
+  it('fills the plaintext with 24 BIP-39 words joined by hyphens in the key-exchange encrypt tab', () => {
     renderEn();
     openEncryptTab();
-    fireEvent.click(screen.getByRole('button', { name: 'Generate 256-bit random password' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate 24 mnemonic words (BIP-39)' }));
     const v = field('Plaintext').value;
-    expect(v).toHaveLength(40);
-    expect(screen.getByRole('status')).toHaveTextContent(/262 bits/);
+    expect(v.split('-')).toHaveLength(24);
+    expect(v.endsWith('-')).toBe(false);
+    expect(screen.getByRole('status')).toHaveTextContent(/256-bit/);
     typeInto('Plaintext', v + 'x');
-    expect(screen.queryByText(/262 bits/)).toBeNull();
+    expect(screen.queryByText(/256-bit entropy/)).toBeNull();
   });
 });

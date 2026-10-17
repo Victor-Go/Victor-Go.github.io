@@ -97,9 +97,13 @@ describe('build guard for dist/cipher', () => {
     // React DOM derives two internal property-name suffixes from Math.random (never a secret and
     // never reaching the crypto path). Allow exactly that pattern and nothing else.
     const reactInternalKey = /Math\.random\(\)\.toString\(36\)\.slice\(2\)/g;
-    const hits = [...artifacts].flatMap(([name, text]) =>
-      findForbidden(text.replace(reactInternalKey, '')).map((h) => `${name}: ${h}`),
-    );
+    // The BIP-39 English wordlist is data and contains the word "fetch". Remove exactly that literal
+    // (and require it to be the 2048-word list) so the word is not mistaken for the network API.
+    const wordlistLiteral = /`abandon\n[a-z\n]*?\nzoo`/g;
+    const hits = [...artifacts].flatMap(([name, text]) => {
+      for (const m of text.matchAll(wordlistLiteral)) expect(m[0].split('\n')).toHaveLength(2048);
+      return findForbidden(text.replace(wordlistLiteral, '').replace(reactInternalKey, '')).map((h) => `${name}: ${h}`);
+    });
     expect(hits).toEqual([]);
   });
 

@@ -13,6 +13,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "dompurify": "3.4.17",
     "katex": "^0.18.7",
     "lucide-react": "^1.23.0",
     "marked": "^18.0.5",

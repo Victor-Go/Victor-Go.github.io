@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import markedKatex from "marked-katex-extension";
 import "katex/dist/katex.min.css";
 import { Eye, Maximize2, FileText } from "lucide-react";
@@ -248,7 +249,9 @@ export const Preview: React.FC<PreviewProps> = ({
   const htmlContent = useMemo(() => {
     try {
       const rawHtml = marked.parse(markdown) as string;
-      return structureResumeHtml(rawHtml);
+      // marked does not sanitize; strip scripts/handlers/javascript: URLs before injection.
+      // Default profile keeps the HTML, SVG and MathML that KaTeX emits.
+      return DOMPurify.sanitize(structureResumeHtml(rawHtml));
     } catch (e) {
       console.error("Markdown parsing failed:", e);
       return `<div class="error-msg">Failed to render markdown content</div>`;

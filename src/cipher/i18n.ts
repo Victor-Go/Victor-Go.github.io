@@ -1,9 +1,7 @@
 export type Lang = "zh" | "en";
 
-/** Picks the initial UI language from the browser. Never persisted. */
-export function detectLang(nav: Pick<Navigator, "language"> = navigator): Lang {
-  return /^zh\b/i.test(nav.language ?? "") ? "zh" : "en";
-}
+/** The UI always starts in Chinese; the language toggle is never persisted. */
+export const DEFAULT_LANG: Lang = "zh";
 
 const zh = {
   title: "Cipher 加密工具",

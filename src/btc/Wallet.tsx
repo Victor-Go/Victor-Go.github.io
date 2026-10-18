@@ -76,27 +76,31 @@ function NewWallet({ m }: { m: Messages }) {
 
 function Restore({ m }: { m: Messages }) {
   const [text, setText] = useState("");
-  const [list, setList] = useState<Address[] | null>(null);
+  const [result, setResult] = useState<{ mnemonic: string; addresses: Address[] } | null>(null);
   const [error, setError] = useState("");
   const go = () => {
     if (!isValidMnemonic24(text)) {
-      setList(null);
+      setResult(null);
       return setError(m.invalidMnemonic);
     }
     setError("");
-    setList(deriveAddresses(text));
+    setResult({ mnemonic: text, addresses: deriveAddresses(text) });
   };
   return (
     <div>
-      <Field label={m.mnemonicInput} value={text} onChange={setText} m={m} secret rows={4} />
+      <Field label={m.mnemonicInput} value={text} onChange={(value) => {
+        setText(value);
+        setResult(null);
+        setError("");
+      }} m={m} secret rows={4} />
       <button type="button" className="c-primary" onClick={go}>
         {m.restoreBtn}
       </button>
       {error && <p role="alert" className="c-error">{error}</p>}
-      {list && (
+      {result && result.mnemonic === text && (
         <>
           <p className="c-hint" role="status">{m.validMnemonic}</p>
-          <Addresses list={list} m={m} />
+          <Addresses list={result.addresses} m={m} />
         </>
       )}
     </div>

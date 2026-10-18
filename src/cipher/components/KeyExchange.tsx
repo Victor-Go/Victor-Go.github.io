@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Messages } from "../i18n";
 import {
   decryptTextWithPrivateKey,
@@ -77,18 +77,21 @@ function Generate({ m, onGenerated }: { m: Messages; onGenerated: (pair: KeyPair
 function Encrypt({ m }: { m: Messages }) {
   const [pub, setPub] = useState("");
   const [text, setText] = useState("");
-  const [out, setOut] = useState("");
+  const [out, setOut] = useState<{ pub: string; text: string; value: string } | null>(null);
+  const revision = useRef(0);
   const [generated, setGenerated] = useState(false);
   const { busy, error, run } = useAction(m);
   return (
     <div>
-      <Field label={m.recipientPublicKey} value={pub} onChange={setPub} m={m} rows={4} />
+      <Field label={m.recipientPublicKey} value={pub} onChange={(value) => { revision.current++; setPub(value); setOut(null); }} m={m} rows={4} />
       <Field
         label={m.plaintext}
         value={text}
         onChange={(v) => {
+          revision.current++;
           setText(v);
           setGenerated(false);
+          setOut(null);
         }}
         m={m}
         rows={5}
@@ -97,8 +100,10 @@ function Encrypt({ m }: { m: Messages }) {
             type="button"
             className="c-link"
             onClick={() => {
+              revision.current++;
               setText(generateMnemonicPassword());
               setGenerated(true);
+              setOut(null);
             }}
           >
             {m.genPassword}
@@ -110,38 +115,49 @@ function Encrypt({ m }: { m: Messages }) {
         type="button"
         className="c-primary"
         disabled={busy}
-        onClick={() => run(async () => setOut(await encryptTextForPublicKey(pub, text)))}
+        onClick={() => {
+          const startedAt = revision.current;
+          void run(async () => {
+            const value = await encryptTextForPublicKey(pub, text);
+            if (revision.current === startedAt) setOut({ pub, text, value });
+          });
+        }}
       >
         {m.encryptBtn}
       </button>
       {error && <p role="alert" className="c-error">{error}</p>}
-      <Output label={m.ciphertext} value={out} m={m} downloadName="cipher-message.txt" />
+      <Output label={m.ciphertext} value={out && out.pub === pub && out.text === text ? out.value : ""} m={m} downloadName="cipher-message.txt" />
     </div>
   );
 }
 
 function Decrypt({ m, priv, setPriv }: { m: Messages; priv: string; setPriv: (v: string) => void }) {
   const [ct, setCt] = useState("");
-  const [out, setOut] = useState<string | null>(null);
+  const [out, setOut] = useState<{ priv: string; ct: string; value: string } | null>(null);
+  const revision = useRef(0);
   const { busy, error, run, setError } = useAction(m);
   return (
     <div>
-      <Field label={m.yourPrivateKey} value={priv} onChange={setPriv} m={m} secret rows={2} />
-      <Field label={m.ciphertext} value={ct} onChange={setCt} m={m} rows={5} />
+      <Field label={m.yourPrivateKey} value={priv} onChange={(value) => { revision.current++; setPriv(value); setOut(null); }} m={m} secret rows={2} />
+      <Field label={m.ciphertext} value={ct} onChange={(value) => { revision.current++; setCt(value); setOut(null); }} m={m} rows={5} />
       <button
         type="button"
         className="c-primary"
         disabled={busy}
         onClick={() => {
+          const startedAt = revision.current;
           setOut(null);
           setError("");
-          void run(async () => setOut(await decryptTextWithPrivateKey(priv, ct)));
+          void run(async () => {
+            const value = await decryptTextWithPrivateKey(priv, ct);
+            if (revision.current === startedAt) setOut({ priv, ct, value });
+          });
         }}
       >
         {m.decryptBtn}
       </button>
       {error && <p role="alert" className="c-error">{error}</p>}
-      {out !== null && <PlainResult label={m.result} value={out} m={m} />}
+      {out && out.priv === priv && out.ct === ct && <PlainResult label={m.result} value={out.value} m={m} />}
     </div>
   );
 }

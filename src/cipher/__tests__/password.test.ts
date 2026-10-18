@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { argon2id } from '@noble/hashes/argon2.js';
 import {
   encryptTextWithPassword,
   decryptTextWithPassword,
@@ -12,6 +13,16 @@ const fast = { m: 64, t: 1, p: 1 };
 const opts = { kdf: inlineKdf, params: fast };
 
 describe('password encryption', () => {
+  it('matches the RFC 9106 Argon2id test vector', () => {
+    const key = argon2id(new Uint8Array(32).fill(1), new Uint8Array(16).fill(2), {
+      m: 32, t: 3, p: 4, dkLen: 32,
+      key: new Uint8Array(8).fill(3),
+      personalization: new Uint8Array(12).fill(4),
+    });
+    expect(Array.from(key, (byte) => byte.toString(16).padStart(2, '0')).join(''))
+      .toBe('0d640df58d78766c08c037a34a8b53c9d01ef0452d75b65eb52520e96b01e659');
+  });
+
   it('uses Argon2id 64 MiB / 3 passes / 1 lane by default', () => {
     expect(DEFAULT_PARAMS).toEqual({ m: 65536, t: 3, p: 1 });
   });

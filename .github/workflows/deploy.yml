@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,8 +31,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Require cipher epoch variables
+        run: |
+          test -n "$VITE_CIPHER_EPOCHS" && test -n "$VITE_CIPHER_EPOCH_CURRENT" || {
+            echo "Set secret CIPHER_EPOCHS and variable CIPHER_EPOCH_CURRENT"; exit 1; }
+        env:
+          VITE_CIPHER_EPOCHS: ${{ secrets.CIPHER_EPOCHS }}
+          VITE_CIPHER_EPOCH_CURRENT: ${{ vars.CIPHER_EPOCH_CURRENT }}
+
       - name: Build
         run: npm run build
+        env:
+          VITE_CIPHER_EPOCHS: ${{ secrets.CIPHER_EPOCHS }}
+          VITE_CIPHER_EPOCH_CURRENT: ${{ vars.CIPHER_EPOCH_CURRENT }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

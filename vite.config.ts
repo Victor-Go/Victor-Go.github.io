@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
+import { DEFAULT_EPOCH_CURRENT, DEFAULT_EPOCH_TABLE, parseEpochs } from './src/cipher/crypto/epochs.ts'
 
 // The dev server injects inline scripts (React refresh preamble) that the strict
 // /cipher CSP forbids, so the CSP meta is dropped for `vite dev` only. Built output keeps it.
@@ -31,9 +32,25 @@ const cipherTrailingSlash = (): Plugin => {
   }
 }
 
+// A malformed epoch table would make every ciphertext undecryptable, so fail the build instead.
+const cipherEpochsCheck = (): Plugin => ({
+  name: 'cipher-epochs-check',
+  apply: 'build',
+  buildStart() {
+    try {
+      parseEpochs(
+        process.env.VITE_CIPHER_EPOCHS || DEFAULT_EPOCH_TABLE,
+        process.env.VITE_CIPHER_EPOCH_CURRENT || DEFAULT_EPOCH_CURRENT,
+      )
+    } catch (e) {
+      this.error(e instanceof Error ? e.message : 'Invalid cipher epoch configuration')
+    }
+  },
+})
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash()],
+  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash(), cipherEpochsCheck()],
   build: {
     // The polyfill issues network requests for modulepreload links, which /cipher's CSP forbids;
     // every supported browser has native modulepreload.

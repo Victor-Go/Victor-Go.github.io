@@ -37,7 +37,7 @@ describe('password encryption', () => {
   it('works with the real default parameters', async () => {
     const ct = await encryptTextWithPassword('real params', 'pw', { kdf: inlineKdf });
     const raw = decode('pw', ct);
-    expect(new DataView(raw.buffer, raw.byteOffset).getUint32(2)).toBe(65536);
+    expect(new DataView(raw.buffer, raw.byteOffset).getUint32(4)).toBe(65536);
     expect(await decryptTextWithPassword(ct, 'pw', { kdf: inlineKdf })).toBe('real params');
   }, 120_000);
 
@@ -68,7 +68,7 @@ describe('password encryption', () => {
   it('refuses absurd KDF parameters from untrusted headers', async () => {
     const ct = await encryptTextWithPassword('x', 'pw', opts);
     const raw = decode('pw', ct);
-    new DataView(raw.buffer, raw.byteOffset).setUint32(2, 0xffffffff);
+    new DataView(raw.buffer, raw.byteOffset).setUint32(4, 0xffffffff);
     await expect(decryptTextWithPassword(encode('pw', raw), 'pw', opts)).rejects.toMatchObject({ code: 'decrypt' });
   });
 });

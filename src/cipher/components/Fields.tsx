@@ -1,4 +1,4 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Messages } from "../i18n";
 import { copyText, downloadText } from "../output";
 
@@ -62,6 +62,9 @@ export function Field({ label, value, onChange, m, secret, singleLine, rows = 4,
   );
 }
 
+/** How long the copy button shows its result before returning to normal. */
+export const COPY_FEEDBACK_MS = 1000;
+
 interface OutputProps {
   label: string;
   value: string;
@@ -74,11 +77,17 @@ interface OutputProps {
 
 export function Output({ label, value, m, secret, downloadName, rows = 5 }: OutputProps) {
   const id = useId();
-  const [status, setStatus] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "ok" | "fail">("idle");
+  const timer = useRef<number | undefined>(undefined);
   const [reveal, setReveal] = useState(false);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
   if (!value) return null;
   const masked = secret && !reveal;
-  const copy = async () => setStatus((await copyText(value)) ? m.copied : m.copyFailed);
+  const copy = async () => {
+    setCopyState((await copyText(value)) ? "ok" : "fail");
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopyState("idle"), COPY_FEEDBACK_MS);
+  };
   return (
     <div className="c-field c-output">
       <div className="c-field-head">
@@ -98,8 +107,13 @@ export function Output({ label, value, m, secret, downloadName, rows = 5 }: Outp
         value={value}
       />
       <div className="c-actions">
-        <button type="button" onClick={copy}>
-          {m.copy}
+        <button
+          type="button"
+          className={copyState === "ok" ? "c-copied" : copyState === "fail" ? "c-copy-failed" : undefined}
+          aria-live="polite"
+          onClick={copy}
+        >
+          {copyState === "ok" ? m.copied : copyState === "fail" ? m.copyFailed : m.copy}
         </button>
         {downloadName && (
           <button type="button" onClick={() => downloadText(downloadName, value)}>
@@ -108,9 +122,6 @@ export function Output({ label, value, m, secret, downloadName, rows = 5 }: Outp
         )}
       </div>
       {downloadName && <div className="c-hint">{m.downloadWarn}</div>}
-      <div className="c-hint" role="status">
-        {status}
-      </div>
     </div>
   );
 }

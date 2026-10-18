@@ -27,17 +27,18 @@ export const workerKdf: Kdf = (password, salt, { m, t, p }) =>
     worker.onmessage = (e: MessageEvent<{ key?: Uint8Array; error?: boolean }>) => {
       done();
       if (e.data.key) resolve(e.data.key);
-      else reject(new CipherError("decrypt"));
+      else reject(new CipherError("kdf"));
     };
     worker.onerror = () => {
       done();
-      reject(new CipherError("decrypt"));
+      reject(new CipherError("kdf"));
     };
     const pw = password.slice();
     try {
       worker.postMessage({ password: pw, salt: salt.slice(), m, t, p }, [pw.buffer]);
     } catch {
       pw.fill(0);
-      cancel();
+      done();
+      reject(new CipherError("kdf"));
     }
   });

@@ -159,7 +159,7 @@ describe('page hardening', () => {
 });
 
 describe('default language', () => {
-  it('starts in Chinese for Chinese browsers and allows switching without persistence', () => {
+  it('starts in Chinese and allows switching without persistence', () => {
     const lang = vi.spyOn(navigator, 'language', 'get').mockReturnValue('zh-CN');
     try {
       render(<App />);
@@ -170,12 +170,12 @@ describe('default language', () => {
       lang.mockRestore();
     }
   });
-  it('starts in English for non-Chinese browsers', () => {
+  it('starts in Chinese even for non-Chinese browsers', () => {
     const lang = vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-CA');
     try {
       render(<App />);
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher');
-      expect(document.documentElement.lang).toBe('en');
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cipher 加密工具');
+      expect(document.documentElement.lang).toBe('zh-CN');
     } finally {
       lang.mockRestore();
     }

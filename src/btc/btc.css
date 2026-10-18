@@ -1,0 +1,41 @@
+.b-group-title {
+  margin: 20px 0 4px;
+  font-weight: 700;
+}
+
+.b-card {
+  margin: 12px 0;
+  padding: 4px 12px 8px;
+  border: 1px solid var(--c-border);
+  border-left: 4px solid var(--c-accent);
+  border-radius: 8px;
+  background: var(--c-bg);
+}
+
+.b-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 0 2px;
+  border-bottom: 1px dashed var(--c-border);
+}
+
+.b-card-head code {
+  color: var(--c-muted);
+  font-size: 0.85em;
+}
+
+/* The private key sits in its own tinted box so it can't be mistaken for the public address. */
+.b-key {
+  margin-top: 8px;
+  padding: 0 10px 6px;
+  border-radius: 6px;
+  background: var(--c-warn-bg);
+  color: var(--c-warn-fg);
+}
+
+.b-key .c-hint {
+  color: inherit;
+}

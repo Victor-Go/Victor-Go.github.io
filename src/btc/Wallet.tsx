@@ -19,18 +19,20 @@ function Addresses({ list, m }: { list: Address[]; m: Messages }) {
     <section className="b-group" aria-label={m.addresses}>
       <p className="b-group-title">{m.addresses}</p>
       <p className="c-hint">{m.addrPath}</p>
-      {list.map((a) => (
-        <article key={a.index} className="b-card">
-          <header className="b-card-head">
-            <strong>{m.cardTitle(a.index)}</strong>
-            <code>{a.path}</code>
-          </header>
-          <Output label={m.receiveAddress} value={a.address} m={m} rows={1} />
-          <div className="b-key">
-            <Output label={m.keyLabel} value={a.wif} m={m} secret rows={1} />
-          </div>
-        </article>
-      ))}
+      <div className="c-cols">
+        {list.map((a) => (
+          <article key={a.index} className="b-card">
+            <header className="b-card-head">
+              <strong>{m.cardTitle(a.index)}</strong>
+              <code>{a.path}</code>
+            </header>
+            <Output label={m.receiveAddress} value={a.address} m={m} rows={1} />
+            <div className="b-key">
+              <Output label={m.keyLabel} value={a.wif} m={m} secret rows={1} />
+            </div>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }

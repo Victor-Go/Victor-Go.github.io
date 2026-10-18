@@ -113,6 +113,12 @@ The app is local-first: local backups remain available offline and Google Drive 
 
 The page does not store or upload your content, and closing it clears everything. It writes no cookies and uses no browser storage, does not upload plaintext or keys, and clears its state on page hide, bfcache restore, five minutes of inactivity, or via the clear button. Thirty seconds after manual copy, it attempts to clear the clipboard if the copied content remains unchanged (permissions may block this). A same-origin worker script may load on first password use. Clipboard history, browser extensions, AI side panels and screen recorders are outside its control; use a private window. See [ARCHITECTURE.md](ARCHITECTURE.md#-cipher-encryption-tool) for the threat model.
 
+## 🔎 /scan Bitcoin Lookup
+
+`/scan/` looks up a transaction hash, a public key (compressed or uncompressed) or a mainnet address. A public key is turned into its standard addresses locally (P2PKH, P2SH-P2WPKH, P2WPKH, key-path Taproot) and each is looked up.
+
+A lookup cannot be fully private: the hash or derived addresses go to the third-party Esplora API at `mempool.space` (`blockstream.info` if it is down), which sees the query and your IP. The page itself sends nothing to this site, writes no cookies and uses no browser storage, sends requests without cookies or referrer, caches nothing, validates every response before rendering it, and clears its state on page hide, bfcache restore, five minutes of inactivity, or via the clear button. Its CSP allows connections to those two hosts only; `src/scan/__tests__/build.guard.test.ts` enforces this. Use Tor Browser or a trusted VPN to hide your IP, or run your own node for no leakage at all.
+
 ### Dependencies and licenses (pinned, no `^`)
 
 | Package | Version | License |

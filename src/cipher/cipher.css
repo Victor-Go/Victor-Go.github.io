@@ -37,8 +37,7 @@
 
 html,
 body {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
   overscroll-behavior: none;
 }
 
@@ -56,38 +55,21 @@ body {
   line-height: 1.5;
 }
 
+/* The page scrolls normally. The shell is wide on desktops and fills the screen on phones. */
 .c-shell {
-  max-width: 760px;
-  height: 100dvh;
+  max-width: 1120px;
+  min-height: 100dvh;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
   padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
-    calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
 }
 
-.c-shell > * {
-  flex: none;
-}
-
-/* App layout: only the active panel scrolls; the module switch stays put like a tab bar. */
-.c-shell > .c-modes {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.c-modes > .c-panel {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.c-modes > .c-panel[hidden] {
-  display: none !important;
+/* The mode switch stays at the top while the page scrolls underneath it. */
+.c-modes > .c-tablist {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--c-bg);
 }
 
 /* Text the user types or must copy stays selectable. */
@@ -297,11 +279,8 @@ textarea:focus-visible {
     margin-bottom: 8px;
     font-size: 0.78rem;
   }
-  /* Module switch stays at the top on phones and desktops. */
   .c-modes > .c-tablist {
-    order: 0;
     border-bottom: 1px solid var(--c-border);
-    border-top: none;
     padding-top: 0;
   }
   .c-modes > .c-tablist .c-tab {
@@ -312,11 +291,29 @@ textarea:focus-visible {
   .c-modes > .c-tablist .c-tab[aria-selected="true"] {
     border-color: var(--c-accent);
   }
-  .c-modes > .c-panel {
-    order: 1;
-    border-top: none;
-    border-radius: 0 0 8px 8px;
+}
+
+@media (min-width: 900px) {
+  .c-shell {
+    padding-top: 24px;
   }
+  .c-header h1 {
+    font-size: 1.75rem;
+  }
+  .c-notice {
+    font-size: 0.95rem;
+  }
+  .c-panel {
+    padding: 20px 24px;
+  }
+}
+
+/* Cards and lists sit side by side when there is room, and stack on phones. */
+.c-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 0 24px;
+  align-items: start;
 }
 
 [hidden] {

@@ -68,9 +68,9 @@ describe('build guard for dist/cipher', () => {
     expect(html).toMatch(/<html[^>]*translate="no"/);
   });
 
-  it('is app-like: no zoom, safe-area viewport, manifest and standalone meta tags', () => {
-    expect(html).toMatch(/name="viewport"[^>]*user-scalable=no/);
-    expect(html).toMatch(/name="viewport"[^>]*maximum-scale=1/);
+  it('allows browser zoom while keeping safe-area viewport, manifest and standalone meta tags', () => {
+    expect(html).not.toMatch(/user-scalable=no/);
+    expect(html).not.toMatch(/maximum-scale=1/);
     expect(html).toMatch(/name="viewport"[^>]*viewport-fit=cover/);
     expect(html).toContain('rel="manifest" href="/cipher/manifest.webmanifest"');
     expect(html).toContain('name="apple-mobile-web-app-capable"');

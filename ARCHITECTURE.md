@@ -136,20 +136,20 @@ src/cipher/workers/       Argon2id Web Worker + client
 - **Password:** Argon2id (64 MiB, t=3, p=1) in a Web Worker; parameters, salt and nonce live in the ciphertext header, which is also the AAD. Parameters read from untrusted headers are bounded before use.
 - **Random passphrase:** the key-exchange encrypt tab can fill the plaintext with a BIP-39 mnemonic (24 words from the standard English 2048-word list, 256-bit entropy plus checksum, via `@scure/bip39` and `crypto.getRandomValues`), joined with `-`.
 - **Errors:** every decryption failure maps to the same message; errors never contain input.
-- **State:** React `useState` only. `Workspace` is remounted on wipe, and tracked `Uint8Array` secrets are `fill(0)`-ed. Wipe fires on `pagehide`, on `pageshow` with `persisted` (bfcache), and from the clear button (no idle timer). Nothing goes in the URL.
-- **Inputs:** textareas only (no `<form>`, no `type=password`), `autocomplete/autocorrect/autocapitalize=off`, `spellcheck=false`, password-manager opt-out attributes; secrets are masked with `-webkit-text-security` (engines without it hide the glyphs and show a character count). Chromium does not restore textarea content on reload or back navigation here because the fields are created after load; `contenteditable` was therefore not needed.
-- **Output:** no auto-copy; manual copy only; the clipboard is never cleared automatically. Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
-- **Isolation:** the page refuses to run when `window.opener` is set or when framed.
+- **State:** React `useState` only. `Workspace` is remounted on wipe, and tracked `Uint8Array` secrets are `fill(0)`-ed. Wipe fires on `pagehide`, on `pageshow` with `persisted` (bfcache), after five minutes without user interaction, and from the clear button (including five minutes of inactivity). Nothing goes in the URL.
+- **Inputs:** textareas only (no `<form>`, no `type=password`), `autocomplete/autocorrect/autocapitalize=off`, `spellcheck=false`, password-manager opt-out attributes; secrets are masked with `-webkit-text-security` (engines without it hide the glyphs and show a character count). Refresh, reopen-closed-tab and session restore behavior still requires real Chrome and Firefox testing. If content is restored, a non-restoring `contenteditable` approach must be evaluated and accessibility rechecked.
+- **Output:** no auto-copy; manual copy only; clipboard clearing is attempted after 30 seconds only if a permitted clipboard read confirms the content is unchanged (best-effort; may fail silently). Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
+- **Isolation:** the page refuses to run when `window.opener` is set or when framed. This cannot block arbitrary same-origin scripts.
 
 ### CSP and build
 
-`default-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'none'; img-src 'self'; font-src 'none'; manifest-src 'self'; form-action 'none'; base-uri 'none'`. `img-src 'self'` (rather than `'none'`) is required because Chromium applies `img-src` to the same-origin favicon, and `manifest-src 'self'` lets the same-origin web app manifest load. Vite's modulepreload polyfill is disabled because it issues network requests. For `vite dev` only, the CSP meta is stripped (React refresh injects an inline script); test CSP with `npm run build && npm run preview`.
+`default-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'none'; img-src 'self'; font-src 'none'; manifest-src 'self'; form-action 'none'; base-uri 'none'`. `img-src 'self'` (rather than `'none'`) is required because Chromium applies `img-src` to the same-origin favicon, and `manifest-src 'self'` lets the same-origin web app manifest load. Vite's modulepreload polyfill is disabled because it issues network requests. The password worker may fetch a same-origin script when password mode is first used; this does not upload secrets but means a literal zero-network-requests-after-load assertion is not yet met. For `vite dev` only, the CSP meta is stripped (React refresh injects an inline script); test CSP with `npm run build && npm run preview`.
 
 `build.guard.test.ts` builds the site and scans everything the cipher page loads for forbidden APIs (cookies, storage, IndexedDB, caches, service workers, network APIs, beacons, analytics, `console.log`, `Math.random`), checks the CSP, and rejects inline scripts. The only allowed `Math.random` is React DOM's internal property-key suffix.
 
 ### App-like mode
 
-The page is laid out like a mobile app: full-height shell with only the active panel scrolling, the module switch as a bottom tab bar on phones, safe-area insets, 16px inputs (prevents iOS focus-zoom), `touch-action: manipulation`, and a viewport with `user-scalable=no` plus a `gesturestart` guard for iOS Safari. A web app manifest (`display: standalone`, scoped to `/cipher/`) and the Apple/Chrome standalone meta tags allow "Add to Home Screen". There is deliberately no service worker, so it does not work offline and nothing is cached by the app. Disabling zoom reduces accessibility for low-vision users.
+The page is laid out like a mobile app: full-height shell with only the active panel scrolling, the module switch at the top on all screen sizes, safe-area insets, 16px inputs (prevents inadvertent iOS focus-zoom), `touch-action: manipulation`, and a viewport with user zoom enabled. A web app manifest (`display: standalone`, scoped to `/cipher/`) and the Apple/Chrome standalone meta tags allow "Add to Home Screen". There is deliberately no service worker, so it does not work offline and nothing is cached by the app. User zoom remains enabled for accessibility.
 
 ### Threat model
 
@@ -158,7 +158,7 @@ Protects against: content persisting in the page's own storage, content being se
 Residual traces the page cannot eliminate:
 
 - GitHub Pages access logs and the visit appearing in browser history and caches.
-- Clipboard and OS clipboard history (the page never clears it; clear it yourself).
+- Clipboard and OS clipboard history (the page attempts to clear an unchanged clipboard after 30 seconds, but history and permission controls are outside its control).
 - Browser extensions, AI side panels, screen recorders and accessibility tools.
 - Memory paging/swap and JavaScript strings, which cannot be zeroed.
 - A tampered or replaced page: the code is delivered by GitHub Pages on every visit, so a compromised deployment or CDN could ship malicious code.

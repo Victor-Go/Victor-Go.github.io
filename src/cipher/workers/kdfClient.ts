@@ -1,14 +1,29 @@
 import { CipherError } from "../crypto/encoding";
 import type { Kdf } from "../crypto/password";
 
+/** Cancel active password derivations when the page is wiped. */
+const pending = new Set<() => void>();
+
+export function cancelPendingKdf(): void {
+  for (const cancel of [...pending]) cancel();
+}
+
 /**
- * Argon2id in a throwaway Web Worker so the UI stays responsive.
- * A fresh worker per call; it is terminated as soon as it answers so its memory is released.
+ * Argon2id runs in a fresh worker per operation. The worker is terminated as
+ * soon as it answers, fails, or the page is cleared.
  */
 export const workerKdf: Kdf = (password, salt, { m, t, p }) =>
   new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./kdf.worker.ts", import.meta.url), { type: "module" });
-    const done = () => worker.terminate();
+    const done = () => {
+      pending.delete(cancel);
+      worker.terminate();
+    };
+    const cancel = () => {
+      done();
+      reject(new CipherError("decrypt"));
+    };
+    pending.add(cancel);
     worker.onmessage = (e: MessageEvent<{ key?: Uint8Array; error?: boolean }>) => {
       done();
       if (e.data.key) resolve(e.data.key);
@@ -19,5 +34,10 @@ export const workerKdf: Kdf = (password, salt, { m, t, p }) =>
       reject(new CipherError("decrypt"));
     };
     const pw = password.slice();
-    worker.postMessage({ password: pw, salt: salt.slice(), m, t, p }, [pw.buffer]);
+    try {
+      worker.postMessage({ password: pw, salt: salt.slice(), m, t, p }, [pw.buffer]);
+    } catch {
+      pw.fill(0);
+      cancel();
+    }
   });

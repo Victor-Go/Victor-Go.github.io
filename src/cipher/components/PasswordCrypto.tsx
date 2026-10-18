@@ -4,6 +4,7 @@ import { decryptTextWithPassword, encryptTextWithPassword, type PasswordOptions 
 import { workerKdf } from "../workers/kdfClient";
 import { Field, Output, Tabs } from "./Fields";
 import { errorText } from "./errorText";
+import { estimateBits, isWeak } from "../crypto/strength";
 
 type Tab = "encrypt" | "decrypt";
 
@@ -46,6 +47,11 @@ function Encrypt({ m }: { m: Messages }) {
   return (
     <div>
       <Field label={m.password} value={pw} onChange={setPw} m={m} secret singleLine />
+      {pw && (
+        <p role="status" className={isWeak(pw) ? "c-error" : "c-hint"}>
+          {isWeak(pw) ? m.strengthWeak(estimateBits(pw)) : m.strengthOk(estimateBits(pw))}
+        </p>
+      )}
       <Field label={m.passwordRepeat} value={pw2} onChange={setPw2} m={m} secret singleLine />
       <Field label={m.plaintext} value={text} onChange={setText} m={m} rows={5} />
       <button type="button" className="c-primary" disabled={busy} onClick={go}>

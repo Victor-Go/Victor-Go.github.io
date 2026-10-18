@@ -1,0 +1,65 @@
+.s-kv {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--c-border);
+}
+
+.s-k {
+  color: var(--c-muted);
+}
+
+.s-v {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.s-io-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--c-border);
+}
+
+.s-io-addr {
+  min-width: 0;
+  flex: 1 1 14em;
+  overflow-wrap: anywhere;
+}
+
+.s-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  text-align: left;
+  word-break: break-all;
+}
+
+.s-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.s-pos {
+  color: #15803d;
+}
+
+.s-neg {
+  color: var(--c-error);
+}
+
+@media (prefers-color-scheme: dark) {
+  .s-pos {
+    color: #86efac;
+  }
+}
+
+/* Result panel without a tab bar above it keeps a full border. */
+.s-panel {
+  border-top: 1px solid var(--c-border);
+  border-radius: 8px;
+}

@@ -12,11 +12,11 @@ const cipherDevWithoutCsp = (): Plugin => ({
   },
 })
 
-// GitHub Pages already redirects /cipher and /btc to their trailing-slash form; mirror that for dev and preview servers.
+// GitHub Pages already redirects /cipher, /btc and /scan to their trailing-slash form; mirror that for dev and preview servers.
 const cipherTrailingSlash = (): Plugin => {
   const redirect = (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
     const [path, query = ''] = (req.url ?? '').split('?')
-    if (path === '/cipher' || path === '/btc') {
+    if (path === '/cipher' || path === '/btc' || path === '/scan') {
       res.statusCode = 301
       res.setHeader('Location', path + '/' + (query ? '?' + query : ''))
       res.end()
@@ -43,6 +43,7 @@ export default defineConfig({
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         cipher: fileURLToPath(new URL('./cipher/index.html', import.meta.url)),
         btc: fileURLToPath(new URL('./btc/index.html', import.meta.url)),
+        scan: fileURLToPath(new URL('./scan/index.html', import.meta.url)),
       },
     },
   },

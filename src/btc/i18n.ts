@@ -1,6 +1,9 @@
-import { messages as cipherMessages, getDefaultLang, type Lang } from "../cipher/i18n";
+import { messages as cipherMessages, type Lang } from "../cipher/i18n";
 
-export { getDefaultLang, type Lang };
+export type { Lang };
+
+/** This page always starts in Chinese; the language toggle is never persisted. */
+export const getDefaultLang = (): Lang => "zh";
 
 const zh = {
   btcTitle: "比特币钱包生成器",

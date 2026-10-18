@@ -138,7 +138,7 @@ src/cipher/workers/       Argon2id Web Worker + client
 - **Errors:** every decryption failure maps to the same message; errors never contain input.
 - **State:** React `useState` only. `Workspace` is remounted on wipe, and tracked `Uint8Array` secrets are `fill(0)`-ed. Wipe fires on `pagehide`, on `pageshow` with `persisted` (bfcache), after five minutes without user interaction, and from the clear button (including five minutes of inactivity). Nothing goes in the URL.
 - **Inputs:** textareas only (no `<form>`, no `type=password`), `autocomplete/autocorrect/autocapitalize=off`, `spellcheck=false`, password-manager opt-out attributes; secrets are masked with `-webkit-text-security` (engines without it hide the glyphs and show a character count). Refresh, reopen-closed-tab and session restore behavior still requires real Chrome and Firefox testing. If content is restored, a non-restoring `contenteditable` approach must be evaluated and accessibility rechecked.
-- **Output:** no auto-copy; manual copy only; clipboard clearing is attempted after 30 seconds only if a permitted clipboard read confirms the content is unchanged (best-effort; may fail silently). Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
+- **Output:** no auto-copy; manual copy only; the clipboard is only written, never read, so no clipboard permission prompt appears. Private keys cannot be downloaded; ciphertext download carries an on-disk warning.
 - **Isolation:** the page refuses to run when `window.opener` is set or when framed. This cannot block arbitrary same-origin scripts.
 
 ### CSP and build
@@ -149,7 +149,7 @@ src/cipher/workers/       Argon2id Web Worker + client
 
 ### Password strength hint
 
-`src/cipher/crypto/strength.ts` estimates entropy (character-class pool size over distinct characters; an all-BIP-39-words phrase counts 11 bits per word). Below 128 bits the password tab shows a red warning; weak passwords are never rejected.
+`src/cipher/crypto/strength.ts` estimates entropy as the cheapest way to describe the password as pieces: single characters (priced by the ASCII classes present, 8 bits per Han/Hangul character, 6 for other non-ASCII), repeated units, runs like `abc`, keyboard walks, a small common-password list, years, and BIP-39 English words (11 bits each). A valid BIP-39 mnemonic (what the generator makes) counts its real entropy (256 bits for 24 words). It is a rough upper bound: it has no large dictionary, so human-chosen text is weaker than shown. Below 128 bits the password tab shows a red warning; weak passwords are never rejected.
 
 ### App-like mode
 
@@ -162,7 +162,7 @@ Protects against: content persisting in the page's own storage, content being se
 Residual traces the page cannot eliminate:
 
 - GitHub Pages access logs and the visit appearing in browser history and caches.
-- Clipboard and OS clipboard history (the page attempts to clear an unchanged clipboard after 30 seconds, but history and permission controls are outside its control).
+- Clipboard and OS clipboard history (the page does not clear it; history and permission controls are outside its control).
 - Browser extensions, AI side panels, screen recorders and accessibility tools.
 - Memory paging/swap and JavaScript strings, which cannot be zeroed.
 - A tampered or replaced page: the code is delivered by GitHub Pages on every visit, so a compromised deployment or CDN could ship malicious code.

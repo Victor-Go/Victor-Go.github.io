@@ -15,7 +15,7 @@ describe('copy button feedback', () => {
     vi.useFakeTimers();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
-      value: { writeText: vi.fn().mockResolvedValue(undefined), readText: vi.fn().mockResolvedValue('') },
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
     render(<Output label="x" value="hello" m={m} />);
     const btn = screen.getByRole('button', { name: m.copy });

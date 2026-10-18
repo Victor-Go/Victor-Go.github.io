@@ -1,6 +1,6 @@
-import { messages as cipherMessages, DEFAULT_LANG, type Lang } from "../cipher/i18n";
+import { messages as cipherMessages, getDefaultLang, type Lang } from "../cipher/i18n";
 
-export { DEFAULT_LANG, type Lang };
+export { getDefaultLang, type Lang };
 
 const zh = {
   btcTitle: "比特币钱包生成器",

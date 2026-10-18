@@ -3,10 +3,10 @@ import { Wallet } from "./Wallet";
 import { wipeTracked } from "../cipher/crypto/secrets";
 import { isEmbeddedOrOpened } from "../cipher/isolation";
 import { useWipeTriggers } from "../cipher/wipe";
-import { DEFAULT_LANG, messages, type Lang } from "./i18n";
+import { getDefaultLang, messages, type Lang } from "./i18n";
 
 export function App() {
-  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
+  const [lang, setLang] = useState<Lang>(getDefaultLang);
   const [epoch, setEpoch] = useState(0);
   const [clearedNote, setClearedNote] = useState(false);
   const m = messages[lang];

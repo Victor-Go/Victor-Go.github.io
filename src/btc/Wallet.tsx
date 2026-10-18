@@ -11,7 +11,7 @@ export function Wallet({ m }: { m: Messages }) {
     { id: "new", label: m.tabNew, content: <NewWallet m={m} /> },
     { id: "restore", label: m.tabRestore, content: <Restore m={m} /> },
   ];
-  return <Tabs label={m.btcTitle} tabs={tabs} active={tab} onChange={(t) => setTab(t as Tab)} />;
+  return <Tabs label={m.btcTitle} tabs={tabs} active={tab} onChange={(t) => setTab(t as Tab)} className="c-modes" />;
 }
 
 function Addresses({ list, m }: { list: Address[]; m: Messages }) {

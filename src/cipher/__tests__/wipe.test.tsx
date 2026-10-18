@@ -161,6 +161,27 @@ describe('page hardening', () => {
     typeInto('Ciphertext', ctVal);
     fireEvent.click(screen.getByRole('button', { name: 'Decrypt' }));
     await waitFor(() => expect(field('Result').value).toBe('hello 你好'));
+    typeInto('Ciphertext', ctVal + 'x');
+    expect(screen.queryByRole('textbox', { name: 'Result' })).toBeNull();
+  });
+
+  it('hides key-exchange results after edits and discards an in-flight result', async () => {
+    renderEn();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate key pair' }));
+    const pub = (await waitFor(() => field(/Public key/))).value;
+    openEncryptTab();
+    typeInto(/Recipient/, pub);
+    typeInto('Plaintext', 'first');
+    fireEvent.click(screen.getByRole('button', { name: 'Encrypt' }));
+    await waitFor(() => expect(field('Ciphertext').value).toMatch(/^cipher1-kx\./));
+
+    typeInto('Plaintext', 'second');
+    expect(screen.queryByRole('textbox', { name: 'Ciphertext' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Encrypt' }));
+    typeInto(/Recipient/, pub + 'x');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Encrypt' })).not.toBeDisabled());
+    expect(screen.queryByRole('textbox', { name: 'Ciphertext' })).toBeNull();
   });
 });
 

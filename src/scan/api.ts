@@ -112,6 +112,7 @@ export interface TxResult {
 
 export async function lookupTx(txid: string, signal: AbortSignal): Promise<TxResult> {
   const tx = parseTx(parseJson(await get(`/tx/${txid}`, signal)));
+  if (tx.txid !== txid) throw new BadResponseError();
   let confirmations = 0;
   if (tx.confirmed && tx.height !== undefined) {
     const tip = Number.parseInt(await get("/blocks/tip/height", signal), 10);

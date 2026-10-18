@@ -66,6 +66,12 @@ describe('response validation', () => {
     stub(() => json('<html>'));
     await expect(lookupTx(TXID, sig())).rejects.toBeInstanceOf(BadResponseError);
   });
+
+  it('rejects a transaction response for a different requested hash', async () => {
+    const f = stub(() => json(tx({ txid: '0'.repeat(64) })));
+    await expect(lookupTx(TXID, sig())).rejects.toBeInstanceOf(BadResponseError);
+    expect(f).toHaveBeenCalledTimes(1); // Do not fetch a tip for the wrong transaction.
+  });
 });
 
 describe('lookupAddress', () => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Messages } from "../i18n";
 import { decryptTextWithPassword, encryptTextWithPassword, type PasswordOptions } from "../crypto/password";
 import { workerKdf } from "../workers/kdfClient";
@@ -28,16 +28,19 @@ function Encrypt({ m }: { m: Messages }) {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [text, setText] = useState("");
-  const [out, setOut] = useState("");
+  const [out, setOut] = useState<{ pw: string; pw2: string; text: string; value: string } | null>(null);
+  const revision = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const go = async () => {
+    const startedAt = revision.current;
     setError("");
-    setOut("");
+    setOut(null);
     if (pw !== pw2) return setError(m.mismatch);
     setBusy(true);
     try {
-      setOut(await encryptTextWithPassword(text, pw, options));
+      const value = await encryptTextWithPassword(text, pw, options);
+      if (revision.current === startedAt) setOut({ pw, pw2, text, value });
     } catch (e) {
       setError(errorText(e, m));
     } finally {
@@ -46,20 +49,20 @@ function Encrypt({ m }: { m: Messages }) {
   };
   return (
     <div>
-      <Field label={m.password} value={pw} onChange={setPw} m={m} secret singleLine />
+      <Field label={m.password} value={pw} onChange={(value) => { revision.current++; setPw(value); setOut(null); }} m={m} secret singleLine />
       {pw && (
         <p role="status" className={isWeak(pw) ? "c-error" : "c-hint"}>
           {isWeak(pw) ? m.strengthWeak(estimateBits(pw)) : m.strengthOk(estimateBits(pw))}
         </p>
       )}
-      <Field label={m.passwordRepeat} value={pw2} onChange={setPw2} m={m} secret singleLine />
-      <Field label={m.plaintext} value={text} onChange={setText} m={m} rows={5} />
+      <Field label={m.passwordRepeat} value={pw2} onChange={(value) => { revision.current++; setPw2(value); setOut(null); }} m={m} secret singleLine />
+      <Field label={m.plaintext} value={text} onChange={(value) => { revision.current++; setText(value); setOut(null); }} m={m} rows={5} />
       <button type="button" className="c-primary" disabled={busy} onClick={go}>
         {m.encryptBtn}
       </button>
       {busy && <p role="status" className="c-hint">{m.working}</p>}
       {error && <p role="alert" className="c-error">{error}</p>}
-      <Output label={m.ciphertext} value={out} m={m} downloadName="cipher-message.txt" />
+      <Output label={m.ciphertext} value={out && out.pw === pw && out.pw2 === pw2 && out.text === text ? out.value : ""} m={m} downloadName="cipher-message.txt" />
     </div>
   );
 }
@@ -67,15 +70,18 @@ function Encrypt({ m }: { m: Messages }) {
 function Decrypt({ m }: { m: Messages }) {
   const [pw, setPw] = useState("");
   const [ct, setCt] = useState("");
-  const [out, setOut] = useState<string | null>(null);
+  const [out, setOut] = useState<{ pw: string; ct: string; value: string } | null>(null);
+  const revision = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const go = async () => {
+    const startedAt = revision.current;
     setError("");
     setOut(null);
     setBusy(true);
     try {
-      setOut(await decryptTextWithPassword(ct, pw, options));
+      const value = await decryptTextWithPassword(ct, pw, options);
+      if (revision.current === startedAt) setOut({ pw, ct, value });
     } catch (e) {
       setError(errorText(e, m));
     } finally {
@@ -84,15 +90,15 @@ function Decrypt({ m }: { m: Messages }) {
   };
   return (
     <div>
-      <Field label={m.password} value={pw} onChange={setPw} m={m} secret singleLine />
-      <Field label={m.ciphertext} value={ct} onChange={setCt} m={m} rows={5} />
+      <Field label={m.password} value={pw} onChange={(value) => { revision.current++; setPw(value); setOut(null); }} m={m} secret singleLine />
+      <Field label={m.ciphertext} value={ct} onChange={(value) => { revision.current++; setCt(value); setOut(null); }} m={m} rows={5} />
       <button type="button" className="c-primary" disabled={busy} onClick={go}>
         {m.decryptBtn}
       </button>
       {busy && <p role="status" className="c-hint">{m.working}</p>}
       {error && <p role="alert" className="c-error">{error}</p>}
-      {out === "" && <p className="c-hint">{m.result}: ∅</p>}
-      {out && <Output label={m.result} value={out} m={m} />}
+      {out && out.pw === pw && out.ct === ct && out.value === "" && <p className="c-hint">{m.result}: ∅</p>}
+      {out && out.pw === pw && out.ct === ct && <Output label={m.result} value={out.value} m={m} />}
     </div>
   );
 }

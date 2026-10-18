@@ -111,7 +111,7 @@ The app is local-first: local backups remain available offline and Google Drive 
 - **Key exchange:** X-Wing hybrid post-quantum KEM (X25519 + ML-KEM-768) → HKDF-SHA256 → AES-256-GCM. Tabs: generate keys, encrypt, decrypt.
 - **Password:** Argon2id (64 MiB, 3 passes, run in a Web Worker) → AES-256-GCM.
 
-The page does not store or upload your content, and closing it clears everything. It writes no cookies and uses no browser storage, does not upload plaintext or keys, and clears its state on page hide, bfcache restore, five minutes of inactivity, or via the clear button. Thirty seconds after manual copy, it attempts to clear the clipboard if the copied content remains unchanged (permissions may block this). A same-origin worker script may load on first password use. Clipboard history, browser extensions, AI side panels and screen recorders are outside its control; use a private window. See [ARCHITECTURE.md](ARCHITECTURE.md#-cipher-encryption-tool) for the threat model.
+The page does not store or upload your content, and closing it clears everything. It writes no cookies and uses no browser storage, does not upload plaintext or keys, and clears its state on page hide, bfcache restore, five minutes of inactivity, or via the clear button. Copying is manual only; the page writes to the clipboard but never reads it, and does not clear it afterwards. A same-origin worker script may load on first password use. Clipboard history, browser extensions, AI side panels and screen recorders are outside its control; use a private window. See [ARCHITECTURE.md](ARCHITECTURE.md#-cipher-encryption-tool) for the threat model.
 
 ## 🔎 /scan Bitcoin Lookup
 

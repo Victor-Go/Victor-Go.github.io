@@ -147,6 +147,10 @@ src/cipher/workers/       Argon2id Web Worker + client
 
 `build.guard.test.ts` builds the site and scans everything the cipher page loads for forbidden APIs (cookies, storage, IndexedDB, caches, service workers, network APIs, beacons, analytics, `console.log`, `Math.random`), checks the CSP, and rejects inline scripts. The only allowed `Math.random` is React DOM's internal property-key suffix.
 
+### Password strength hint
+
+`src/cipher/crypto/strength.ts` estimates entropy (character-class pool size over distinct characters; an all-BIP-39-words phrase counts 11 bits per word). Below 128 bits the password tab shows a red warning; weak passwords are never rejected.
+
 ### App-like mode
 
 The page is laid out like a mobile app: full-height shell with only the active panel scrolling, the module switch at the top on all screen sizes, safe-area insets, 16px inputs (prevents inadvertent iOS focus-zoom), `touch-action: manipulation`, and a viewport with user zoom enabled. A web app manifest (`display: standalone`, scoped to `/cipher/`) and the Apple/Chrome standalone meta tags allow "Add to Home Screen". There is deliberately no service worker, so it does not work offline and nothing is cached by the app. User zoom remains enabled for accessibility.
@@ -163,3 +167,14 @@ Residual traces the page cannot eliminate:
 - Memory paging/swap and JavaScript strings, which cannot be zeroed.
 - A tampered or replaced page: the code is delivered by GitHub Pages on every visit, so a compromised deployment or CDN could ship malicious code.
 - Same-origin risk from the resume tool: an XSS there would reach `/cipher`, hence the DOMPurify fix; the opener/frame check does not stop a script running in another same-origin tab.
+
+---
+
+## ₿ /btc Wallet Generator
+
+A third Vite entry (`btc/index.html`, `src/btc/`) served at `/btc/` (GitHub Pages redirects `/btc` to `/btc/`; the dev and preview servers mirror that). It reuses the cipher page's CSS, fields, wipe and isolation helpers and the same strict CSP (`connect-src 'none'`), so it can only generate, never send or query balances.
+
+- **Entropy:** 32 bytes from `crypto.getRandomValues`, optionally hashed with user-typed extra input (`SHA-256("btc-wallet/v1" ‖ random ‖ extra)`). A constant or wrong-length random source is refused.
+- **Seed:** 24-word BIP-39 (English), no passphrase. Restore tab validates the checksum.
+- **Addresses:** BIP-84 `m/84'/0'/0'/0/i` native SegWit (`bc1q…`) via `@scure/bip32` and `@scure/btc-signer`; checked against the official BIP-84 test vector. WIF keys are masked until revealed.
+- `src/btc/__tests__/build.guard.test.ts` scans the built page for forbidden APIs and checks the CSP.

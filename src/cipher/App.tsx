@@ -3,7 +3,8 @@ import { KeyExchange } from "./components/KeyExchange";
 import { PasswordCrypto } from "./components/PasswordCrypto";
 import { Tabs } from "./components/Fields";
 import { wipeTracked } from "./crypto/secrets";
-import { DEFAULT_LANG, messages, type Lang } from "./i18n";
+import { getDefaultLang, messages, type Lang } from "./i18n";
+import { cancelPendingKdf } from "./workers/kdfClient";
 import { isEmbeddedOrOpened } from "./isolation";
 import { useWipeTriggers } from "./wipe";
 
@@ -23,12 +24,13 @@ function Workspace({ lang }: { lang: Lang }) {
 }
 
 export function App() {
-  const [lang, setLang] = useState<Lang>(DEFAULT_LANG);
+  const [lang, setLang] = useState<Lang>(getDefaultLang);
   const [epoch, setEpoch] = useState(0);
   const [clearedNote, setClearedNote] = useState(false);
   const m = messages[lang];
 
   const wipe = useCallback(() => {
+    cancelPendingKdf();
     wipeTracked();
     setEpoch((e) => e + 1);
   }, []);

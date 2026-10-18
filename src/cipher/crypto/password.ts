@@ -101,8 +101,9 @@ export async function decryptWithPassword(
   try {
     const key = await deriveAesKey(kdf, password, salt, params);
     return await open(key, nonce, head, data.subarray(HEADER_LEN));
-  } catch {
-    throw new CipherError("decrypt");
+  } catch (e) {
+    // A key-derivation failure says nothing about the password, so it keeps its own message.
+    throw e instanceof CipherError && e.code === "kdf" ? e : new CipherError("decrypt");
   }
 }
 

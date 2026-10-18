@@ -1,8 +1,7 @@
 export type Lang = "zh" | "en";
 
-/** Use the browser language on each fresh visit; never persist a selection. */
-export const getDefaultLang = (): Lang =>
-  typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+/** The UI always starts in Chinese; the language toggle is never persisted. */
+export const getDefaultLang = (): Lang => "zh";
 
 const zh = {
   title: "Cipher 加密工具",
@@ -40,7 +39,7 @@ const zh = {
   decryptBtn: "解密",
   result: "结果",
   copy: "点击复制(请确保其他应用不会读取您的剪贴板)",
-  copied: "已复制。",
+  copied: "✓ 已复制",
   copyFailed: "复制失败,请手动选中复制。",
   download: "下载密文",
   downloadWarn: "注意:下载的文件会留在磁盘上。",
@@ -55,6 +54,7 @@ const zh = {
   badFormat: "输入格式无效,请检查是否完整粘贴。",
   wrongKind: "粘贴的内容类型不对(例如把公钥当成了私钥或密文)。",
   decryptFailed: "解密失败(密码/密钥错误或数据被篡改)",
+  kdfFailed: "密钥派生失败(可能内存不足或被中断),内容未被处理。请重试,或关闭其他标签页后再试。",
   failed: "操作失败。",
 };
 
@@ -96,7 +96,7 @@ const en: typeof zh = {
   decryptBtn: "Decrypt",
   result: "Result",
   copy: "Click to copy (make sure other apps cannot read your clipboard)",
-  copied: "Copied.",
+  copied: "✓ Copied",
   copyFailed: "Copy failed; please select and copy manually.",
   download: "Download ciphertext",
   downloadWarn: "Note: the downloaded file stays on disk.",
@@ -111,6 +111,7 @@ const en: typeof zh = {
   badFormat: "Invalid input format; check that you pasted all of it.",
   wrongKind: "Wrong kind of input (e.g. a public key where a private key or ciphertext is expected).",
   decryptFailed: "Decryption failed (wrong password/key, or the data was tampered with)",
+  kdfFailed: "Key derivation failed (possibly out of memory or interrupted); nothing was processed. Please retry, or close other tabs and try again.",
   failed: "Operation failed.",
 };
 

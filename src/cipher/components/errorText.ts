@@ -12,6 +12,8 @@ export function errorText(e: unknown, m: Messages): string {
         return m.wrongKind;
       case "empty-password":
         return m.emptyPassword;
+      case "kdf":
+        return m.kdfFailed;
     }
   }
   return m.failed;

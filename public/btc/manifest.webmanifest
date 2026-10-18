@@ -1,0 +1,12 @@
+{
+  "name": "Bitcoin Wallet",
+  "short_name": "Bitcoin Wallet",
+  "description": "Generate a 24-word Bitcoin wallet offline. Nothing is stored or uploaded.",
+  "start_url": "/btc/",
+  "scope": "/btc/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#f8fafc",
+  "icons": [{ "src": "/btc/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -15,7 +15,9 @@
   "dependencies": {
     "@noble/hashes": "2.4.0",
     "@noble/post-quantum": "0.7.1",
+    "@scure/bip32": "2.4.0",
     "@scure/bip39": "2.4.0",
+    "@scure/btc-signer": "2.4.1",
     "dompurify": "3.4.17",
     "katex": "^0.18.7",
     "lucide-react": "^1.23.0",

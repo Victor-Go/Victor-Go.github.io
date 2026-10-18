@@ -5,10 +5,16 @@ import { attachWipeListeners } from '../wipe';
 import { track, trackedCount, wipeTracked } from '../crypto/secrets';
 
 /** The app starts in Chinese; most assertions below use the English labels. */
-function renderEn() {
+function renderEnPassword() {
   render(<App />);
   const switchToEnglish = screen.queryByRole('button', { name: 'Switch to English' });
   if (switchToEnglish) fireEvent.click(switchToEnglish);
+}
+
+/** Most tests below exercise key exchange, which is not the default mode. */
+function renderEn() {
+  renderEnPassword();
+  fireEvent.click(screen.getByRole('tab', { name: 'Key exchange' }));
 }
 
 /** Panels of inactive tabs stay mounted but hidden; only the visible match counts. */
@@ -204,6 +210,16 @@ describe('tab switching', () => {
     typeInto('Plaintext', 'still here');
     fireEvent.click(screen.getByRole('button', { name: '切换到中文' }));
     expect(allTextareaValues()).toContain('still here');
+  });
+});
+
+describe('mode tabs', () => {
+  it('lists Password first and selects it by default', () => {
+    renderEnPassword();
+    const modes = screen.getAllByRole('tab').slice(0, 2);
+    expect(modes.map((t) => t.textContent)).toEqual(['Password', 'Key exchange']);
+    expect(modes[0]).toHaveAttribute('aria-selected', 'true');
+    expect(modes[1]).toHaveAttribute('aria-selected', 'false');
   });
 });
 

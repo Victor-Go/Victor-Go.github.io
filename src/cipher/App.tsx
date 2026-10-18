@@ -13,10 +13,10 @@ type Mode = "kx" | "pw";
 /** Everything secret lives in the useState of this subtree; remounting it discards all of it. */
 function Workspace({ lang }: { lang: Lang }) {
   const m = messages[lang];
-  const [mode, setMode] = useState<Mode>("kx");
+  const [mode, setMode] = useState<Mode>("pw");
   const modes = [
-    { id: "kx", label: m.moduleKx, content: <KeyExchange m={m} /> },
     { id: "pw", label: m.modulePw, content: <PasswordCrypto m={m} /> },
+    { id: "kx", label: m.moduleKx, content: <KeyExchange m={m} /> },
   ];
   return (
     <Tabs label={m.modules} tabs={modes} active={mode} onChange={(t) => setMode(t as Mode)} className="c-modes" />

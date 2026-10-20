@@ -24,11 +24,13 @@ interface FieldProps {
   /** Single-line semantics: Enter is swallowed (passwords). */
   singleLine?: boolean;
   rows?: number;
+  /** Tall message box: 600px by default, never below 300px. */
+  tall?: boolean;
   /** Extra control shown in the label row. */
   action?: ReactNode;
 }
 
-export function Field({ label, value, onChange, m, secret, singleLine, rows = 4, action }: FieldProps) {
+export function Field({ label, value, onChange, m, secret, singleLine, rows = 4, tall, action }: FieldProps) {
   const id = useId();
   const [reveal, setReveal] = useState(false);
   const masked = secret && !reveal;
@@ -51,7 +53,7 @@ export function Field({ label, value, onChange, m, secret, singleLine, rows = 4,
       <textarea
         id={id}
         {...NO_AUTOFILL}
-        className={masked ? "c-input c-masked" : "c-input"}
+        className={(masked ? "c-input c-masked" : "c-input") + (tall ? " c-tall" : "")}
         rows={singleLine ? 1 : rows}
         value={value}
         onChange={(e) => onChange(singleLine ? e.target.value.replace(/[\r\n]/g, "") : e.target.value)}
@@ -73,9 +75,10 @@ interface OutputProps {
   /** When set, offers a ciphertext download with a persistent-file warning. */
   downloadName?: string;
   rows?: number;
+  tall?: boolean;
 }
 
-export function Output({ label, value, m, secret, downloadName, rows = 5 }: OutputProps) {
+export function Output({ label, value, m, secret, downloadName, rows = 5, tall }: OutputProps) {
   const id = useId();
   const [copyState, setCopyState] = useState<"idle" | "ok" | "fail">("idle");
   const timer = useRef<number | undefined>(undefined);
@@ -102,7 +105,7 @@ export function Output({ label, value, m, secret, downloadName, rows = 5 }: Outp
         id={id}
         {...NO_AUTOFILL}
         readOnly
-        className={masked ? "c-input c-masked" : "c-input"}
+        className={(masked ? "c-input c-masked" : "c-input") + (tall ? " c-tall" : "")}
         rows={rows}
         value={value}
       />

@@ -232,6 +232,12 @@ textarea:focus-visible {
   word-break: break-all;
 }
 
+/* Message boxes: 600px by default, user may shrink to 300px. */
+.c-tall {
+  height: 600px;
+  min-height: 300px;
+}
+
 /* Passwords and private keys are plain textareas (no password-manager hooks), masked in CSS. */
 .c-masked {
   -webkit-text-security: disc;

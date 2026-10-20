@@ -56,13 +56,13 @@ function Encrypt({ m }: { m: Messages }) {
         </p>
       )}
       <Field label={m.passwordRepeat} value={pw2} onChange={(value) => { revision.current++; setPw2(value); setOut(null); }} m={m} secret singleLine />
-      <Field label={m.plaintext} value={text} onChange={(value) => { revision.current++; setText(value); setOut(null); }} m={m} rows={5} />
+      <Field label={m.plaintext} value={text} onChange={(value) => { revision.current++; setText(value); setOut(null); }} m={m} tall />
       <button type="button" className="c-primary" disabled={busy} onClick={go}>
         {m.encryptBtn}
       </button>
       {busy && <p role="status" className="c-hint">{m.working}</p>}
       {error && <p role="alert" className="c-error">{error}</p>}
-      <Output label={m.ciphertext} value={out && out.pw === pw && out.pw2 === pw2 && out.text === text ? out.value : ""} m={m} downloadName="cipher-message.txt" />
+      <Output label={m.ciphertext} value={out && out.pw === pw && out.pw2 === pw2 && out.text === text ? out.value : ""} m={m} downloadName="cipher-message.txt" tall />
     </div>
   );
 }
@@ -91,14 +91,14 @@ function Decrypt({ m }: { m: Messages }) {
   return (
     <div>
       <Field label={m.password} value={pw} onChange={(value) => { revision.current++; setPw(value); setOut(null); }} m={m} secret singleLine />
-      <Field label={m.ciphertext} value={ct} onChange={(value) => { revision.current++; setCt(value); setOut(null); }} m={m} rows={5} />
+      <Field label={m.ciphertext} value={ct} onChange={(value) => { revision.current++; setCt(value); setOut(null); }} m={m} tall />
       <button type="button" className="c-primary" disabled={busy} onClick={go}>
         {m.decryptBtn}
       </button>
       {busy && <p role="status" className="c-hint">{m.working}</p>}
       {error && <p role="alert" className="c-error">{error}</p>}
       {out && out.pw === pw && out.ct === ct && out.value === "" && <p className="c-hint">{m.result}: ∅</p>}
-      {out && out.pw === pw && out.ct === ct && <Output label={m.result} value={out.value} m={m} />}
+      {out && out.pw === pw && out.ct === ct && <Output label={m.result} value={out.value} m={m} tall />}
     </div>
   );
 }

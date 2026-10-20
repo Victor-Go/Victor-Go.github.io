@@ -94,7 +94,7 @@ function Encrypt({ m }: { m: Messages }) {
           setOut(null);
         }}
         m={m}
-        rows={5}
+        tall
         action={
           <button
             type="button"
@@ -126,7 +126,7 @@ function Encrypt({ m }: { m: Messages }) {
         {m.encryptBtn}
       </button>
       {error && <p role="alert" className="c-error">{error}</p>}
-      <Output label={m.ciphertext} value={out && out.pub === pub && out.text === text ? out.value : ""} m={m} downloadName="cipher-message.txt" />
+      <Output label={m.ciphertext} value={out && out.pub === pub && out.text === text ? out.value : ""} m={m} downloadName="cipher-message.txt" tall />
     </div>
   );
 }
@@ -139,7 +139,7 @@ function Decrypt({ m, priv, setPriv }: { m: Messages; priv: string; setPriv: (v:
   return (
     <div>
       <Field label={m.yourPrivateKey} value={priv} onChange={(value) => { revision.current++; setPriv(value); setOut(null); }} m={m} secret rows={2} />
-      <Field label={m.ciphertext} value={ct} onChange={(value) => { revision.current++; setCt(value); setOut(null); }} m={m} rows={5} />
+      <Field label={m.ciphertext} value={ct} onChange={(value) => { revision.current++; setCt(value); setOut(null); }} m={m} tall />
       <button
         type="button"
         className="c-primary"
@@ -164,5 +164,5 @@ function Decrypt({ m, priv, setPriv }: { m: Messages; priv: string; setPriv: (v:
 
 /** Plaintext may legitimately be empty, so it gets its own always-rendered box. */
 function PlainResult({ label, value, m }: { label: string; value: string; m: Messages }) {
-  return value === "" ? <p className="c-hint">{label}: ∅</p> : <Output label={label} value={value} m={m} />;
+  return value === "" ? <p className="c-hint">{label}: ∅</p> : <Output label={label} value={value} m={m} tall />;
 }

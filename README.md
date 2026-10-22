@@ -119,6 +119,10 @@ The page does not store or upload your content, and closing it clears everything
 
 A lookup cannot be fully private: the hash or derived addresses go to the third-party Esplora API at `mempool.space` (`blockstream.info` if it is down), which sees the query and your IP. The page itself sends nothing to this site, writes no cookies and uses no browser storage, sends requests without cookies or referrer, caches nothing, validates every response before rendering it, and clears its state on page hide, bfcache restore, five minutes of inactivity, or via the clear button. Its CSP allows connections to those two hosts only; `src/scan/__tests__/build.guard.test.ts` enforces this. Use Tor Browser or a trusted VPN to hide your IP, or run your own node for no leakage at all.
 
+## #️⃣ /hash Hash Calculator
+
+`/hash/` hashes typed text (UTF-8) or a chosen file (up to 200 MB) entirely in the browser, with the same strict no-network CSP as `/btc/`. Algorithms: MD5, SHA-1, SHA-224/256/384/512, SHA-512/256, SHA3-224/256/384/512, Keccak-256, RIPEMD-160, BLAKE2b, BLAKE2s and BLAKE3 (all from `@noble/hashes`). MD5 and SHA-1 are broken for security purposes; use them only for integrity checks or legacy comparison.
+
 ### Dependencies and licenses (pinned, no `^`)
 
 | Package | Version | License |

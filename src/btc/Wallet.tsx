@@ -39,18 +39,35 @@ function Addresses({ list, m }: { list: Address[]; m: Messages }) {
 
 function NewWallet({ m }: { m: Messages }) {
   const [extra, setExtra] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [phrase, setPhrase] = useState("");
+  const [usedPassphrase, setUsedPassphrase] = useState(false);
   const [list, setList] = useState<Address[]>([]);
   const [error, setError] = useState("");
+
+  // Shown addresses belong to the passphrase they were made with, so editing it clears them.
+  const clear = () => {
+    setPhrase("");
+    setList([]);
+    setError("");
+  };
+
   const go = () => {
     setError("");
+    // A typo here would silently create a different wallet, so it must be typed twice.
+    if (passphrase !== "" && passphrase !== confirm) {
+      clear();
+      setError(m.passphraseMismatch);
+      return;
+    }
     try {
       const mnemonic = generateMnemonic24(extra);
       setPhrase(mnemonic);
-      setList(deriveAddresses(mnemonic));
+      setList(deriveAddresses(mnemonic, 5, passphrase));
+      setUsedPassphrase(passphrase !== "");
     } catch {
-      setPhrase("");
-      setList([]);
+      clear();
       setError(m.randomFailed);
     }
   };
@@ -58,6 +75,31 @@ function NewWallet({ m }: { m: Messages }) {
     <div>
       <Field label={m.extraLabel} value={extra} onChange={setExtra} m={m} rows={2} />
       <p className="c-hint">{m.extraHint}</p>
+      <Field
+        label={m.passphraseLabel}
+        value={passphrase}
+        onChange={(v) => {
+          setPassphrase(v);
+          clear();
+        }}
+        m={m}
+        secret
+        singleLine
+      />
+      <p className="c-hint">{m.passphraseHint}</p>
+      {passphrase !== "" && (
+        <Field
+          label={m.passphraseConfirmLabel}
+          value={confirm}
+          onChange={(v) => {
+            setConfirm(v);
+            clear();
+          }}
+          m={m}
+          secret
+          singleLine
+        />
+      )}
       <button type="button" className="c-primary" onClick={go}>
         {m.generateWallet}
       </button>
@@ -66,6 +108,7 @@ function NewWallet({ m }: { m: Messages }) {
         <>
           <Output label={m.mnemonic} value={phrase} m={m} secret rows={4} />
           <p className="c-warn">{m.mnemonicWarn}</p>
+          {usedPassphrase && <p className="c-warn">{m.passphraseUsed}</p>}
           <p className="c-warn">{m.addrWarn}</p>
           <Addresses list={list} m={m} />
         </>
@@ -76,7 +119,8 @@ function NewWallet({ m }: { m: Messages }) {
 
 function Restore({ m }: { m: Messages }) {
   const [text, setText] = useState("");
-  const [result, setResult] = useState<{ mnemonic: string; addresses: Address[] } | null>(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [result, setResult] = useState<{ mnemonic: string; passphrase: string; addresses: Address[] } | null>(null);
   const [error, setError] = useState("");
   const go = () => {
     if (!isValidMnemonic24(text)) {
@@ -84,7 +128,7 @@ function Restore({ m }: { m: Messages }) {
       return setError(m.invalidMnemonic);
     }
     setError("");
-    setResult({ mnemonic: text, addresses: deriveAddresses(text) });
+    setResult({ mnemonic: text, passphrase, addresses: deriveAddresses(text, 5, passphrase) });
   };
   return (
     <div>
@@ -93,11 +137,17 @@ function Restore({ m }: { m: Messages }) {
         setResult(null);
         setError("");
       }} m={m} secret rows={4} />
+      <Field label={m.passphraseLabel} value={passphrase} onChange={(value) => {
+        setPassphrase(value);
+        setResult(null);
+        setError("");
+      }} m={m} secret singleLine />
+      <p className="c-hint">{m.restorePassphraseHint}</p>
       <button type="button" className="c-primary" onClick={go}>
         {m.restoreBtn}
       </button>
       {error && <p role="alert" className="c-error">{error}</p>}
-      {result && result.mnemonic === text && (
+      {result && result.mnemonic === text && result.passphrase === passphrase && (
         <>
           <p className="c-hint" role="status">{m.validMnemonic}</p>
           <Addresses list={result.addresses} m={m} />

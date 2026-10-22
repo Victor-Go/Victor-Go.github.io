@@ -31,6 +31,13 @@ const zh = {
   restoreBtn: "校验并显示地址",
   invalidMnemonic: "助记词无效:需要 24 个英文单词且校验和正确。",
   validMnemonic: "助记词有效。请对照下面的地址与你记录的是否一致。",
+  passphraseLabel: "密码短语(可选,即“第 25 个词”)",
+  passphraseHint:
+    "可输入任意字符:中文、符号、空格、emoji 都行,大小写和空格都算数(不能换行)。它和助记词一起决定地址:只拿到助记词、不知道密码短语的人,只会得到另一个空钱包。密码短语不会被保存,忘了就无法找回资金,请和助记词分开保管。不需要就留空。",
+  passphraseConfirmLabel: "再输入一次密码短语",
+  passphraseMismatch: "两次输入的密码短语不一致,已拒绝生成。",
+  passphraseUsed: "这个钱包使用了密码短语:恢复时必须同时输入助记词和这个密码短语,缺一不可。请把密码短语和助记词分开记录。",
+  restorePassphraseHint: "如果创建时设置了密码短语,请在这里填入。填错不会报错,只会得到另一组全新的、没有资金的地址。",
 };
 
 const en: typeof zh = {
@@ -59,6 +66,15 @@ const en: typeof zh = {
   restoreBtn: "Verify and show addresses",
   invalidMnemonic: "Invalid seed phrase: 24 English words with a correct checksum are required.",
   validMnemonic: "Seed phrase is valid. Compare the addresses below with the ones you recorded.",
+  passphraseLabel: "Passphrase (optional, the \"25th word\")",
+  passphraseHint:
+    "Any characters work: letters, symbols, spaces, emoji; case and spaces both count (no line breaks). Together with the seed phrase it decides the addresses: someone who has the seed phrase but not the passphrase only gets a different, empty wallet. The passphrase is never stored; if you forget it the funds cannot be recovered, so keep it apart from the seed phrase. Leave empty if you do not want one.",
+  passphraseConfirmLabel: "Enter the passphrase again",
+  passphraseMismatch: "The two passphrases do not match, so nothing was generated.",
+  passphraseUsed:
+    "This wallet uses a passphrase: restoring it needs both the seed phrase and this passphrase, neither alone. Record the passphrase separately from the seed phrase.",
+  restorePassphraseHint:
+    "If a passphrase was set when the wallet was created, enter it here. A wrong one gives no error, only a different set of new, empty addresses.",
 };
 
 const own: Record<Lang, typeof zh> = { zh, en };

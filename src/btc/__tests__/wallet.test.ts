@@ -47,3 +47,24 @@ describe('wallet', () => {
     expect(() => generateEntropy('', () => new Uint8Array(16).map((_, i) => i))).toThrow();
   });
 });
+
+describe('BIP-39 passphrase', () => {
+  const first = (m: string, p?: string) => deriveAddresses(m, 1, p)[0].address;
+
+  it('defaults to the empty passphrase and yields a completely different wallet otherwise', () => {
+    expect(first(BIP84, '')).toBe('bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu');
+    expect(first(BIP84)).toBe(first(BIP84, ''));
+    expect(first(BIP84, 'TREZOR')).not.toBe(first(BIP84, ''));
+    expect(first(BIP84, 'TREZOR')).toBe(first(BIP84, 'TREZOR'));
+  });
+
+  it('uses the passphrase exactly as typed: case and spaces count, any Unicode is accepted', () => {
+    const base = first(BIP84, 'pass word');
+    expect(first(BIP84, 'Pass word')).not.toBe(base);
+    expect(first(BIP84, ' pass word')).not.toBe(base);
+    expect(first(BIP84, 'pass word ')).not.toBe(base);
+    expect(first(BIP84, '密码 🔑 \t#')).toMatch(/^bc1q/);
+    // BIP-39 NFKD-normalizes, so composed and decomposed forms are the same passphrase.
+    expect(first(BIP84, 'é')).toBe(first(BIP84, 'é'));
+  });
+});

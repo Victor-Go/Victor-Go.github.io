@@ -60,9 +60,13 @@ export function isValidMnemonic24(text: string): boolean {
   return m.split(" ").length === WORD_COUNT && validateMnemonic(m, wordlist);
 }
 
-/** BIP-84 native SegWit receive addresses: m/84'/0'/0'/0/i (bc1q…). */
-export function deriveAddresses(mnemonic: string, count = 5): Address[] {
-  const seed = mnemonicToSeedSync(normalizeMnemonic(mnemonic));
+/**
+ * BIP-84 native SegWit receive addresses: m/84'/0'/0'/0/i (bc1q…).
+ * The optional BIP-39 passphrase is used exactly as typed (never trimmed: spaces count) and is
+ * NFKD-normalized by the BIP-39 library. A different passphrase yields a completely different wallet.
+ */
+export function deriveAddresses(mnemonic: string, count = 5, passphrase = ""): Address[] {
+  const seed = mnemonicToSeedSync(normalizeMnemonic(mnemonic), passphrase);
   try {
     const root = HDKey.fromMasterSeed(seed);
     const out: Address[] = [];

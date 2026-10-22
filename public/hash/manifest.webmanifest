@@ -1,0 +1,12 @@
+{
+  "name": "Hash Calculator",
+  "short_name": "Hash Calculator",
+  "description": "Compute hashes of text and files locally. Nothing is stored or uploaded.",
+  "start_url": "/hash/",
+  "scope": "/hash/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#f8fafc",
+  "icons": [{ "src": "/hash/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

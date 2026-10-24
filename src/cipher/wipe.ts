@@ -1,15 +1,18 @@
 import { useEffect, useRef } from "react";
 
 const IDLE_MILLISECONDS = 5 * 60 * 1000;
+/** The /cipher page uses a longer, user-switchable idle timeout. */
+export const CIPHER_IDLE_MILLISECONDS = 10 * 60 * 1000;
 
 /**
- * Discard state on pagehide and bfcache restoration, or after five minutes with
- * no user interaction. Events never read, log, or retain input values.
+ * Discard state on pagehide and bfcache restoration, and (unless idleMs is null)
+ * after idleMs with no user interaction. Events never read, log, or retain
+ * input values.
  */
 export function attachWipeListeners(
   onWipe: () => void,
   target: Window = window,
-  idleMs = IDLE_MILLISECONDS,
+  idleMs: number | null = IDLE_MILLISECONDS,
 ): () => void {
   let timer: number | undefined;
   const stopTimer = () => {
@@ -18,6 +21,7 @@ export function attachWipeListeners(
   };
   const restartTimer = () => {
     stopTimer();
+    if (idleMs === null) return;
     timer = target.setTimeout(() => {
       onWipe();
       restartTimer();
@@ -44,10 +48,10 @@ export function attachWipeListeners(
   };
 }
 
-export function useWipeTriggers(onWipe: () => void): void {
+export function useWipeTriggers(onWipe: () => void, idleMs: number | null = IDLE_MILLISECONDS): void {
   const ref = useRef(onWipe);
   useEffect(() => {
     ref.current = onWipe;
   });
-  useEffect(() => attachWipeListeners(() => ref.current()), []);
+  useEffect(() => attachWipeListeners(() => ref.current(), window, idleMs), [idleMs]);
 }

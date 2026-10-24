@@ -106,6 +106,33 @@ describe('wipe on page lifecycle', () => {
   });
 });
 
+describe('auto-clear switch', () => {
+  it('is on by default, wipes after ten minutes idle, and can be switched off', () => {
+    vi.useFakeTimers();
+    renderEn();
+    openEncryptTab();
+    const sw = screen.getByRole('switch', { name: /Auto-clear everything after 10 minutes/ });
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+    typeInto('Plaintext', 'top secret');
+    act(() => {
+      vi.advanceTimersByTime(9 * 60 * 1000);
+    });
+    expect(allTextareaValues()).toContain('top secret');
+    act(() => {
+      vi.advanceTimersByTime(60 * 1000);
+    });
+    expect(allTextareaValues().every((v) => v === '')).toBe(true);
+
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    typeInto('Plaintext', 'stay');
+    act(() => {
+      vi.advanceTimersByTime(60 * 60 * 1000);
+    });
+    expect(allTextareaValues()).toContain('stay');
+  });
+});
+
 describe('page hardening', () => {
   it('refuses to run when opened by another window', () => {
     const original = Object.getOwnPropertyDescriptor(window, 'opener');

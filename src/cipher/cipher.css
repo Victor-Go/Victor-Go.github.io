@@ -252,6 +252,39 @@ textarea:focus-visible {
   }
 }
 
+.c-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--c-muted);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.c-switch-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--c-border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.c-switch[aria-checked="true"] .c-switch-box {
+  background: var(--c-fg);
+  color: var(--c-bg);
+  border-color: var(--c-fg);
+}
+
 .c-hint {
   color: var(--c-muted);
   font-size: 0.8rem;

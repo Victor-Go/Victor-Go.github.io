@@ -6,7 +6,7 @@ import { wipeTracked } from "./crypto/secrets";
 import { getDefaultLang, messages, type Lang } from "./i18n";
 import { cancelPendingKdf } from "./workers/kdfClient";
 import { isEmbeddedOrOpened } from "./isolation";
-import { useWipeTriggers } from "./wipe";
+import { CIPHER_IDLE_MILLISECONDS, useWipeTriggers } from "./wipe";
 
 type Mode = "kx" | "pw";
 
@@ -27,6 +27,7 @@ export function App() {
   const [lang, setLang] = useState<Lang>(getDefaultLang);
   const [epoch, setEpoch] = useState(0);
   const [clearedNote, setClearedNote] = useState(false);
+  const [autoClear, setAutoClear] = useState(true);
   const m = messages[lang];
 
   const wipe = useCallback(() => {
@@ -34,7 +35,7 @@ export function App() {
     wipeTracked();
     setEpoch((e) => e + 1);
   }, []);
-  useWipeTriggers(wipe);
+  useWipeTriggers(wipe, autoClear ? CIPHER_IDLE_MILLISECONDS : null);
 
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
@@ -72,6 +73,16 @@ export function App() {
       <p className="c-notice" role="note">
         {m.notice}
       </p>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={autoClear}
+        className="c-switch"
+        onClick={() => setAutoClear((v) => !v)}
+      >
+        <span className="c-switch-box" aria-hidden="true">{autoClear ? "✓" : ""}</span>
+        {m.autoClear}
+      </button>
       {clearedNote && <p role="status" className="c-hint">{m.cleared}</p>}
       <Workspace key={epoch} lang={lang} />
     </main>

@@ -10,7 +10,7 @@ export const PREFIX: Record<Kind, string> = {
 
 export const DECRYPT_FAILED = "解密失败(密码/密钥错误或数据被篡改)";
 
-export type ErrorCode = "format" | "wrong-kind" | "decrypt" | "empty-password" | "kdf";
+export type ErrorCode = "format" | "wrong-kind" | "decrypt" | "empty-password" | "kdf" | "file-format";
 
 /** Errors carry a code only; they never include any part of the user's input. */
 export class CipherError extends Error {

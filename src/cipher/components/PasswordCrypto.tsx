@@ -3,6 +3,7 @@ import type { Messages } from "../i18n";
 import { decryptTextWithPassword, encryptTextWithPassword, type PasswordOptions } from "../crypto/password";
 import { workerKdf } from "../workers/kdfClient";
 import { Field, Output, Tabs } from "./Fields";
+import { Links } from "./Links";
 import { errorText } from "./errorText";
 import { estimateBits, isWeak } from "../crypto/strength";
 
@@ -57,6 +58,7 @@ function Encrypt({ m }: { m: Messages }) {
       )}
       <Field label={m.passwordRepeat} value={pw2} onChange={(value) => { revision.current++; setPw2(value); setOut(null); }} m={m} secret singleLine />
       <Field label={m.plaintext} value={text} onChange={(value) => { revision.current++; setText(value); setOut(null); }} m={m} tall />
+      <Links text={text} m={m} />
       <button type="button" className="c-primary" disabled={busy} onClick={go}>
         {m.encryptBtn}
       </button>
@@ -99,6 +101,7 @@ function Decrypt({ m }: { m: Messages }) {
       {error && <p role="alert" className="c-error">{error}</p>}
       {out && out.pw === pw && out.ct === ct && out.value === "" && <p className="c-hint">{m.result}: ∅</p>}
       {out && out.pw === pw && out.ct === ct && <Output label={m.result} value={out.value} m={m} tall />}
+      {out && out.pw === pw && out.ct === ct && <Links text={out.value} m={m} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { KeyExchange } from "./components/KeyExchange";
+import { FileCrypto } from "./components/FileCrypto";
 import { PasswordCrypto } from "./components/PasswordCrypto";
 import { Tabs } from "./components/Fields";
 import { wipeTracked } from "./crypto/secrets";
@@ -9,7 +10,7 @@ import { isEmbeddedOrOpened } from "./isolation";
 import { epochsAvailable } from "./crypto/epochsEnv";
 import { CIPHER_IDLE_MILLISECONDS, useWipeTriggers } from "./wipe";
 
-type Mode = "kx" | "pw";
+type Mode = "kx" | "pw" | "file";
 
 /** Everything secret lives in the useState of this subtree; remounting it discards all of it. */
 function Workspace({ lang }: { lang: Lang }) {
@@ -17,6 +18,7 @@ function Workspace({ lang }: { lang: Lang }) {
   const [mode, setMode] = useState<Mode>("pw");
   const modes = [
     { id: "pw", label: m.modulePw, content: <PasswordCrypto m={m} /> },
+    { id: "file", label: m.moduleFile, content: <FileCrypto m={m} /> },
     { id: "kx", label: m.moduleKx, content: <KeyExchange m={m} /> },
   ];
   return (

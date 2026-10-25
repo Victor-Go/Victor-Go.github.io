@@ -14,6 +14,8 @@ export function errorText(e: unknown, m: Messages): string {
         return m.emptyPassword;
       case "kdf":
         return m.kdfFailed;
+      case "file-format":
+        return m.badFile;
     }
   }
   return m.failed;

@@ -151,7 +151,8 @@ describe('page hardening', () => {
     renderEn();
     openEncryptTab();
     expect(document.querySelector('form')).toBeNull();
-    expect(document.querySelector('input')).toBeNull();
+    // The only inputs are the file pickers of the File mode.
+    expect(document.querySelector('input:not([type="file"])')).toBeNull();
     document.querySelectorAll('button').forEach((b) => expect(b.getAttribute('type')).toBe('button'));
     document.querySelectorAll('textarea').forEach((t) => {
       expect(t.getAttribute('autocomplete')).toBe('off');
@@ -264,10 +265,11 @@ describe('tab switching', () => {
 describe('mode tabs', () => {
   it('lists Password first and selects it by default', () => {
     renderEnPassword();
-    const modes = screen.getAllByRole('tab').slice(0, 2);
-    expect(modes.map((t) => t.textContent)).toEqual(['Password', 'Key exchange']);
+    const modes = screen.getAllByRole('tab').slice(0, 3);
+    expect(modes.map((t) => t.textContent)).toEqual(['Password', 'File', 'Key exchange']);
     expect(modes[0]).toHaveAttribute('aria-selected', 'true');
     expect(modes[1]).toHaveAttribute('aria-selected', 'false');
+    expect(modes[2]).toHaveAttribute('aria-selected', 'false');
   });
 });
 

@@ -48,7 +48,7 @@ const LEGACY_HEADER_LEN = 2 + 4 + 1 + 1 + SALT_LEN + NONCE_LEN;
 // v2: version(1) kdf(1) epoch(2) m(4) t(1) p(1) salt(16) nonce(12)
 const HEADER_LEN = LEGACY_HEADER_LEN + 2;
 
-function validParams({ m, t, p }: KdfParams): boolean {
+export function validParams({ m, t, p }: KdfParams): boolean {
   return (
     Number.isInteger(m) && Number.isInteger(t) && Number.isInteger(p) &&
     p >= 1 && p <= MAX_P && t >= 1 && t <= MAX_T && m >= 8 * p && m <= MAX_M
@@ -61,13 +61,25 @@ function passwordBytes(password: string): Uint8Array {
 
 /** Argon2id output; v2 additionally binds the epoch constant through HKDF. `label` is undefined for v1. */
 async function deriveAesKey(kdf: Kdf, password: string, salt: Uint8Array, params: KdfParams, label?: string) {
+  return deriveKey(kdf, password, salt, params, label, INFO);
+}
+
+/** Shared by text and file encryption; `info` separates the two key domains. */
+export async function deriveKey(
+  kdf: Kdf,
+  password: string,
+  salt: Uint8Array,
+  params: KdfParams,
+  label: string | undefined,
+  info: Uint8Array,
+) {
   const pw = track(passwordBytes(password));
   let raw: Uint8Array | undefined;
   let okm: Uint8Array | undefined;
   try {
     raw = track(await kdf(pw, salt, params));
     if (label === undefined) return await importAesKey(raw);
-    okm = track(hkdf(sha256, raw, utf8(label), INFO, 32));
+    okm = track(hkdf(sha256, raw, utf8(label), info, 32));
     return await importAesKey(okm);
   } finally {
     release(pw);

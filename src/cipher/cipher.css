@@ -377,3 +377,134 @@ button.c-copy-failed {
   border-color: var(--c-error);
   color: var(--c-error);
 }
+
+/* File mode: picker, preview and full-screen viewer. */
+/* The native picker is hidden; a regular button opens it so it matches the other controls. */
+.c-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.c-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 8px 0;
+  font-size: 0.9rem;
+}
+
+.c-meta dt {
+  color: var(--c-muted);
+}
+
+.c-meta dd {
+  margin: 0;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.c-thumb-btn {
+  display: block;
+  padding: 0;
+  min-height: 0;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  cursor: zoom-in;
+}
+
+.c-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  margin: 0 auto;
+}
+
+video.c-thumb {
+  max-height: 480px;
+}
+
+.c-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  overscroll-behavior: none;
+  cursor: grab;
+  outline: none;
+}
+
+.c-viewer:active {
+  cursor: grabbing;
+}
+
+.c-viewer-img {
+  max-width: 100vw;
+  max-height: 100dvh;
+  -webkit-user-select: none;
+  user-select: none;
+  will-change: transform;
+}
+
+.c-viewer-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+}
+
+.c-viewer-hint {
+  position: absolute;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  padding: 0 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+
+.c-links {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+}
+
+.c-links-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.c-links ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.c-links a {
+  color: var(--c-accent);
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Dropping a file anywhere on the File panel selects it. */
+.c-drop {
+  border-radius: 8px;
+}
+
+.c-drop.c-dragging {
+  outline: 2px dashed var(--c-accent);
+  outline-offset: 4px;
+}

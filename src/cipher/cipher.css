@@ -508,3 +508,32 @@ video.c-thumb {
   outline: 2px dashed var(--c-accent);
   outline-offset: 4px;
 }
+
+.c-pdf {
+  width: 100%;
+  height: 60vh;
+  border: 1px solid var(--c-border, #cbd5e1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.c-viewer-pdf {
+  cursor: default;
+  touch-action: auto;
+}
+
+.c-viewer-frame {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  background: #fff;
+}
+
+.c-viewer-pdf .c-viewer-close {
+  top: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+.c-pdf {
+  margin-top: 12px;
+}

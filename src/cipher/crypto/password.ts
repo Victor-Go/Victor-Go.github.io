@@ -5,7 +5,7 @@ import { CipherError, decode, encode } from "./encoding";
 import { concat, importAesKey, open, seal, utf8, utf8Decode } from "./aead";
 import { randomBytes, release, track } from "./secrets";
 import { LEGACY_EPOCH, type Epochs } from "./epochs";
-import { buildEpochs } from "./epochsEnv";
+import { getEpochs } from "./epochsEnv";
 
 export interface KdfParams {
   /** Memory in KiB. */
@@ -79,7 +79,7 @@ async function deriveAesKey(kdf: Kdf, password: string, salt: Uint8Array, params
 export async function encryptWithPassword(
   plaintext: Uint8Array,
   password: string,
-  { kdf = inlineKdf, params = DEFAULT_PARAMS, epochs = buildEpochs }: PasswordOptions = {},
+  { kdf = inlineKdf, params = DEFAULT_PARAMS, epochs = getEpochs() }: PasswordOptions = {},
 ): Promise<Uint8Array> {
   if (password.length === 0) throw new CipherError("empty-password");
   if (!validParams(params)) throw new CipherError("format");
@@ -133,7 +133,7 @@ function parseHeader(data: Uint8Array): Header | null {
 export async function decryptWithPassword(
   data: Uint8Array,
   password: string,
-  { kdf = inlineKdf, epochs = buildEpochs }: PasswordOptions = {},
+  { kdf = inlineKdf, epochs = getEpochs() }: PasswordOptions = {},
 ): Promise<Uint8Array> {
   const h = parseHeader(data);
   if (!h) throw new CipherError("decrypt");

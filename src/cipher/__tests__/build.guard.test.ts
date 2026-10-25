@@ -1,14 +1,26 @@
 // @vitest-environment node
 /// <reference types="node" />
 import { describe, it, expect, beforeAll } from 'vitest';
+import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findForbidden } from './forbidden';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const outDir = resolve(root, 'node_modules/.tmp/cipher-guard-dist');
+
+/** Distinctive fake epoch constant; must appear only in assets/cipher-epochs.js. */
+const MARKER = 'ZZmarkerZZ';
+const EPOCHS_FILE = 'assets/cipher-epochs.js';
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((n) => {
+    const p = join(dir, n);
+    return statSync(p).isDirectory() ? walk(p) : [p];
+  });
+}
 
 const REQUIRED_CSP = [
   "default-src 'none'",
@@ -54,7 +66,7 @@ describe('build guard for dist/cipher', () => {
     execFileSync(
       process.execPath,
       [resolve(root, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', outDir, '--emptyOutDir', '--logLevel', 'error'],
-      { cwd: root, stdio: 'pipe', env: { ...process.env, NODE_ENV: 'production' } },
+      { cwd: root, stdio: 'pipe', env: { ...process.env, NODE_ENV: 'production', VITE_CIPHER_EPOCHS: `0,2:${MARKER}`, VITE_CIPHER_EPOCH_CURRENT: '2', GITHUB_ACTIONS: 'true' } },
     );
     html = readFileSync(join(outDir, 'cipher/index.html'), 'utf8');
     artifacts = collectArtifacts();
@@ -97,6 +109,34 @@ describe('build guard for dist/cipher', () => {
     for (const m of html.matchAll(/(?:src|href)="(\/[^"]+)"/g)) {
       expect(existsSync(join(outDir, m[1]))).toBe(true);
     }
+  });
+
+  it('ships the epoch table only as a separate script, loaded before the module script', () => {
+    const file = readFileSync(join(outDir, EPOCHS_FILE), 'utf8');
+    expect(file).toContain(MARKER);
+    const leaks = walk(outDir).filter((p) => p !== join(outDir, EPOCHS_FILE) && readFileSync(p).includes(MARKER));
+    expect(leaks).toEqual([]);
+    const epochsAt = html.indexOf('src="/assets/cipher-epochs.js"');
+    const moduleAt = html.search(/<script[^>]*type="module"/);
+    expect(epochsAt).toBeGreaterThan(-1);
+    expect(moduleAt).toBeGreaterThan(epochsAt);
+    // Only the cipher page loads it.
+    for (const other of ['index.html', 'btc/index.html', 'scan/index.html', 'hash/index.html']) {
+      expect(readFileSync(join(outDir, other), 'utf8')).not.toContain('cipher-epochs');
+    }
+    expect(html).toContain("connect-src 'none'");
+  });
+
+  it('defines the epoch global only on allow-listed hosts', () => {
+    const file = readFileSync(join(outDir, EPOCHS_FILE), 'utf8');
+    const run = (hostname: string) => {
+      const ctx: Record<string, unknown> = { location: { hostname } };
+      ctx.self = ctx;
+      vm.runInNewContext(file, ctx);
+      return ctx.__cipherEpochs;
+    };
+    expect(run('victor-go.github.io')).toEqual([`0,2:${MARKER}`, '2']);
+    for (const h of ['localhost', '127.0.0.1', 'evil.example', 'victor-go.github.io.evil.example']) expect(run(h)).toBeUndefined();
   });
 
   it('bundles the worker and its chunks', () => {

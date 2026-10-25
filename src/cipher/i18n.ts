@@ -14,6 +14,7 @@ const zh = {
   cleared: "已清空所有内容。",
   autoClear: "十分钟无操作自动清除所有信息",
   refused: "为保护内容,本页面拒绝在 iframe 或由其他页面打开的窗口中运行。请在独立标签页中直接访问。",
+  unavailable: "页面资源未能完整加载,请从官方地址直接访问。",
   modules: "功能",
   moduleKx: "密钥交换",
   modulePw: "密码加密",
@@ -71,6 +72,7 @@ const en: typeof zh = {
   autoClear: "Auto-clear everything after 10 minutes of inactivity",
   refused:
     "To protect your content this page refuses to run inside an iframe or a window opened by another page. Open it directly in its own tab.",
+  unavailable: "The page resources did not load completely. Please open the official address directly.",
   modules: "Mode",
   moduleKx: "Key exchange",
   modulePw: "Password",

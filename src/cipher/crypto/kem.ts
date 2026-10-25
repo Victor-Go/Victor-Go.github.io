@@ -5,7 +5,7 @@ import { CipherError, decode, encode } from "./encoding";
 import { concat, importAesKey, open, seal, utf8, utf8Decode } from "./aead";
 import { randomBytes, release, track } from "./secrets";
 import { LEGACY_EPOCH, type Epochs } from "./epochs";
-import { buildEpochs } from "./epochsEnv";
+import { getEpochs } from "./epochsEnv";
 
 /** noble ships X-Wing (draft-connolly-cfrg-xwing-kem) under this export name. */
 export const xwing = ml_kem768_x25519;
@@ -56,7 +56,7 @@ async function deriveKeyAndNonce(shared: Uint8Array, kemCt: Uint8Array, label?: 
 export async function encryptForPublicKey(
   publicKey: Uint8Array,
   plaintext: Uint8Array,
-  epochs: Epochs = buildEpochs,
+  epochs: Epochs = getEpochs(),
 ): Promise<Uint8Array> {
   if (publicKey.length !== PUBLIC_KEY_LEN) throw new CipherError("format");
   const label = epochs.labels.get(epochs.current);
@@ -83,7 +83,7 @@ export async function encryptForPublicKey(
 export async function decryptWithPrivateKey(
   seed: Uint8Array,
   data: Uint8Array,
-  epochs: Epochs = buildEpochs,
+  epochs: Epochs = getEpochs(),
 ): Promise<Uint8Array> {
   if (seed.length !== SEED_LEN) throw new CipherError("format");
   const legacy = data[0] === VERSION_LEGACY;

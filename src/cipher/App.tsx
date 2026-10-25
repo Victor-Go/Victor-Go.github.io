@@ -6,6 +6,7 @@ import { wipeTracked } from "./crypto/secrets";
 import { getDefaultLang, messages, type Lang } from "./i18n";
 import { cancelPendingKdf } from "./workers/kdfClient";
 import { isEmbeddedOrOpened } from "./isolation";
+import { epochsAvailable } from "./crypto/epochsEnv";
 import { CIPHER_IDLE_MILLISECONDS, useWipeTriggers } from "./wipe";
 
 type Mode = "kx" | "pw";
@@ -42,10 +43,10 @@ export function App() {
     document.title = m.title;
   }, [lang, m.title]);
 
-  if (isEmbeddedOrOpened()) {
+  if (isEmbeddedOrOpened() || !epochsAvailable()) {
     return (
       <main className="c-shell">
-        <p role="alert" className="c-error">{m.refused}</p>
+        <p role="alert" className="c-error">{isEmbeddedOrOpened() ? m.refused : m.unavailable}</p>
       </main>
     );
   }

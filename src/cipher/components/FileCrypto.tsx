@@ -16,6 +16,7 @@ import { ACTIVITY_EVENT } from "../wipe";
 import { estimateBits, isWeak } from "../crypto/strength";
 import { Field, Tabs } from "./Fields";
 import { ImageViewer } from "./ImageViewer";
+import { PdfViewer } from "./PdfViewer";
 import { errorText } from "./errorText";
 
 type Tab = "encrypt" | "decrypt";
@@ -299,7 +300,16 @@ function DecryptFile({ m }: { m: Messages }) {
             </button>
           )}
           {url && kind === "video" && <video src={url} className="c-thumb" controls playsInline preload="metadata" />}
-          {url && <div className="c-hint">{kind === "image" ? m.previewHint : m.previewVideoHint}</div>}
+          {url && kind === "pdf" && (
+            <>
+              <div className="c-actions">
+                <button type="button" onClick={() => setFull(true)}>{m.openPdfFullscreen}</button>
+              </div>
+              <iframe src={url} title={m.pdfTitle} className="c-pdf" />
+            </>
+          )}
+          {url && kind !== "pdf" && <div className="c-hint">{kind === "image" ? m.previewHint : m.previewVideoHint}</div>}
+          {url && kind === "pdf" && <div className="c-hint">{m.previewPdfHint}</div>}
           <div className="c-actions">
             <button type="button" onClick={() => downloadBlob(safeFileName(out.meta.name), out.blob)}>
               {m.downloadPlain}
@@ -307,7 +317,8 @@ function DecryptFile({ m }: { m: Messages }) {
           </div>
         </div>
       )}
-      {full && url && <ImageViewer src={url} m={m} onClose={() => setFull(false)} />}
+      {full && url && kind === "image" && <ImageViewer src={url} m={m} onClose={() => setFull(false)} />}
+      {full && url && kind === "pdf" && <PdfViewer src={url} m={m} onClose={() => setFull(false)} />}
     </div>
   );
 }

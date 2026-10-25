@@ -138,7 +138,8 @@ describe('file helpers', () => {
     expect(previewKind('image/png')).toBe('image');
     expect(previewKind('image/jpeg')).toBe('image');
     expect(previewKind('video/webm')).toBe('video');
-    for (const t of ['image/svg+xml', 'text/html', 'application/pdf', 'application/octet-stream']) {
+    expect(previewKind('application/pdf')).toBe('pdf');
+    for (const t of ['image/svg+xml', 'text/html', 'application/octet-stream']) {
       expect(previewKind(t)).toBeNull();
     }
   });

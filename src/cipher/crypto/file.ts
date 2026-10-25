@@ -70,7 +70,8 @@ export function sanitizeMime(type: string): string {
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"]);
 const VIDEO_TYPES = new Set(["video/webm", "video/mp4"]);
 
-export function previewKind(type: string): "image" | "video" | null {
+export function previewKind(type: string): "image" | "video" | "pdf" | null {
+  if (type === "application/pdf") return "pdf";
   if (IMAGE_TYPES.has(type)) return "image";
   if (VIDEO_TYPES.has(type)) return "video";
   return null;

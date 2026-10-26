@@ -59,6 +59,84 @@ describe('File mode multi-file drop', () => {
   });
 });
 
+describe('File mode removing selected files', () => {
+  it('removes one file or clears all of them', () => {
+    renderEn();
+    fireEvent.click(screen.getByRole('tab', { name: 'File' }));
+    const files = [new File(['a'], 'a.png'), new File(['bb'], 'b.pdf'), new File(['c'], 'c.txt')];
+    fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files } });
+    fireEvent.click(screen.getByRole('button', { name: m.removeFileLabel('b.pdf') }));
+    expect(screen.getByText(m.selectedFiles(2, '2 B'))).toBeInTheDocument();
+    expect(screen.queryByText('b.pdf')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: m.removeFileLabel('a.png') }));
+    expect(screen.getByText(m.selectedFile('c.txt', '1 B'))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: m.clearFiles }));
+    expect(screen.getAllByText(m.noFile).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: m.clearFiles })).toBeNull();
+  });
+});
+
+describe('File mode drag to reorder', () => {
+  it('moves a file when its grip is dragged over another row', () => {
+    renderEn();
+    fireEvent.click(screen.getByRole('tab', { name: 'File' }));
+    const files = [new File(['a'], 'a.png'), new File(['b'], 'b.pdf'), new File(['c'], 'c.txt')];
+    fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files } });
+    const names = () => Array.from(document.querySelectorAll('[data-file-index] .c-file-name')).map((n) => n.textContent!);
+    expect(names()).toEqual(['a.png', 'b.pdf', 'c.txt']);
+    const grips = screen.getAllByRole('img', { name: m.dragToReorder });
+    const rows = document.querySelectorAll('[data-file-index]');
+    document.elementFromPoint = () => rows[2];
+    fireEvent.pointerDown(grips[0], { pointerId: 1 });
+    fireEvent.pointerMove(grips[0], { pointerId: 1, clientX: 1, clientY: 1 });
+    fireEvent.pointerUp(grips[0], { pointerId: 1 });
+    expect(names()).toEqual(['b.pdf', 'c.txt', 'a.png']);
+  });
+});
+
+describe('ImageViewer paging', () => {
+  const swipe = (el: Element, from: number, to: number, pointerType = 'touch') => {
+    fireEvent.pointerDown(el, { pointerId: 1, pointerType, clientX: from, clientY: 100 });
+    fireEvent.pointerUp(el, { pointerId: 1, pointerType, clientX: to, clientY: 105 });
+  };
+
+  it('shows arrows only for neighbours and calls them', () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    const { rerender } = render(<ImageViewer src="blob:x" m={m} onClose={() => {}} onNext={onNext} position="1 / 3" />);
+    expect(screen.queryByRole('button', { name: m.viewerPrev })).toBeNull();
+    expect(screen.getByText('1 / 3')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: m.viewerNext }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+    rerender(<ImageViewer src="blob:x" m={m} onClose={() => {}} onPrev={onPrev} onNext={onNext} />);
+    fireEvent.click(screen.getByRole('button', { name: m.viewerPrev }));
+    expect(onPrev).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowRight' });
+    expect(onNext).toHaveBeenCalledTimes(2);
+  });
+
+  it('swipes left for next and right for previous, but not for mouse drags or short moves', () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    render(<ImageViewer src="blob:x" m={m} onClose={() => {}} onPrev={onPrev} onNext={onNext} />);
+    const stage = screen.getByRole('dialog');
+    swipe(stage, 300, 100);
+    expect(onNext).toHaveBeenCalledTimes(1);
+    swipe(stage, 100, 300);
+    expect(onPrev).toHaveBeenCalledTimes(1);
+    swipe(stage, 100, 130);
+    swipe(stage, 300, 100, 'mouse');
+    expect(onNext).toHaveBeenCalledTimes(1);
+    expect(onPrev).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no navigation for a single image', () => {
+    render(<ImageViewer src="blob:x" m={m} onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: m.viewerNext })).toBeNull();
+    expect(screen.queryByRole('button', { name: m.viewerPrev })).toBeNull();
+  });
+});
+
 describe('links in text', () => {
   it('shows safe, clickable links for URLs in the plaintext box of the Password encrypt tab', () => {
     renderEn();

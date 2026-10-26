@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Messages } from "../i18n";
 import {
   EFILE_EXTENSION,
@@ -10,9 +10,11 @@ import {
   type FileMeta,
   type FileOptions,
 } from "../crypto/file";
+import { isBundle, packBundle, unpackBundle, type BundleEntry } from "../crypto/bundle";
 import { workerKdf } from "../workers/kdfClient";
 import { downloadBlob } from "../output";
 import { ACTIVITY_EVENT } from "../wipe";
+import { useFileDrop } from "../useFileDrop";
 import { estimateBits, isWeak } from "../crypto/strength";
 import { Field, Tabs } from "./Fields";
 import { ImageViewer } from "./ImageViewer";
@@ -80,73 +82,56 @@ function useJob(m: Messages) {
   return { busy, progress, error, run };
 }
 
-/**
- * Accepts a file dropped anywhere on the page while `ref`'s panel is the visible one. A file dropped
- * elsewhere is swallowed too, so a stray drop never navigates away and loses what was typed.
- */
-function useFileDrop(ref: RefObject<HTMLElement | null>, onPick: (f: File) => void) {
-  const [dragging, setDragging] = useState(false);
-  const pick = useRef(onPick);
-  useEffect(() => {
-    pick.current = onPick;
-  });
-  useEffect(() => {
-    const active = () => !!ref.current && !ref.current.closest("[hidden]");
-    const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
-    const over = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      setDragging(active());
-    };
-    const leave = (e: DragEvent) => {
-      if (e.relatedTarget === null) setDragging(false);
-    };
-    const drop = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      setDragging(false);
-      const f = e.dataTransfer?.files[0];
-      if (f && active()) pick.current(f);
-    };
-    window.addEventListener("dragover", over);
-    window.addEventListener("dragleave", leave);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragover", over);
-      window.removeEventListener("dragleave", leave);
-      window.removeEventListener("drop", drop);
-    };
-  }, [ref]);
-  return dragging;
-}
-
 const LARGE_FILE_BYTES = 100 * 1024 * 1024;
 
-function LargeFileNote({ m, file }: { m: Messages; file: File | null }) {
-  if (!file || file.size <= LARGE_FILE_BYTES) return null;
+function LargeFileNote({ m, size }: { m: Messages; size: number }) {
+  if (size <= LARGE_FILE_BYTES) return null;
   return (
     <p role="note" className="c-warn">
-      {m.largeFile(formatBytes(file.size))}
+      {m.largeFile(formatBytes(size))}
     </p>
   );
 }
 
-function FilePicker({ m, file, onPick }: { m: Messages; file: File | null; onPick: (f: File | null) => void }) {
+const MAX_LISTED = 50;
+
+function FilePicker({ m, files, onPick, multiple }: { m: Messages; files: File[]; onPick: (f: File[]) => void; multiple?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
+  const total = files.reduce((n, f) => n + f.size, 0);
   return (
     <div className="c-field">
       <input
         ref={input}
         type="file"
+        multiple={multiple}
         className="c-file-input"
         tabIndex={-1}
         aria-hidden="true"
-        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          onPick(Array.from(e.target.files ?? []));
+          e.target.value = "";
+        }}
       />
       <button type="button" onClick={() => input.current?.click()}>
-        {m.chooseFile}
+        {multiple ? m.chooseFiles : m.chooseFile}
       </button>
-      <div className="c-hint">{file ? m.selectedFile(file.name, formatBytes(file.size)) : m.noFile}</div>
+      <div className="c-hint">
+        {files.length === 0
+          ? m.noFile
+          : files.length === 1
+            ? m.selectedFile(files[0].name, formatBytes(files[0].size))
+            : m.selectedFiles(files.length, formatBytes(total))}
+      </div>
+      {files.length > 1 && (
+        <ul className="c-file-list">
+          {files.slice(0, MAX_LISTED).map((f, i) => (
+            <li key={i}>
+              {f.name} <span className="c-hint">({formatBytes(f.size)})</span>
+            </li>
+          ))}
+          {files.length > MAX_LISTED && <li>…</li>}
+        </ul>
+      )}
     </div>
   );
 }
@@ -171,25 +156,27 @@ function Status({ m, busy, progress, error }: { m: Messages; busy: boolean; prog
 function EncryptFile({ m }: { m: Messages }) {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [compress, setCompress] = useState(false);
   const [out, setOut] = useState<Blob | null>(null);
   const revision = useRef(0);
   const job = useJob(m);
   const root = useRef<HTMLDivElement>(null);
-  const dragging = useFileDrop(root, (f) => { touch(); setFile(f); });
+  const dragging = useFileDrop(root, (f) => { touch(); setFiles(f); });
   const canCompress = compressionSupported();
   const touch = () => {
     revision.current++;
     setOut(null);
   };
   const go = () => {
-    if (!file) return;
+    if (files.length === 0) return;
     if (pw !== pw2) return;
     const startedAt = revision.current;
     setOut(null);
     return job.run(async (o) => {
-      const blob = await encryptFile(file, pw, { ...o, compress: compress && canCompress });
+      // Several files are packed into one zip first, then that single archive is encrypted.
+      const input = files.length === 1 ? files[0] : await packBundle(files);
+      const blob = await encryptFile(input, pw, { ...o, compress: compress && canCompress });
       if (revision.current === startedAt) setOut(blob);
     });
   };
@@ -203,8 +190,8 @@ function EncryptFile({ m }: { m: Messages }) {
         </p>
       )}
       <Field label={m.passwordRepeat} value={pw2} onChange={(v) => { touch(); setPw2(v); }} m={m} secret singleLine />
-      <FilePicker m={m} file={file} onPick={(f) => { touch(); setFile(f); }} />
-      <LargeFileNote m={m} file={file} />
+      <FilePicker m={m} files={files} multiple onPick={(f) => { touch(); setFiles(f); }} />
+      <LargeFileNote m={m} size={files.reduce((n, f) => n + f.size, 0)} />
       <button
         type="button"
         role="switch"
@@ -217,7 +204,7 @@ function EncryptFile({ m }: { m: Messages }) {
         {m.compress}
       </button>
       <div className="c-hint">{canCompress ? m.compressHint : m.compressUnsupported}</div>
-      <button type="button" className="c-primary" disabled={job.busy || !file || mismatch} onClick={go}>
+      <button type="button" className="c-primary" disabled={job.busy || files.length === 0 || mismatch} onClick={go}>
         {m.encryptBtn}
       </button>
       {mismatch && pw2 !== "" && <p role="alert" className="c-error">{m.mismatch}</p>}
@@ -236,10 +223,17 @@ function EncryptFile({ m }: { m: Messages }) {
   );
 }
 
+interface Decrypted {
+  blob: Blob;
+  meta: FileMeta;
+  /** Set when the .efile held several packed files. */
+  entries?: BundleEntry[];
+}
+
 function DecryptFile({ m }: { m: Messages }) {
   const [pw, setPw] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [out, setOut] = useState<{ blob: Blob; meta: FileMeta } | null>(null);
+  const [out, setOut] = useState<Decrypted | null>(null);
   const [url, setUrl] = useState("");
   const [full, setFull] = useState(false);
   const revision = useRef(0);
@@ -255,12 +249,13 @@ function DecryptFile({ m }: { m: Messages }) {
     setOut(null);
     return job.run(async (o) => {
       const result = await decryptFile(file, pw, o);
-      if (revision.current === startedAt) setOut(result);
+      const entries = isBundle(result.meta.type) ? await unpackBundle(result.blob) : undefined;
+      if (revision.current === startedAt) setOut({ ...result, entries });
     });
   };
   const root = useRef<HTMLDivElement>(null);
-  const dragging = useFileDrop(root, (f) => { touch(); setFile(f); });
-  const kind = out ? previewKind(out.meta.type) : null;
+  const dragging = useFileDrop(root, (f) => { touch(); setFile(f[0]); });
+  const kind = out && !out.entries ? previewKind(out.meta.type) : null;
   useEffect(() => {
     if (!out || !kind) {
       setUrl("");
@@ -273,13 +268,14 @@ function DecryptFile({ m }: { m: Messages }) {
   return (
     <div ref={root} className={dragging ? "c-drop c-dragging" : "c-drop"}>
       <Field label={m.password} value={pw} onChange={(v) => { touch(); setPw(v); }} m={m} secret singleLine />
-      <FilePicker m={m} file={file} onPick={(f) => { touch(); setFile(f); }} />
-      <LargeFileNote m={m} file={file} />
+      <FilePicker m={m} files={file ? [file] : []} onPick={(f) => { touch(); setFile(f[0] ?? null); }} />
+      <LargeFileNote m={m} size={file?.size ?? 0} />
       <button type="button" className="c-primary" disabled={job.busy || !file} onClick={go}>
         {m.decryptBtn}
       </button>
       <Status m={m} busy={job.busy} progress={job.progress} error={job.error} />
-      {out && (
+      {out?.entries && <BundleResult m={m} zip={out.blob} entries={out.entries} />}
+      {out && !out.entries && (
         <div className="c-field c-output">
           <div className="c-field-head">
             <label>{m.fileResult}</label>
@@ -319,6 +315,81 @@ function DecryptFile({ m }: { m: Messages }) {
       )}
       {full && url && kind === "image" && <ImageViewer src={url} m={m} onClose={() => setFull(false)} />}
       {full && url && kind === "pdf" && <PdfViewer src={url} m={m} onClose={() => setFull(false)} />}
+    </div>
+  );
+}
+
+/** Several decrypted files: every previewable one is listed, the rest are counted and downloadable. */
+function BundleResult({ m, zip, entries }: { m: Messages; zip: Blob; entries: BundleEntry[] }) {
+  const shown = entries.filter((e) => previewKind(e.blob.type));
+  const others = entries.filter((e) => !previewKind(e.blob.type));
+  const [urls, setUrls] = useState<string[]>([]);
+  const [full, setFull] = useState<number | null>(null);
+  useEffect(() => {
+    const made = entries.filter((e) => previewKind(e.blob.type)).map((e) => URL.createObjectURL(e.blob));
+    setUrls(made);
+    return () => made.forEach((u) => URL.revokeObjectURL(u));
+  }, [entries]);
+  const fullKind = full !== null ? previewKind(shown[full].blob.type) : null;
+  return (
+    <div className="c-field c-output">
+      <div className="c-actions">
+        <button type="button" className="c-primary" onClick={() => downloadBlob("decrypted-files.zip", zip)}>
+          {m.downloadAll(entries.length)}
+        </button>
+      </div>
+      <div className="c-field-head">
+        <label>{m.bundleResult(entries.length)}</label>
+      </div>
+      {shown.map((e, i) => {
+        const kind = previewKind(e.blob.type);
+        const url = urls[i];
+        return (
+          <div className="c-bundle-item" key={i}>
+            <div className="c-bundle-name">
+              {e.name} <span className="c-hint">({formatBytes(e.size)})</span>
+            </div>
+            {url && kind === "image" && (
+              <button type="button" className="c-thumb-btn" aria-label={m.openFullscreen} onClick={() => setFull(i)}>
+                <img src={url} alt="" className="c-thumb" draggable={false} />
+              </button>
+            )}
+            {url && kind === "video" && <video src={url} className="c-thumb" controls playsInline preload="metadata" />}
+            {url && kind === "pdf" && (
+              <>
+                <div className="c-actions">
+                  <button type="button" onClick={() => setFull(i)}>{m.openPdfFullscreen}</button>
+                </div>
+                <iframe src={url} title={`${m.pdfTitle}: ${e.name}`} className="c-pdf" />
+              </>
+            )}
+            <div className="c-actions">
+              <button type="button" onClick={() => downloadBlob(e.name, e.blob)}>
+                {m.downloadOne}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {others.length > 0 && (
+        <div className="c-bundle-item">
+          <p role="note" className="c-warn">{m.unpreviewable(others.length, shown.length > 0)}</p>
+          <ul className="c-file-list">
+            {others.map((e, i) => (
+              <li key={i}>
+                {e.name} <span className="c-hint">({formatBytes(e.size)})</span>{" "}
+                <button type="button" onClick={() => downloadBlob(e.name, e.blob)}>
+                  {m.downloadOne}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {shown.some((e) => previewKind(e.blob.type) === "image") && <div className="c-hint">{m.previewHint}</div>}
+      {shown.some((e) => previewKind(e.blob.type) === "pdf") && <div className="c-hint">{m.previewPdfHint}</div>}
+      {full !== null && urls[full] && fullKind === "image" && <ImageViewer src={urls[full]} m={m} onClose={() => setFull(null)} />}
+      {full !== null && urls[full] && fullKind === "pdf" && <PdfViewer src={urls[full]} m={m} onClose={() => setFull(null)} />}
     </div>
   );
 }

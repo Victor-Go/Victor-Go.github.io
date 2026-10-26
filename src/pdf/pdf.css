@@ -1,0 +1,29 @@
+.p-select,
+.p-text {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-fg);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.p-range {
+  width: 100%;
+}
+
+.p-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.p-file-name {
+  color: var(--c-muted);
+  word-break: break-all;
+}

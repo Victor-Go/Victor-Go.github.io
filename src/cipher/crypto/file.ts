@@ -32,6 +32,8 @@ const MIN_CHUNK_LOG2 = 16;
 const MAX_CHUNK_LOG2 = 24;
 const MAX_META = 8192;
 export const EFILE_EXTENSION = ".efile";
+/** Metadata type of an .efile whose payload is several files packed into a zip (see bundle.ts). */
+export const BUNDLE_TYPE = "application/x-efile-bundle";
 
 export interface FileMeta {
   /** Original file name (may be empty). */
@@ -346,7 +348,7 @@ export async function decryptFile(
     if (e instanceof DOMException) throw e;
     throw e instanceof CipherError && (e.code === "kdf" || e.code === "format") ? e : new CipherError("decrypt");
   }
-  const type = previewKind(meta.type) ? meta.type : FALLBACK_TYPE;
+  const type = previewKind(meta.type) || meta.type === BUNDLE_TYPE ? meta.type : FALLBACK_TYPE;
   return { blob: new Blob(parts, { type }), meta };
 }
 

@@ -24,6 +24,7 @@
     "lucide-react": "^1.23.0",
     "marked": "^18.0.5",
     "marked-katex-extension": "^5.1.12",
+    "pdfjs-dist": "5.4.149",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "zustand": "^5.0.14"

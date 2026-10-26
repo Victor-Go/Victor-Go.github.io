@@ -2,20 +2,22 @@ import { useCallback, useEffect, useState } from "react";
 import { Wallet } from "./Wallet";
 import { wipeTracked } from "../cipher/crypto/secrets";
 import { isEmbeddedOrOpened } from "../cipher/isolation";
-import { useWipeTriggers } from "../cipher/wipe";
+import { CIPHER_IDLE_MILLISECONDS, useWipeTriggers } from "../cipher/wipe";
+import { AutoClearSwitch } from "../cipher/components/Fields";
 import { getDefaultLang, messages, type Lang } from "./i18n";
 
 export function App() {
   const [lang, setLang] = useState<Lang>(getDefaultLang);
   const [epoch, setEpoch] = useState(0);
   const [clearedNote, setClearedNote] = useState(false);
+  const [autoClear, setAutoClear] = useState(true);
   const m = messages[lang];
 
   const wipe = useCallback(() => {
     wipeTracked();
     setEpoch((e) => e + 1);
   }, []);
-  useWipeTriggers(wipe);
+  useWipeTriggers(wipe, autoClear ? CIPHER_IDLE_MILLISECONDS : null);
 
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
@@ -51,6 +53,7 @@ export function App() {
       </header>
       <p className="c-tagline">{m.tagline}</p>
       <p className="c-notice" role="note">{m.notice}</p>
+      <AutoClearSwitch checked={autoClear} onChange={setAutoClear} label={m.autoClear} />
       {clearedNote && <p role="status" className="c-hint">{m.cleared}</p>}
       <Wallet key={epoch} m={m} />
     </main>

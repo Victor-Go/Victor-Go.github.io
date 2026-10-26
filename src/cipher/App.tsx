@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyExchange } from "./components/KeyExchange";
 import { FileCrypto } from "./components/FileCrypto";
 import { PasswordCrypto } from "./components/PasswordCrypto";
-import { Tabs } from "./components/Fields";
+import { AutoClearSwitch, Tabs } from "./components/Fields";
 import { wipeTracked } from "./crypto/secrets";
 import { getDefaultLang, messages, type Lang } from "./i18n";
 import { cancelPendingKdf } from "./workers/kdfClient";
@@ -76,16 +76,7 @@ export function App() {
       <p className="c-notice" role="note">
         {m.notice}
       </p>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={autoClear}
-        className="c-switch"
-        onClick={() => setAutoClear((v) => !v)}
-      >
-        <span className="c-switch-box" aria-hidden="true">{autoClear ? "✓" : ""}</span>
-        {m.autoClear}
-      </button>
+      <AutoClearSwitch checked={autoClear} onChange={setAutoClear} label={m.autoClear} />
       {clearedNote && <p role="status" className="c-hint">{m.cleared}</p>}
       <Workspace key={epoch} lang={lang} />
     </main>

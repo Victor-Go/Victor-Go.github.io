@@ -189,3 +189,12 @@ export function Tabs({ label, tabs, active, onChange, className }: TabsProps) {
     </div>
   );
 }
+
+export function AutoClearSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} className="c-switch" onClick={() => onChange(!checked)}>
+      <span className="c-switch-box" aria-hidden="true">{checked ? "✓" : ""}</span>
+      {label}
+    </button>
+  );
+}

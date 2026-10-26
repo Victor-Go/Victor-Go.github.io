@@ -15,6 +15,7 @@ import { workerKdf } from "../workers/kdfClient";
 import { downloadBlob } from "../output";
 import { ACTIVITY_EVENT } from "../wipe";
 import { useFileDrop } from "../useFileDrop";
+import { moveItem } from "../reorder";
 import { estimateBits, isWeak } from "../crypto/strength";
 import { Field, Tabs } from "./Fields";
 import { ImageViewer } from "./ImageViewer";
@@ -93,11 +94,10 @@ function LargeFileNote({ m, size }: { m: Messages; size: number }) {
   );
 }
 
-const MAX_LISTED = 50;
-
 function FilePicker({ m, files, onPick, multiple }: { m: Messages; files: File[]; onPick: (f: File[]) => void; multiple?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const total = files.reduce((n, f) => n + f.size, 0);
+  const [drag, setDrag] = useState<number | null>(null);
   return (
     <div className="c-field">
       <input
@@ -122,15 +122,59 @@ function FilePicker({ m, files, onPick, multiple }: { m: Messages; files: File[]
             ? m.selectedFile(files[0].name, formatBytes(files[0].size))
             : m.selectedFiles(files.length, formatBytes(total))}
       </div>
-      {files.length > 1 && (
-        <ul className="c-file-list">
-          {files.slice(0, MAX_LISTED).map((f, i) => (
-            <li key={i}>
-              {f.name} <span className="c-hint">({formatBytes(f.size)})</span>
-            </li>
-          ))}
-          {files.length > MAX_LISTED && <li>…</li>}
-        </ul>
+      {multiple && files.length > 0 && (
+        <>
+          <ul className="c-file-list">
+            {files.map((f, i) => (
+              <li key={i} data-file-index={i} className={drag === i ? "c-file-item c-file-dragging" : "c-file-item"}>
+                {files.length > 1 && (
+                  <span
+                    className="c-drag-handle"
+                    role="img"
+                    aria-label={m.dragToReorder}
+                    title={m.dragToReorder}
+                    onPointerDown={(e) => {
+                      setDrag(i);
+                      try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      } catch {
+                        // Not capturable (e.g. a synthetic event); the row under the pointer is still tracked.
+                      }
+                    }}
+                    onPointerMove={(e) => {
+                      if (drag === null) return;
+                      // The pointer is captured by the handle, so the row under it is found by position.
+                      const row = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-file-index]");
+                      const to = row ? Number(row.getAttribute("data-file-index")) : drag;
+                      if (to !== drag) {
+                        onPick(moveItem(files, drag, to));
+                        setDrag(to);
+                      }
+                    }}
+                    onPointerUp={() => setDrag(null)}
+                    onPointerCancel={() => setDrag(null)}
+                  >
+                    ⠿
+                  </span>
+                )}
+                <span className="c-file-name">{f.name}</span>
+                <span className="c-hint c-file-size">({formatBytes(f.size)})</span>
+                <button
+                  type="button"
+                  className="c-file-remove"
+                  aria-label={m.removeFileLabel(f.name)}
+                  title={m.removeFileLabel(f.name)}
+                  onClick={() => onPick(files.filter((_, j) => j !== i))}
+                >
+                  {m.removeFile}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => onPick([])}>
+            {m.clearFiles}
+          </button>
+        </>
       )}
     </div>
   );
@@ -331,6 +375,9 @@ function BundleResult({ m, zip, entries }: { m: Messages; zip: Blob; entries: Bu
     return () => made.forEach((u) => URL.revokeObjectURL(u));
   }, [entries]);
   const fullKind = full !== null ? previewKind(shown[full].blob.type) : null;
+  // Full-screen images can be paged through; PDFs and videos are skipped.
+  const images = shown.flatMap((e, i) => (previewKind(e.blob.type) === "image" ? [i] : []));
+  const at = full !== null ? images.indexOf(full) : -1;
   return (
     <div className="c-field c-output">
       <div className="c-actions">
@@ -377,7 +424,8 @@ function BundleResult({ m, zip, entries }: { m: Messages; zip: Blob; entries: Bu
           <ul className="c-file-list">
             {others.map((e, i) => (
               <li key={i}>
-                {e.name} <span className="c-hint">({formatBytes(e.size)})</span>{" "}
+                <span className="c-file-name">{e.name}</span>
+                <span className="c-hint c-file-size">({formatBytes(e.size)})</span>
                 <button type="button" onClick={() => downloadBlob(e.name, e.blob)}>
                   {m.downloadOne}
                 </button>
@@ -388,7 +436,16 @@ function BundleResult({ m, zip, entries }: { m: Messages; zip: Blob; entries: Bu
       )}
       {shown.some((e) => previewKind(e.blob.type) === "image") && <div className="c-hint">{m.previewHint}</div>}
       {shown.some((e) => previewKind(e.blob.type) === "pdf") && <div className="c-hint">{m.previewPdfHint}</div>}
-      {full !== null && urls[full] && fullKind === "image" && <ImageViewer src={urls[full]} m={m} onClose={() => setFull(null)} />}
+      {full !== null && urls[full] && fullKind === "image" && (
+        <ImageViewer
+          src={urls[full]}
+          m={m}
+          onClose={() => setFull(null)}
+          onPrev={at > 0 ? () => setFull(images[at - 1]) : undefined}
+          onNext={at >= 0 && at < images.length - 1 ? () => setFull(images[at + 1]) : undefined}
+          position={images.length > 1 ? `${at + 1} / ${images.length}` : undefined}
+        />
+      )}
       {full !== null && urls[full] && fullKind === "pdf" && <PdfViewer src={urls[full]} m={m} onClose={() => setFull(null)} />}
     </div>
   );

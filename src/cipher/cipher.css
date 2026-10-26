@@ -552,7 +552,86 @@ video.c-thumb {
 }
 
 .c-file-list {
-  margin: 6px 0 0;
-  padding-left: 20px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.c-file-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.c-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
   word-break: break-all;
+}
+
+.c-file-size {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Small round "×" so a row stays one line and the button doesn't dominate it. */
+.c-file-remove {
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* Selected files can be reordered by dragging the grip, with mouse or touch. */
+.c-drag-handle {
+  display: inline-block;
+  flex: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  color: var(--c-muted, #64748b);
+}
+
+.c-file-dragging {
+  background: var(--c-accent-soft, rgba(79, 70, 229, 0.1));
+  outline: 1px dashed var(--c-accent, #4f46e5);
+}
+
+/* Previous / next image arrows and the "2 / 5" counter of the full-screen viewer. */
+.c-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 64px;
+  padding: 0;
+  font-size: 2rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f172a;
+}
+
+.c-viewer-prev {
+  left: calc(12px + env(safe-area-inset-left));
+}
+
+.c-viewer-next {
+  right: calc(12px + env(safe-area-inset-right));
+}
+
+.c-viewer-position {
+  position: absolute;
+  top: calc(16px + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
 }

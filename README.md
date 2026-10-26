@@ -110,6 +110,7 @@ The app is local-first: local backups remain available offline and Google Drive 
 
 - **Password:** Argon2id (64 MiB, 3 passes, run in a Web Worker) → AES-256-GCM.
 - **Key exchange:** X-Wing hybrid post-quantum KEM (X25519 + ML-KEM-768) → HKDF-SHA256 → AES-256-GCM. Tabs: generate keys, encrypt, decrypt.
+- **Files:** one or several files per `.efile`. Several are first packed into a stored zip (marked `application/x-efile-bundle` inside the encrypted metadata), and that single archive is encrypted. On decrypt every previewable image, video and PDF is listed with its own download button, the other files are counted ("another n files can't be previewed") and listed, and "Download all" at the top saves the whole set as a zip.
 
 The page does not store or upload your content, and closing it clears everything. It writes no cookies and uses no browser storage, does not upload plaintext or keys, and clears its state on page hide, bfcache restore, ten minutes of inactivity (a switch, on by default, can turn this off), or via the clear button. Copying is manual only; the page writes to the clipboard but never reads it, and does not clear it afterwards. A same-origin worker script may load on first password use. Clipboard history, browser extensions, AI side panels and screen recorders are outside its control; use a private window. See [ARCHITECTURE.md](ARCHITECTURE.md#-cipher-encryption-tool) for the threat model.
 
@@ -123,12 +124,17 @@ A lookup cannot be fully private: the hash or derived addresses go to the third-
 
 `/hash/` hashes typed text (UTF-8) or a chosen file (up to 200 MB) entirely in the browser, with the same strict no-network CSP as `/btc/`. Algorithms: MD5, SHA-1, SHA-224/256/384/512, SHA-512/256, SHA3-224/256/384/512, Keccak-256, RIPEMD-160, BLAKE2b, BLAKE2s and BLAKE3 (all from `@noble/hashes`). MD5 and SHA-1 are broken for security purposes; use them only for integrity checks or legacy comparison.
 
+## 📄 /pdf PDF Tools
+
+`/pdf/` works on PDF files entirely in the browser; files are never uploaded. Its CSP is the `/hash/` one except `connect-src 'self'`, which lets pdf.js load its CMaps (CJK text), standard fonts, JPEG 2000 decoder and ICC profile from `public/pdf/pdfjs/` (copied from `node_modules/pdfjs-dist`; refresh them when upgrading `pdfjs-dist`). The first tool converts a PDF to PNG or JPG images (1×–3× resolution, optional page range, password-protected PDFs supported; drop a file anywhere on the page, as in /cipher). One image downloads directly; several are bundled into a stored (uncompressed) `.zip` built in the page. PDFs exported from the main page's Print PDF embed their fonts (Playfair Display, Lora, Merriweather, Inter, Outfit, Roboto, Open Sans, Fira Code, JetBrains Mono, Source Code Pro, KaTeX, CJK), so they render as printed.
+
 ### Dependencies and licenses (pinned, no `^`)
 
 | Package | Version | License |
 | --- | --- | --- |
 | `@noble/post-quantum` | 0.7.1 | MIT |
 | `@noble/hashes` | 2.4.0 | MIT |
+| `pdfjs-dist` (/pdf rendering) | 5.4.149 | Apache-2.0 |
 | `@scure/bip39` | 2.4.0 | MIT |
 | `dompurify` (main site Markdown sanitizing) | 3.4.17 | MPL-2.0 OR Apache-2.0 (dual; used under Apache-2.0, compatible with MIT) |
 

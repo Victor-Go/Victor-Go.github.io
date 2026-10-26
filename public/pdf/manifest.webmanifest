@@ -1,0 +1,12 @@
+{
+  "name": "PDF Tools",
+  "short_name": "PDF Tools",
+  "description": "Work with PDF files locally. Nothing is stored or uploaded.",
+  "start_url": "/pdf/",
+  "scope": "/pdf/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#f8fafc",
+  "icons": [{ "src": "/pdf/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

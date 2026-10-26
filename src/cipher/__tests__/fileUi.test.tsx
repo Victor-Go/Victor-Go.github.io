@@ -44,6 +44,21 @@ describe('File mode drop and size note', () => {
   });
 });
 
+describe('File mode multi-file drop', () => {
+  it('encrypt takes several dropped files at once, decrypt only the first', () => {
+    renderEn();
+    fireEvent.click(screen.getByRole('tab', { name: 'File' }));
+    const files = [new File(['a'], 'a.png'), new File(['bb'], 'b.pdf'), new File(['c'], 'c.txt')];
+    fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files } });
+    expect(screen.getByText(m.selectedFiles(3, '4 B'))).toBeInTheDocument();
+    for (const f of files) expect(screen.getByText(f.name)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('tab', { name: 'Decrypt' }).find((t) => !t.closest('[hidden]'))!);
+    fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files } });
+    expect(screen.getByText(m.selectedFile('a.png', '1 B'))).toBeInTheDocument();
+  });
+});
+
 describe('links in text', () => {
   it('shows safe, clickable links for URLs in the plaintext box of the Password encrypt tab', () => {
     renderEn();

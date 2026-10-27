@@ -29,6 +29,10 @@ const EXTENSION_TYPES: Record<string, string> = {
   webm: "video/webm",
   mp4: "video/mp4",
   pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
 };
 
 export function typeFromName(name: string): string {

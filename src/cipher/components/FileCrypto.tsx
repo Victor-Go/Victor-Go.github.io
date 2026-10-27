@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { TextPreview } from "./TextPreview";
 import type { Messages } from "../i18n";
 import {
   EFILE_EXTENSION,
@@ -206,7 +207,7 @@ function EncryptFile({ m }: { m: Messages }) {
   const revision = useRef(0);
   const job = useJob(m);
   const root = useRef<HTMLDivElement>(null);
-  const dragging = useFileDrop(root, (f) => { touch(); setFiles(f); });
+  const dragging = useFileDrop(root, (f) => { touch(); setFiles((prev) => [...prev, ...f]); });
   const canCompress = compressionSupported();
   const touch = () => {
     revision.current++;
@@ -324,7 +325,7 @@ function DecryptFile({ m }: { m: Messages }) {
           <div className="c-field-head">
             <label>{m.fileResult}</label>
           </div>
-          {!kind && (
+          {kind !== "image" && kind !== "video" && kind !== "pdf" && (
           <dl className="c-meta">
             <dt>{m.metaName}</dt>
             <dd>{out.meta.name || "—"}</dd>
@@ -334,6 +335,7 @@ function DecryptFile({ m }: { m: Messages }) {
             <dd>{formatBytes(out.meta.size)}</dd>
           </dl>
           )}
+          {kind === "text" && <TextPreview blob={out.blob} m={m} />}
           {url && kind === "image" && (
             <button type="button" className="c-thumb-btn" aria-label={m.openFullscreen} onClick={() => setFull(true)}>
               <img src={url} alt="" className="c-thumb" draggable={false} />
@@ -396,6 +398,7 @@ function BundleResult({ m, zip, entries }: { m: Messages; zip: Blob; entries: Bu
             <div className="c-bundle-name">
               {e.name} <span className="c-hint">({formatBytes(e.size)})</span>
             </div>
+            {kind === "text" && <TextPreview blob={e.blob} m={m} />}
             {url && kind === "image" && (
               <button type="button" className="c-thumb-btn" aria-label={m.openFullscreen} onClick={() => setFull(i)}>
                 <img src={url} alt="" className="c-thumb" draggable={false} />

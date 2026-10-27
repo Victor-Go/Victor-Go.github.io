@@ -12,9 +12,10 @@ const scanDir = resolve(root, 'src/scan');
 const outDir = resolve(root, 'node_modules/.tmp/scan-guard-dist');
 
 // /scan must talk to exactly these hosts and nothing else; it may use fetch (only in api.ts)
+// and write public lookups to the address bar (pushState/replaceState, see Scanner.tsx `inUrl`),
 // but every storage, tracking and logging API stays forbidden.
 const HOSTS = ['https://mempool.space', 'https://blockstream.info'];
-const ALLOWED_HERE = new Set(['fetch']);
+const ALLOWED_HERE = new Set(['fetch', 'pushState', 'replaceState']);
 const STILL_FORBIDDEN = FORBIDDEN.filter((f) => !ALLOWED_HERE.has(f.label));
 
 function walk(dir: string): string[] {

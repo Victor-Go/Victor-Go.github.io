@@ -7,6 +7,8 @@ import {
   lookupAddress,
   lookupAddressPage,
   lookupBlock,
+  priceDay,
+  priceUsdAt,
   lookupTx,
   type AddressResult,
   type AddressTx,
@@ -135,8 +137,30 @@ function kindText(q: Query, m: Messages): string {
   }
 }
 
+/** The `?q=` search param holds the query, so back/forward step through lookups and links can be shared. */
+const urlQuery = () => new URLSearchParams(location.search).get("q") ?? "";
+
+/**
+ * Only public lookups may appear in the address bar (it ends up in history, bookmarks and referrers):
+ * never a seed phrase, private key or extended private key, and never a pasted raw transaction.
+ */
+function inUrl(q: Query): boolean {
+  switch (q.kind) {
+    case "tx":
+    case "block":
+    case "address":
+      return true;
+    case "pubkey":
+      return !q.fromPrivateKey;
+    case "extkey":
+      return !q.isPrivate;
+    default:
+      return false;
+  }
+}
+
 export function Scanner({ m }: { m: Messages }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => (inUrl(classify(urlQuery())) ? urlQuery() : ""));
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -148,12 +172,16 @@ export function Scanner({ m }: { m: Messages }) {
 
   const query = useMemo(() => classify(text), [text]);
 
-  const run = async (input: string) => {
+  const run = async (input: string, push = true) => {
     const q = classify(input);
     setResult(null);
     if (q.kind === "invalid") {
       setError(invalidMessage(q.reason, m));
       return;
+    }
+    const trimmed = input.trim();
+    if (push && inUrl(q) && urlQuery() !== trimmed) {
+      history.pushState(null, "", `${location.pathname}?q=${encodeURIComponent(trimmed)}`);
     }
     ctl.current?.abort();
     setBusy(false);
@@ -210,6 +238,25 @@ export function Scanner({ m }: { m: Messages }) {
     reset();
     set(v);
   };
+
+  // Back/forward (and opening a shared link) re-run the query the address bar holds.
+  const sync = useRef<() => void>(() => {});
+  sync.current = () => {
+    const q = urlQuery();
+    if (q && inUrl(classify(q))) {
+      setText(q);
+      void run(q, false);
+    } else {
+      reset();
+      setText("");
+    }
+  };
+  useEffect(() => {
+    const onPop = () => sync.current();
+    window.addEventListener("popstate", onPop);
+    if (urlQuery()) sync.current();
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const follow = (value: string) => {
     setText(value);
@@ -282,6 +329,8 @@ function Link({ value, m, follow, children }: { value: string; m: Messages; foll
 }
 
 const short = (h: string) => `${h.slice(0, 12)}…${h.slice(-6)}`;
+const abbr = (h: string) => `${h.slice(0, 8)}…${h.slice(-8)}`;
+const usdText = (n: number, digits: number) => n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 /** Who an input or output belongs to: an address, or for address-less scripts what kind of script it is. */
 function Party({ io, m, follow }: { io: TxIO; m: Messages; follow: Follow }) {
@@ -555,22 +604,64 @@ function TxHistory({ data, m, follow }: { data: AddressResult; m: Messages; foll
     }
   };
 
+  // Approximate historical prices (one lookup per distinct day), shown as they arrive.
+  const [prices, setPrices] = useState<Record<number, number>>({});
+  useEffect(() => {
+    const c = new AbortController();
+    const days = [...new Set(rows.flatMap(({ tx }) => (tx.time !== undefined ? [priceDay(tx.time)] : [])))];
+    for (const day of days) {
+      void priceUsdAt(day, c.signal).then((usd) => {
+        if (usd !== undefined && !c.signal.aborted) setPrices((p) => (p[day] === undefined ? { ...p, [day]: usd } : p));
+      });
+    }
+    return () => c.abort();
+  }, [rows]);
+
+  // The confirmed balance is known for "now"; walking back through the newer transactions gives the
+  // balance right after each one. Unconfirmed ones are not part of it.
+  const balances = new Map<string, number>();
+  let running = data.balance;
+  for (const p of cur.pages.slice(0, cur.page + 1)) {
+    for (const { tx, net } of p) {
+      if (!tx.confirmed) continue;
+      balances.set(tx.txid, running);
+      running -= net;
+    }
+  }
+
   const title = m.txRange(before + 1, before + rows.length, data.txCount);
   return (
     <section aria-label={title}>
       <p className="b-group-title">{title}</p>
-      {rows.map(({ tx, net }) => (
-        <div key={tx.txid} className="s-io-row">
-          <span className="s-io-addr">
-            <Link value={tx.txid} m={m} follow={follow} />
-            <span className="c-hint">{tx.confirmed ? ` #${tx.height}` : ` ${m.unconfirmedMark}`}</span>
-          </span>
-          <span className={net >= 0 ? "s-amount s-pos" : "s-amount s-neg"}>
-            {net > 0 ? "+" : ""}
-            {formatBtc(net)}
-          </span>
-        </div>
-      ))}
+      {rows.map(({ tx, net }) => {
+        const price = tx.time !== undefined ? prices[priceDay(tx.time)] : undefined;
+        const balance = balances.get(tx.txid);
+        return (
+          <div key={tx.txid} className="s-io-row">
+            <span className="s-io-addr">
+              <Link value={tx.txid} m={m} follow={follow}>
+                {abbr(tx.txid)}
+              </Link>
+              <span className="c-hint">{tx.confirmed ? ` #${tx.height}` : ` ${m.unconfirmedMark}`}</span>
+            </span>
+            <span className={net >= 0 ? "s-amount s-pos" : "s-amount s-neg"}>
+              {net > 0 ? "+" : ""}
+              {formatBtc(net)}
+            </span>
+            <span className="s-tx-meta c-hint">
+              {[
+                tx.time !== undefined ? `${m.txTime} ${new Date(tx.time * 1000).toLocaleString()}` : undefined,
+                balance !== undefined ? `${m.balanceAfter} ${formatBtc(balance)} BTC` : undefined,
+                balance !== undefined && price !== undefined
+                  ? m.worthAt(usdText((balance / 1e8) * price, 0), usdText(price, 2))
+                  : undefined,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </div>
+        );
+      })}
       {(cur.page > 0 || hasNext) && (
         <nav className="s-pager" aria-label={m.pager}>
           <button type="button" disabled={busy || cur.page === 0} onClick={() => setState({ ...cur, page: cur.page - 1 })}>

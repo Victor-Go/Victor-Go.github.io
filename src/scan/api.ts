@@ -383,6 +383,33 @@ export async function lookupAddress(
   };
 }
 
+const DAY = 86_400;
+const priceCache = new Map<number, number>();
+
+/**
+ * Approximate USD price of 1 BTC around `time` (Unix seconds), from mempool.space only: Esplora itself
+ * has no prices. Only a day number is sent, never an address. Failure is not an error, the price is
+ * an extra: undefined means unknown.
+ */
+export async function priceUsdAt(time: number, signal: AbortSignal): Promise<number | undefined> {
+  const day = Math.floor(time / DAY) * DAY;
+  const known = priceCache.get(day);
+  if (known !== undefined) return known;
+  const o = await attempt(PROVIDERS[0], `/v1/historical-price?currency=USD&timestamp=${day}`, signal, () => {});
+  if (o.kind !== "ok") return undefined;
+  try {
+    const first = arr(obj(parseJson(o.text)).prices)[0];
+    const usd = obj(first).USD;
+    if (typeof usd !== "number" || !Number.isFinite(usd) || usd <= 0) return undefined;
+    priceCache.set(day, usd);
+    return usd;
+  } catch {
+    return undefined;
+  }
+}
+
+export const priceDay = (time: number): number => Math.floor(time / DAY) * DAY;
+
 export interface BlockInfo {
   hash: string;
   height: number;

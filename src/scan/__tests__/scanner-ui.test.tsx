@@ -6,7 +6,10 @@ import { messages } from '../i18n';
 const ABANDON = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const USED = 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu'; // BIP84 m/84'/0'/0'/0/0 of the phrase above
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  history.replaceState(null, '', '/');
+});
 
 describe('seed phrase lookup', () => {
   it('opens only the address types with history and folds the unused ones', async () => {
@@ -76,12 +79,14 @@ describe('address history pages', () => {
     expect(f.mock.calls.some(([u]) => String(u).endsWith('/txs/chain/' + id(25)))).toBe(true);
     expect((screen.getByRole('button', { name: '下一页' }) as HTMLButtonElement).disabled).toBe(true);
 
-    const calls = f.mock.calls.length;
+    // Price lookups (one per day, mempool.space only) may land at any time; they are not history requests.
+    const history = () => f.mock.calls.filter(([u]) => !String(u).includes('historical-price')).length;
+    const calls = history();
     fireEvent.click(screen.getByRole('button', { name: '上一页' }));
     await screen.findByText(/第 1–25 笔/);
     fireEvent.click(screen.getByRole('button', { name: '下一页' }));
     await screen.findByText(/第 26–30 笔/);
-    expect(f.mock.calls.length).toBe(calls); // both moves came from the cache
+    expect(history()).toBe(calls); // both moves came from the cache
   });
 });
 
@@ -133,7 +138,7 @@ describe('editing the input', () => {
     render(<Scanner m={messages.zh} />);
     fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: ADDR } });
     fireEvent.click(screen.getByRole('button', { name: '查询' }));
-    fireEvent.click(await screen.findByRole('button', { name: TXID }));
+    fireEvent.click(await screen.findByRole('button', { name: `${TXID.slice(0, 8)}…${TXID.slice(-8)}` }));
     expect(await screen.findByRole('article', { name: '交易' })).toBeTruthy();
     expect((screen.getAllByRole('textbox')[0] as HTMLTextAreaElement).value).toBe(TXID);
   });
@@ -184,6 +189,7 @@ describe('protocols inferred from the pasted format', () => {
     await waitFor(() => expect(x).toHaveBeenCalledTimes(20)); // 4 protocols x 5 addresses
     expect(urls(x).some((u) => u.includes('/scripthash/'))).toBe(false); // no hierarchical wallet holds P2PK
     cleanup();
+    history.replaceState(null, '', '/'); // a remount would otherwise re-run the xpub the address bar still holds
     const z = await lookup(ZPUB);
     await waitFor(() => expect(z).toHaveBeenCalledTimes(5));
     await settle();

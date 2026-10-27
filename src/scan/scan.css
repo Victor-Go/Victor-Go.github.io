@@ -32,6 +32,11 @@
   overflow-wrap: anywhere;
 }
 
+.s-tx-meta {
+  flex: 1 1 100%;
+  font-size: 0.85em;
+}
+
 .s-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85em;

@@ -32,6 +32,38 @@
   overflow-wrap: anywhere;
 }
 
+.s-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+}
+
+.s-select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-fg);
+  font: inherit;
+}
+
+/* The browser's default focus ring on a select is a heavy black/white double line. */
+.s-select:focus,
+.s-select:focus-visible {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px var(--c-accent);
+}
+
+.s-usd {
+  display: block;
+  text-align: right;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 .s-tx-meta {
   flex: 1 1 100%;
   font-size: 0.85em;

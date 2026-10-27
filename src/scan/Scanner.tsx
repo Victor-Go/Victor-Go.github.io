@@ -563,32 +563,42 @@ function lastConfirmed(page: AddressTx[]): string | undefined {
   return undefined;
 }
 
+const PAGE_SIZE = 25;
+/** Oldest-first needs the whole history, fetched one cursor page at a time, so it is only offered up to this size. */
+const FULL_LOAD_MAX = 500;
+
+type Sort = "oldest" | "newest";
+
 /**
- * An address's transactions, newest first. Esplora hands out history by cursor, so pages are fetched
- * in order, kept for going back, and dropped when a different result is shown.
+ * An address's transactions, 25 per view. Esplora (both providers) hands history out newest first by
+ * cursor only: there is no ascending order and no amount order. "Newest first" therefore pages on
+ * demand; "oldest first" loads the whole history first (up to FULL_LOAD_MAX) and then reverses it,
+ * so it is correct across all pages. Loaded pages are kept for going back and dropped when a
+ * different result is shown.
  */
 function TxHistory({ data, m, follow }: { data: AddressResult; m: Messages; follow: Follow }) {
-  const fresh = { src: data, pages: [data.txs], page: 0 };
+  const fresh = { src: data, chunks: [data.txs], page: 0, failed: false };
   const [state, setState] = useState(fresh);
+  const [sort, setSort] = useState<Sort>("oldest");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => () => ctl.current?.abort(), []);
 
   const cur = state.src === data ? state : fresh;
-  const rows = cur.pages[cur.page];
-  const before = cur.pages.slice(0, cur.page).reduce((n, p) => n + p.length, 0);
-  const loaded = cur.pages.reduce((n, p) => n + p.length, 0);
-  const cursor = lastConfirmed(rows);
-  const hasNext = cur.page + 1 < cur.pages.length || (cursor !== undefined && data.txCount > loaded);
+  const flat = cur.chunks.flat();
+  const cursor = lastConfirmed(cur.chunks[cur.chunks.length - 1]);
+  const moreToLoad = cursor !== undefined && data.txCount > flat.length;
+  const order: Sort = data.txCount <= FULL_LOAD_MAX && !cur.failed ? sort : "newest";
+  const loadingAll = order === "oldest" && moreToLoad;
+  const sorted = order === "oldest" ? [...flat].reverse() : flat;
+  // Nothing is shown (or priced) until the full history is in, so a half-loaded list never looks sorted.
+  const visible = loadingAll ? [] : sorted.slice(cur.page * PAGE_SIZE, (cur.page + 1) * PAGE_SIZE);
+  const hasNext = (cur.page + 1) * PAGE_SIZE < flat.length || (order === "newest" && moreToLoad);
 
-  const goNext = async () => {
-    setError("");
-    if (cur.page + 1 < cur.pages.length) {
-      setState({ ...cur, page: cur.page + 1 });
-      return;
-    }
+  const loadMore = async (advance: boolean) => {
     if (!cursor) return;
+    setError("");
     ctl.current?.abort();
     const c = new AbortController();
     ctl.current = c;
@@ -596,44 +606,78 @@ function TxHistory({ data, m, follow }: { data: AddressResult; m: Messages; foll
     try {
       const next = await lookupAddressPage(data.address, cursor, c.signal, data.script);
       if (c.signal.aborted) return;
-      setState({ ...cur, pages: [...cur.pages, next], page: cur.page + 1 });
+      setState((s) => {
+        const base = s.src === data ? s : fresh;
+        // A page that was fetched for a history other than the one now shown is dropped.
+        if (base.chunks.length !== cur.chunks.length) return s;
+        return { ...base, chunks: [...base.chunks, next], page: advance ? base.page + 1 : base.page };
+      });
     } catch (e) {
-      if (!c.signal.aborted) setError(errorMessage(e, m));
+      if (c.signal.aborted) return;
+      setError(errorMessage(e, m));
+      // The full history could not be completed: fall back to newest first, which needs no more pages.
+      if (loadingAll) setState((s) => ({ ...(s.src === data ? s : fresh), failed: true }));
     } finally {
       if (ctl.current === c) setBusy(false);
     }
   };
+  const goNext = () => {
+    if ((cur.page + 1) * PAGE_SIZE < flat.length) setState((s) => ({ ...(s.src === data ? s : fresh), page: cur.page + 1 }));
+    else void loadMore(true);
+  };
+  useEffect(() => {
+    if (loadingAll && !busy) void loadMore(false);
+  });
 
   // Approximate historical prices (one lookup per distinct day), shown as they arrive.
   const [prices, setPrices] = useState<Record<number, number>>({});
+  const dayKey = [...new Set(visible.flatMap(({ tx }) => (tx.time !== undefined ? [priceDay(tx.time)] : [])))].join(",");
   useEffect(() => {
     const c = new AbortController();
-    const days = [...new Set(rows.flatMap(({ tx }) => (tx.time !== undefined ? [priceDay(tx.time)] : [])))];
-    for (const day of days) {
+    for (const day of dayKey ? dayKey.split(",").map(Number) : []) {
       void priceUsdAt(day, c.signal).then((usd) => {
         if (usd !== undefined && !c.signal.aborted) setPrices((p) => (p[day] === undefined ? { ...p, [day]: usd } : p));
       });
     }
     return () => c.abort();
-  }, [rows]);
+  }, [dayKey]);
 
   // The confirmed balance is known for "now"; walking back through the newer transactions gives the
   // balance right after each one. Unconfirmed ones are not part of it.
   const balances = new Map<string, number>();
   let running = data.balance;
-  for (const p of cur.pages.slice(0, cur.page + 1)) {
-    for (const { tx, net } of p) {
-      if (!tx.confirmed) continue;
-      balances.set(tx.txid, running);
-      running -= net;
-    }
+  for (const { tx, net } of flat) {
+    if (!tx.confirmed) continue;
+    balances.set(tx.txid, running);
+    running -= net;
   }
 
-  const title = m.txRange(before + 1, before + rows.length, data.txCount);
+  const from = cur.page * PAGE_SIZE + 1;
+  const title = m.txRange(from, Math.min(from + PAGE_SIZE - 1, flat.length), data.txCount, order === "newest");
   return (
     <section aria-label={title}>
       <p className="b-group-title">{title}</p>
-      {rows.map(({ tx, net }) => {
+      {data.txCount > 1 && data.txCount <= FULL_LOAD_MAX && !cur.failed && (
+        <label className="s-sort c-hint">
+          {m.sortLabel}
+          <select
+            className="s-select"
+            value={sort}
+            disabled={loadingAll}
+            onChange={(e) => {
+              setSort(e.target.value as Sort);
+              setState((s) => ({ ...(s.src === data ? s : fresh), page: 0 }));
+            }}
+          >
+            <option value="oldest">{m.sortOldest}</option>
+            <option value="newest">{m.sortNewest}</option>
+          </select>
+        </label>
+      )}
+      {loadingAll && <p className="c-hint" role="status">{m.historyLoading(flat.length, data.txCount)}</p>}
+      {!loadingAll && (
+        <>
+      {visible.map(({ tx, net }) => {
         const price = tx.time !== undefined ? prices[priceDay(tx.time)] : undefined;
         const balance = balances.get(tx.txid);
         return (
@@ -647,6 +691,12 @@ function TxHistory({ data, m, follow }: { data: AddressResult; m: Messages; foll
             <span className={net >= 0 ? "s-amount s-pos" : "s-amount s-neg"}>
               {net > 0 ? "+" : ""}
               {formatBtc(net)}
+              {price !== undefined && net !== 0 && (
+                <span className="s-usd">
+                  {m.approx}
+                  {net < 0 ? "-" : "+"}${usdText(Math.abs((net / 1e8) * price), Math.abs((net / 1e8) * price) < 100 ? 2 : 0)}
+                </span>
+              )}
             </span>
             <span className="s-tx-meta c-hint">
               {[
@@ -662,13 +712,15 @@ function TxHistory({ data, m, follow }: { data: AddressResult; m: Messages; foll
           </div>
         );
       })}
-      {(cur.page > 0 || hasNext) && (
+        </>
+      )}
+      {!loadingAll && (cur.page > 0 || hasNext) && (
         <nav className="s-pager" aria-label={m.pager}>
-          <button type="button" disabled={busy || cur.page === 0} onClick={() => setState({ ...cur, page: cur.page - 1 })}>
+          <button type="button" disabled={busy || cur.page === 0} onClick={() => setState((s) => ({ ...(s.src === data ? s : fresh), page: cur.page - 1 }))}>
             {m.prevPage}
           </button>
           <span className="c-hint">{m.pageNumber(cur.page + 1)}</span>
-          <button type="button" disabled={busy || !hasNext} onClick={() => void goNext()}>
+          <button type="button" disabled={busy || !hasNext} onClick={goNext}>
             {busy ? m.searching : m.nextPage}
           </button>
         </nav>

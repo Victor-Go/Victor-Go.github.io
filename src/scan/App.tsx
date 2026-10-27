@@ -13,7 +13,11 @@ export function App() {
   const m = messages[lang];
 
   // Remounting Scanner drops the input and results and aborts any request in flight.
-  const wipe = useCallback(() => setEpoch((e) => e + 1), []);
+  // The remounted Scanner re-runs whatever `?q=` holds, so the wipe clears it from the address bar too.
+  const wipe = useCallback(() => {
+    if (location.search) history.replaceState(null, "", location.pathname);
+    setEpoch((e) => e + 1);
+  }, []);
   useWipeTriggers(wipe, autoClear ? CIPHER_IDLE_MILLISECONDS : null);
 
   useEffect(() => {

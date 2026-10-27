@@ -635,3 +635,18 @@ video.c-thumb {
   color: rgba(255, 255, 255, 0.85);
   pointer-events: none;
 }
+
+/* Decrypted text: grows with its content, never taller than 600px. */
+.c-text {
+  margin: 12px 0 0;
+  padding: 10px;
+  max-height: 600px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  border: 1px solid var(--c-border, #cbd5e1);
+  border-radius: 8px;
+  user-select: text;
+}

@@ -62,7 +62,7 @@ describe('bundle', () => {
     expect(isBundle(dec.meta.type)).toBe(true);
     const entries = await unpackBundle(dec.blob);
     expect(entries.map((e) => e.name)).toEqual(['a.png', 'b.pdf', 'c.txt', 'a (2).png']);
-    expect(entries.map((e) => e.blob.type)).toEqual(['image/png', 'application/pdf', 'application/octet-stream', 'image/png']);
+    expect(entries.map((e) => e.blob.type)).toEqual(['image/png', 'application/pdf', 'text/plain', 'image/png']);
     expect(await bytesOf(entries[2].blob)).toEqual([4, 5, 6]);
     expect(entries.map((e) => e.size)).toEqual([2, 1, 3, 1]);
   });

@@ -72,8 +72,12 @@ export function sanitizeMime(type: string): string {
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp"]);
 const VIDEO_TYPES = new Set(["video/webm", "video/mp4"]);
 
-export function previewKind(type: string): "image" | "video" | "pdf" | null {
+/** Plain-text formats shown in a read-only box; never rendered as markup. */
+const TEXT_TYPES = new Set(["text/plain", "text/markdown", "text/csv", "application/json"]);
+
+export function previewKind(type: string): "image" | "video" | "pdf" | "text" | null {
   if (type === "application/pdf") return "pdf";
+  if (TEXT_TYPES.has(type)) return "text";
   if (IMAGE_TYPES.has(type)) return "image";
   if (VIDEO_TYPES.has(type)) return "video";
   return null;

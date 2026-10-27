@@ -37,5 +37,25 @@ export function useFileDrop(ref: RefObject<HTMLElement | null>, onPick: (files: 
       window.removeEventListener("drop", drop);
     };
   }, [ref]);
+  usePasteFiles(ref, onPick);
   return dragging;
+}
+
+/** Files pasted from the clipboard (Ctrl/Cmd+V) while `ref`'s panel is visible; plain-text pastes are left alone. */
+function usePasteFiles(ref: RefObject<HTMLElement | null>, onPick: (files: File[]) => void) {
+  const pick = useRef(onPick);
+  useEffect(() => {
+    pick.current = onPick;
+  });
+  useEffect(() => {
+    const paste = (e: ClipboardEvent) => {
+      if (!ref.current || ref.current.closest("[hidden]")) return;
+      const files = Array.from(e.clipboardData?.files ?? []);
+      if (files.length === 0) return;
+      e.preventDefault();
+      pick.current(files);
+    };
+    window.addEventListener("paste", paste);
+    return () => window.removeEventListener("paste", paste);
+  }, [ref]);
 }

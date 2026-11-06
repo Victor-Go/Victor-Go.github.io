@@ -1,8 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { argon2id } from "@noble/hashes/argon2.js";
 import { toB64, fromB64 } from "../crypto/b64";
-import { deriveAuth, type Kdf } from "../crypto/devAuth";
 import { generateIdentity, publicKeyOf, toEpochs } from "../crypto/keys";
 import { unwrapKey, wrapKey } from "../crypto/kx";
 import { decryptMessage, encryptMessage, type Binding } from "../crypto/message";
@@ -97,27 +95,6 @@ describe("vault", () => {
     await expect(openRecord(mk, "u1", "contact:b", 3, ct)).rejects.toThrow();
     await expect(openRecord(mk, "u1", "contact:a", 2, ct)).rejects.toThrow();
     await expect(openRecord(newMasterKey(), "u1", "contact:a", 3, ct)).rejects.toThrow();
-  });
-});
-
-describe("dev password auth", () => {
-  const kdf: Kdf = async (pw, salt, p) => argon2id(pw, salt, { m: p.m, t: p.t, p: p.p, dkLen: p.dkLen });
-  const fast = { m: 8, t: 1, p: 1, dkLen: 64 };
-
-  it("is deterministic per handle (case-insensitive) and splits into two independent keys", async () => {
-    const a = await deriveAuth("Correct horse 1", "Alice", kdf, fast);
-    const b = await deriveAuth("Correct horse 1", "alice", kdf, fast);
-    expect(a.authKey).toEqual(b.authKey);
-    expect(a.kek).toEqual(b.kek);
-    expect(a.authKey).not.toEqual(a.kek);
-    expect((await deriveAuth("Correct horse 2", "alice", kdf, fast)).authKey).not.toEqual(a.authKey);
-    expect((await deriveAuth("Correct horse 1", "bob", kdf, fast)).authKey).not.toEqual(a.authKey);
-  });
-
-  it("normalises the password so keyboards agree", async () => {
-    const a = await deriveAuth("Ａbcdefghij１k", "alice", kdf, fast);
-    const b = await deriveAuth("Abcdefghij1k", "alice", kdf, fast);
-    expect(a.authKey).toEqual(b.authKey);
   });
 });
 

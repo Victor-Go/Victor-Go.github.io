@@ -2,10 +2,10 @@ import type { Epochs } from "../cipher/crypto/epochs";
 import { randomBytes } from "../cipher/crypto/secrets";
 import { fromB64, toB64 } from "./crypto/b64";
 import { openFavoriteText, sealFavoriteText } from "./crypto/favorite";
-import { deriveAuth } from "./crypto/devAuth";
 import { generateIdentity, publicKeyOf, toEpochs } from "./crypto/keys";
 import { KX_EPOCHS, unwrapKey, wrapKey } from "./crypto/kx";
 import { MESSAGE_MAX_CHARS, decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, voiceBinding, type Binding, type Payload } from "./crypto/message";
+import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
 import { ChatSocket, type Frame } from "./net/socket";
@@ -18,7 +18,7 @@ import { stripControls } from "./text";
 import { canonicalHandle } from "./validation";
 import { fitsServer } from "./voice";
 import { playVoice, stopVoice } from "./voicePlayer";
-import { Cancelled, cancelWork, solveInWorkers, workerKdf } from "./workers/client";
+import { Cancelled, cancelWork, solveInWorkers } from "./workers/client";
 import type { Challenge } from "./workers/solve";
 
 export { ApiError, Cancelled };
@@ -118,37 +118,52 @@ async function pow(action: string, subject: string, onProgress?: OnProgress): Pr
 }
 
 // ---------- session ----------
+const wrongPassword = (): ApiError => new ApiError(401, "unauthorized");
+
 export async function register(handle: string, password: string, inviteCode: string | undefined, onProgress: OnProgress): Promise<void> {
-  onProgress({ step: "derive" });
-  const auth = await deriveAuth(password, handle, workerKdf);
-  const solution = await pow("register", canonicalHandle(handle), onProgress);
-  onProgress({ step: "server" });
-  const { regId } = await api().post<{ regId: string }>("/auth/register/start", { handle, inviteCode, pow: solution });
-  const identity = generateIdentity();
-  const mk = newMasterKey();
-  const wrappedMK = await wrapMasterKey(mk, auth.kek);
-  const session = await api().post<SessionPayload>("/auth/register/finish", {
-    regId,
-    authKey: toB64(auth.authKey),
-    publicKey: identity.publicKey,
-    wrappedMK,
-  });
-  auth.authKey.fill(0);
-  auth.kek.fill(0);
-  await establish(session, mk, identity.seed, onProgress);
+  const flow = new PasswordFlow(password);
+  let kek: Uint8Array | null = null;
+  try {
+    const registrationRequest = await flow.startRegistration();
+    const solution = await pow("register", canonicalHandle(handle), onProgress);
+    onProgress({ step: "server" });
+    const start = await api().post<{ regId: string; userId: string; registrationResponse: string }>("/auth/register/start", { handle, inviteCode, pow: solution, registrationRequest });
+    onProgress({ step: "derive" });
+    const done = await flow.finishRegistration(start.registrationResponse, start.userId);
+    kek = done.kek;
+    const identity = generateIdentity();
+    const mk = newMasterKey();
+    const wrappedMK = await wrapMasterKey(mk, kek);
+    onProgress({ step: "server" });
+    const session = await api().post<SessionPayload>("/auth/register/finish", { regId: start.regId, registrationRecord: done.registrationRecord, publicKey: identity.publicKey, wrappedMK });
+    await establish(session, mk, identity.seed, onProgress);
+  } finally {
+    kek?.fill(0);
+    flow.wipe();
+  }
 }
 
 export async function login(handle: string, password: string, onProgress: OnProgress): Promise<void> {
-  const solution = await pow("login", canonicalHandle(handle), onProgress);
-  onProgress({ step: "derive" });
-  const auth = await deriveAuth(password, handle, workerKdf);
-  onProgress({ step: "server" });
-  const { loginId } = await api().post<{ loginId: string }>("/auth/login/start", { handle, pow: solution });
-  const session = await api().post<SessionPayload>("/auth/login/finish", { loginId, authKey: toB64(auth.authKey) });
-  const mk = await unwrapMasterKey(session.wrappedMK, auth.kek);
-  auth.authKey.fill(0);
-  auth.kek.fill(0);
-  await establish(session, mk, null, onProgress);
+  const flow = new PasswordFlow(password);
+  let kek: Uint8Array | null = null;
+  try {
+    const startLoginRequest = await flow.startLogin();
+    const solution = await pow("login", canonicalHandle(handle), onProgress);
+    onProgress({ step: "server" });
+    const start = await api().post<{ loginId: string; userId: string; loginResponse: string }>("/auth/login/start", { handle, pow: solution, startLoginRequest });
+    onProgress({ step: "derive" });
+    const done = await flow.finishLogin(start.loginResponse, start.userId);
+    // The library cannot open the envelope: the password is wrong (or the handle unknown, which looks the same). Nothing more is sent.
+    if (!done) throw wrongPassword();
+    kek = done.kek;
+    onProgress({ step: "server" });
+    const session = await api().post<SessionPayload>("/auth/login/finish", { loginId: start.loginId, finishLoginRequest: done.finishLoginRequest });
+    const mk = await unwrapMasterKey(session.wrappedMK, kek);
+    await establish(session, mk, null, onProgress);
+  } finally {
+    kek?.fill(0);
+    flow.wipe();
+  }
 }
 
 async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Array | null, onProgress: OnProgress): Promise<void> {
@@ -936,46 +951,61 @@ export async function changeHandle(handle: string, onProgress: OnProgress): Prom
   patch({ me: { ...me(), handle: r.handle } });
 }
 
-/** The server checks the current password (and the work), then this re-wraps the master key for the new one. */
-export async function changePassword(current: string, next: string, onProgress?: OnProgress): Promise<void> {
-  const handle = me().handle;
-  const old = await deriveAuth(current, handle, workerKdf);
+/**
+ * Proves the password for one action: the work is spent at `verify/start` (named by the purpose), a fresh OPAQUE exchange follows,
+ * and the answer is a one-time proof the action takes in place of the password. A wrong password stops here, before `verify/finish`,
+ * and never ends the session.
+ */
+async function stepUp(password: string, purpose: "password" | "delete" | "unlock" | "wipeall", onProgress?: OnProgress): Promise<string> {
+  const flow = new PasswordFlow(password);
   try {
-    const fresh = await deriveAuth(next, handle, workerKdf);
-    try {
-      const wrappedMK = await wrapMasterKey(s.mk!, fresh.kek);
-      const solution = await pow("password", me().userId, onProgress);
-      await api().request("POST", "/auth/password", { oldAuthKey: toB64(old.authKey), authKey: toB64(fresh.authKey), wrappedMK, pow: solution }, { keepSession: true });
-      s.wrappedMK = wrappedMK;
-    } finally {
-      fresh.authKey.fill(0);
-      fresh.kek.fill(0);
-    }
+    const startLoginRequest = await flow.startLogin();
+    const solution = await pow(purpose, me().userId, onProgress);
+    onProgress?.({ step: "server" });
+    const start = await api().request<{ verifyId: string; userId: string; loginResponse: string }>("POST", "/auth/verify/start", { purpose, pow: solution, startLoginRequest }, { keepSession: true });
+    onProgress?.({ step: "derive" });
+    const done = await flow.finishLogin(start.loginResponse, start.userId);
+    if (!done) throw wrongPassword();
+    done.kek.fill(0);
+    onProgress?.({ step: "server" });
+    const r = await api().request<{ proof: string }>("POST", "/auth/verify/finish", { verifyId: start.verifyId, finishLoginRequest: done.finishLoginRequest }, { keepSession: true });
+    return r.proof;
   } finally {
-    old.authKey.fill(0);
-    old.kek.fill(0);
+    flow.wipe();
   }
 }
 
-/** Runs a request that proves the password: derives the key, does the work the server asks for, and never lets a wrong password end the session. */
-async function withPassword<T>(password: string, action: string, subject: string, onProgress: OnProgress | undefined, send: (authKey: string, solution: { id: string; nonces: number[] }) => Promise<T>): Promise<T> {
-  const auth = await deriveAuth(password, me().handle, workerKdf);
+/** The server checks the current password (a step-up proof), then this registers the new one and re-wraps the master key for it. */
+export async function changePassword(current: string, next: string, onProgress?: OnProgress): Promise<void> {
+  const proof = await stepUp(current, "password", onProgress);
+  const flow = new PasswordFlow(next);
+  let kek: Uint8Array | null = null;
   try {
-    const solution = await pow(action, subject, onProgress);
-    return await send(toB64(auth.authKey), solution);
+    const registrationRequest = await flow.startRegistration();
+    onProgress?.({ step: "server" });
+    const start = await api().request<{ pwId: string; registrationResponse: string }>("POST", "/auth/password/start", { proof, registrationRequest }, { keepSession: true });
+    onProgress?.({ step: "derive" });
+    const done = await flow.finishRegistration(start.registrationResponse, me().userId);
+    kek = done.kek;
+    const wrappedMK = await wrapMasterKey(s.mk!, kek);
+    onProgress?.({ step: "server" });
+    await api().request("POST", "/auth/password/finish", { pwId: start.pwId, registrationRecord: done.registrationRecord, wrappedMK }, { keepSession: true });
+    s.wrappedMK = wrappedMK;
   } finally {
-    auth.authKey.fill(0);
-    auth.kek.fill(0);
+    kek?.fill(0);
+    flow.wipe();
   }
 }
 
 /** Opens the management lock again (the server checks the password and the work; it enforces the lock, not this page). */
 export async function unlockAdmin(password: string, onProgress?: OnProgress): Promise<void> {
-  await withPassword(password, "unlock", me().userId, onProgress, (authKey, solution) => api().request("POST", "/admin/unlock", { authKey, pow: solution }, { keepSession: true }));
+  const proof = await stepUp(password, "unlock", onProgress);
+  await api().request("POST", "/admin/unlock", { proof }, { keepSession: true });
 }
 
 export async function deleteAccount(password: string, onProgress?: OnProgress): Promise<void> {
-  await withPassword(password, "delete", me().userId, onProgress, (authKey, solution) => api().request("POST", "/auth/delete", { authKey, pow: solution }, { keepSession: true }));
+  const proof = await stepUp(password, "delete", onProgress);
+  await api().request("POST", "/auth/delete", { proof }, { keepSession: true });
   lock(null);
 }
 
@@ -987,7 +1017,8 @@ export async function adminDeleteUser(userId: string, handle: string, onProgress
 
 /** Erases everything on the server, the administrator included. Every session ends with it, so the page returns to the sign-in. */
 export async function wipeEverything(password: string, onProgress?: OnProgress): Promise<void> {
-  await withPassword(password, "wipeall", me().userId, onProgress, (authKey, solution) => api().request("POST", "/admin/wipe-all", { confirm: "WIPE ALL", authKey, pow: solution }, { keepSession: true }));
+  const proof = await stepUp(password, "wipeall", onProgress);
+  await api().request("POST", "/admin/wipe-all", { confirm: "WIPE ALL", proof }, { keepSession: true });
   lock(s.lockNotice("kicked"));
 }
 

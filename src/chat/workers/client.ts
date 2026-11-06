@@ -1,4 +1,3 @@
-import type { Kdf } from "../crypto/devAuth";
 import type { Challenge } from "./solve";
 
 /** Workers that are running; cancelled when the user leaves, locks or cancels. */
@@ -13,32 +12,6 @@ export class Cancelled extends Error {
     super("cancelled");
   }
 }
-
-/** Argon2id in a fresh worker, terminated as soon as it answers. */
-export const workerKdf: Kdf = (password, salt, { m, t, p, dkLen }) =>
-  new Promise((resolve, reject) => {
-    const worker = new Worker(new URL("./kdf.worker.ts", import.meta.url), { type: "module" });
-    const cancel = () => {
-      finish();
-      reject(new Cancelled());
-    };
-    const finish = () => {
-      running.delete(cancel);
-      worker.terminate();
-    };
-    running.add(cancel);
-    worker.onmessage = (e: MessageEvent<{ key?: Uint8Array }>) => {
-      finish();
-      if (e.data.key) resolve(e.data.key);
-      else reject(new Error("kdf failed"));
-    };
-    worker.onerror = () => {
-      finish();
-      reject(new Error("kdf failed"));
-    };
-    const pw = password.slice();
-    worker.postMessage({ password: pw, salt: salt.slice(), m, t, p, dkLen }, [pw.buffer]);
-  });
 
 /**
  * Solves a challenge on one or two workers (parts are split between them). `onProgress` gets 0..1.

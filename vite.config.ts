@@ -1,9 +1,12 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { epochHosts } from './src/cipher/epochsHosts.ts'
 import { DEFAULT_EPOCH_CURRENT, DEFAULT_EPOCH_TABLE, parseEpochs } from './src/cipher/crypto/epochs.ts'
 import { connectSrc } from './src/chat/csp.ts'
+import { CHAT_PATHS } from './src/chat/paths.ts'
 
 // The dev server injects inline scripts (React refresh preamble) that the strict
 // /cipher CSP forbids, so the CSP meta is dropped for `vite dev` only. Built output keeps it.
@@ -19,7 +22,7 @@ const cipherDevWithoutCsp = (): Plugin => ({
 const cipherTrailingSlash = (): Plugin => {
   const redirect = (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
     const [path, query = ''] = (req.url ?? '').split('?')
-    if (['/cipher', '/btc', '/scan', '/hash', '/pdf', '/chat', '/chat/account', '/chat/management'].includes(path)) {
+    if (['/cipher', '/btc', '/scan', '/hash', '/pdf', '/chat', ...CHAT_PATHS.filter((p) => p !== '/chat/').map((p) => p.slice(0, -1))].includes(path)) {
       res.statusCode = 301
       res.setHeader('Location', path + '/' + (query ? '?' + query : ''))
       res.end()
@@ -31,6 +34,34 @@ const cipherTrailingSlash = (): Plugin => {
     name: 'cipher-trailing-slash',
     configureServer: (server) => void server.middlewares.use(redirect),
     configurePreviewServer: (server) => void server.middlewares.use(redirect),
+  }
+}
+
+// Every screen of /chat has its own address, but the host is static (a reload or a shared link at /chat/settings/ must not be a 404):
+// each address is served by the one app page. Dev and preview rewrite the request; the build writes a copy of the page into each folder.
+const chatScreens = (): Plugin => {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
+    const [path, query = ''] = (req.url ?? '').split('?')
+    if (CHAT_PATHS.includes(path) && path !== '/chat/') req.url = '/chat/' + (query ? '?' + query : '')
+    next()
+  }
+  let outDir = 'dist'
+  return {
+    name: 'chat-screens',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    configureServer: (server) => void server.middlewares.use(rewrite),
+    configurePreviewServer: (server) => void server.middlewares.use(rewrite),
+    writeBundle() {
+      const page = readFileSync(join(outDir, 'chat', 'index.html'))
+      for (const path of CHAT_PATHS) {
+        if (path === '/chat/') continue
+        const dir = join(outDir, path)
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(join(dir, 'index.html'), page)
+      }
+    },
   }
 }
 
@@ -96,7 +127,7 @@ const chatConnectSrc = (): Plugin => {
 // https://vite.dev/config/
 export default defineConfig({
   define: { __CHAT_COMMIT__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)) },
-  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash(), cipherEpochsFile(), chatConnectSrc()],
+  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash(), chatScreens(), cipherEpochsFile(), chatConnectSrc()],
   build: {
     // The polyfill issues network requests for modulepreload links, which /cipher's CSP forbids;
     // every supported browser has native modulepreload.
@@ -110,8 +141,6 @@ export default defineConfig({
         hash: fileURLToPath(new URL('./hash/index.html', import.meta.url)),
         pdf: fileURLToPath(new URL('./pdf/index.html', import.meta.url)),
         chat: fileURLToPath(new URL('./chat/index.html', import.meta.url)),
-        chatAccount: fileURLToPath(new URL('./chat/account/index.html', import.meta.url)),
-        chatManagement: fileURLToPath(new URL('./chat/management/index.html', import.meta.url)),
       },
     },
   },

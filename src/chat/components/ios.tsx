@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { usePending } from "./ui";
 
 /** A small set of iOS-Settings-style building blocks: grouped inset lists, rows, switches, and pages with a back button. */
 
@@ -58,12 +59,14 @@ interface RowProps {
   /** Centre the title (for actions such as "Sign out"). */
   center?: boolean;
   disabled?: boolean;
-  onClick?: () => void;
+  /** May return a promise: the row then ignores taps and shows a spinner until it settles. */
+  onClick?: () => unknown;
   /** A control at the right edge (a switch, an input). */
   children?: ReactNode;
 }
 
 export function Row({ icon, title, subtitle, value, chevron, destructive, center, disabled, onClick, children }: RowProps) {
+  const [busy, run] = usePending();
   const body = (
     <>
       {icon}
@@ -73,12 +76,12 @@ export function Row({ icon, title, subtitle, value, chevron, destructive, center
       </span>
       {value !== undefined && <span className="ios-value">{value}</span>}
       {children}
-      {chevron && <ChevronRight size={18} className="ios-chevron" aria-hidden="true" />}
+      {busy ? <span className="ch-spinner" aria-hidden="true" /> : chevron && <ChevronRight size={18} className="ios-chevron" aria-hidden="true" />}
     </>
   );
   const cls = "ios-row" + (icon ? " ios-has-icon" : "") + (destructive ? " ios-destructive" : "") + (onClick ? " ios-tap" : "");
   return onClick ? (
-    <button type="button" className={cls} onClick={onClick} disabled={disabled}>
+    <button type="button" className={cls} onClick={() => run(onClick)} disabled={disabled || busy} aria-busy={busy}>
       {body}
     </button>
   ) : (
@@ -87,16 +90,17 @@ export function Row({ icon, title, subtitle, value, chevron, destructive, center
 }
 
 /** A row with an on/off switch. */
-export function SwitchRow({ icon, title, subtitle, checked, onChange }: { icon?: ReactNode; title: ReactNode; subtitle?: ReactNode; checked: boolean; onChange: (v: boolean) => void }) {
+export function SwitchRow({ icon, title, subtitle, checked, onChange }: { icon?: ReactNode; title: ReactNode; subtitle?: ReactNode; checked: boolean; onChange: (v: boolean) => unknown }) {
+  const [busy, run] = usePending();
   return (
     <Row icon={icon} title={title} subtitle={subtitle}>
-      <button type="button" role="switch" aria-checked={checked} aria-label={typeof title === "string" ? title : undefined} className="ios-switch" onClick={() => onChange(!checked)} />
+      <button type="button" role="switch" aria-checked={checked} aria-label={typeof title === "string" ? title : undefined} className="ios-switch" disabled={busy} aria-busy={busy} onClick={() => run(() => onChange(!checked))} />
     </Row>
   );
 }
 
 /** A row of a pick-one list; the chosen one shows a check mark. */
-export function CheckRow({ title, checked, onClick }: { title: ReactNode; checked: boolean; onClick: () => void }) {
+export function CheckRow({ title, checked, onClick }: { title: ReactNode; checked: boolean; onClick: () => unknown }) {
   return (
     <Row title={title} onClick={onClick}>
       {checked && <Check size={20} className="ios-check" aria-label="selected" />}

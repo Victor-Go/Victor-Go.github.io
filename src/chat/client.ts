@@ -370,7 +370,9 @@ export async function refreshContacts(): Promise<void> {
       }
     }
   }
-  const list = (await api().get<{ contacts: { userId: string; handle: string; role: string; convId: string; deleted?: boolean }[] }>("/contacts")).contacts;
+  const list = (await api().get<{ contacts: { userId: string; handle: string; role: string; convId: string; deleted?: boolean; lastAt?: number }[] }>("/contacts")).contacts;
+  // The server says when each chat last had a message, which orders the list.
+  for (const c of list) noteActive(c.convId, c.lastAt ?? 0);
   const contacts: Contact[] = list.map((c) => ({ ...c, key: s.contactKeys.get(c.userId)?.key ?? null }));
   // A key saved before the server confirmed the contact has no conversation id yet; now that it is known it is written down.
   for (const c of contacts) {
@@ -482,6 +484,7 @@ function addMessage(conv: string, msg: Msg): boolean {
   const next = i >= 0 ? list.map((m, j) => (j === i ? msg : m)) : [...list, msg];
   next.sort((a, b) => (a.seq || Infinity) - (b.seq || Infinity) || a.time - b.time);
   patch({ messages: { ...st.messages, [conv]: next } });
+  noteActive(conv, msg.time);
   // Looked at means: the contacts part is showing, this chat is open in it, and the page is visible. Anything else leaves it unread (and rings).
   if (i < 0 && !msg.mine && !(st.section === "contacts" && st.activeConv === conv && !document.hidden)) {
     patch({ unread: { ...useChat.getState().unread, [conv]: (st.unread[conv] ?? 0) + 1 } });
@@ -496,7 +499,16 @@ function addMessage(conv: string, msg: Msg): boolean {
   return i < 0;
 }
 
-const PAGE = 50;
+/** Remembers the newest message time of a conversation (the contact list is ordered by it). */
+function noteActive(conv: string, time: number): void {
+  const cur = useChat.getState().lastActive;
+  if ((cur[conv] ?? 0) < time) patch({ lastActive: { ...cur, [conv]: time } });
+}
+
+/** A page of history: small, so a chat costs the server little; older pages come as the reader scrolls up. */
+const PAGE = 20;
+/** Catching up on what arrived while away may need larger steps. */
+const CATCHUP = 50;
 interface HistoryPage {
   messages: WireMessage[];
   lastSeq: number;
@@ -513,7 +525,7 @@ export async function loadHistory(conv: string): Promise<void> {
   const first = !s.lastSeq.has(conv);
   let after = s.lastSeq.get(conv) ?? 0;
   for (let round = 0; round < 200; round++) {
-    const q = first && round === 0 ? `limit=${PAGE}` : `afterSeq=${after}&limit=${PAGE}`;
+    const q = first && round === 0 ? `limit=${PAGE}` : `afterSeq=${after}&limit=${CATCHUP}`;
     const r = await api().get<HistoryPage>(`/messages?conv=${encodeURIComponent(conv)}&${q}`);
     if (r.peerRead !== undefined) patch({ reads: { ...useChat.getState().reads, [conv]: Math.max(useChat.getState().reads[conv] ?? 0, r.peerRead) } });
     for (const w of r.messages) {
@@ -780,12 +792,13 @@ function notifyIncoming(conv: string): void {
 }
 
 // ---------- groups ----------
-type WireGroup = Omit<Group, "keys">;
+type WireGroup = Omit<Group, "keys"> & { lastAt?: number };
 
 export async function refreshGroups(): Promise<void> {
   const list = (await api().get<{ groups: WireGroup[] }>("/groups")).groups;
   const groups: Group[] = [];
   for (const g of list) {
+    noteActive(g.id, g.lastAt ?? 0);
     let keys = s.groupKeys.get(g.id);
     if (!keys) s.groupKeys.set(g.id, (keys = new Map()));
     const missing = !keys.has(g.gen);

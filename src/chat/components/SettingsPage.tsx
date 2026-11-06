@@ -5,6 +5,7 @@ import { getConfig } from "../config";
 import { errorText } from "../i18nApp";
 import { onEnter } from "../keys";
 import { checkHealth, type HealthState } from "../net/health";
+import { PATH, SETTINGS_DETAILS, go, useLocation } from "../route";
 import { IDLE_CHOICES, patch, useChat } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle, checkPassword } from "../validation";
@@ -14,7 +15,8 @@ import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
 import { Steps } from "./ui";
 
-type Detail = "language" | "idle" | "notifications" | "handle" | "password" | "connection" | "delete";
+const DETAILS = SETTINGS_DETAILS;
+type Detail = (typeof SETTINGS_DETAILS)[number];
 type Permission = NotificationPermission | "unsupported";
 
 const notificationState = (): Permission => (notificationsSupported() ? Notification.permission : "unsupported");
@@ -23,8 +25,8 @@ function LanguagePage() {
   const { lang } = useLang();
   return (
     <Group>
-      <CheckRow title="中文" checked={lang === "zh"} onClick={() => void saveLanguage("zh")} />
-      <CheckRow title="English" checked={lang === "en"} onClick={() => void saveLanguage("en")} />
+      <CheckRow title="中文" checked={lang === "zh"} onClick={() => saveLanguage("zh")} />
+      <CheckRow title="English" checked={lang === "en"} onClick={() => saveLanguage("en")} />
     </Group>
   );
 }
@@ -48,7 +50,7 @@ function NotificationsPage() {
   return (
     <Group footer={perm === "default" ? undefined : footer}>
       {perm === "default" ? (
-        <Row title={a.notificationsEnable} onClick={() => void enableNotifications().then(setPerm)} />
+        <Row title={a.notificationsEnable} onClick={() => enableNotifications().then(setPerm)} />
       ) : (
         <Row title={a.notifications} value={shortNotification(a, perm)} />
       )}
@@ -236,12 +238,14 @@ function DeletePage() {
 }
 
 /** Settings as an iOS-style stack: a list of sections, each opening its own page. */
-export function SettingsFlow({ onBack }: { onBack: () => void }) {
+export function SettingsFlow() {
   const { lang, a } = useLang();
   const me = useChat((s) => s.me)!;
   const idle = useChat((s) => s.idleMinutes);
   const sound = useChat((s) => s.sound);
-  const [detail, setDetail] = useState<Detail | null>(null);
+  const { path } = useLocation();
+  const detail = DETAILS.find((d) => path === PATH.settingsDetail(d)) ?? null;
+  const setDetail = (d: Detail) => go(PATH.settingsDetail(d));
   const isAdmin = me.role === "admin";
 
   if (detail) {
@@ -255,7 +259,7 @@ export function SettingsFlow({ onBack }: { onBack: () => void }) {
       delete: a.deleteAccount,
     };
     return (
-      <Page title={titles[detail]} onBack={() => setDetail(null)} backLabel={a.settingsTitle}>
+      <Page title={titles[detail]} onBack={() => go(PATH.settings)} backLabel={a.settingsTitle}>
         {detail === "language" && <LanguagePage />}
         {detail === "idle" && <IdlePage />}
         {detail === "notifications" && <NotificationsPage />}
@@ -268,13 +272,13 @@ export function SettingsFlow({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <Page title={a.settingsTitle} onBack={onBack} backLabel={a.tabMe}>
+    <Page title={a.settingsTitle} onBack={() => go(PATH.me)} backLabel={a.tabMe}>
       <Group>
         <Row icon={<Icon color="#007aff"><Globe size={18} /></Icon>} title={a.language} value={lang === "zh" ? "中文" : "English"} chevron onClick={() => setDetail("language")} />
         <Row icon={<Icon color="#ff9500"><Clock size={18} /></Icon>} title={a.idleLogout} value={a.idleOption(idle)} chevron onClick={() => setDetail("idle")} />
       </Group>
       <Group footer={a.soundHint}>
-        <SwitchRow icon={<Icon color="#ff2d55"><Volume2 size={18} /></Icon>} title={a.soundLabel} checked={sound} onChange={(v) => void setSoundEnabled(v)} />
+        <SwitchRow icon={<Icon color="#ff2d55"><Volume2 size={18} /></Icon>} title={a.soundLabel} checked={sound} onChange={(v) => setSoundEnabled(v)} />
         <Row icon={<Icon color="#ff3b30"><Bell size={18} /></Icon>} title={a.notifications} value={shortNotification(a, notificationState())} chevron onClick={() => setDetail("notifications")} />
       </Group>
       <Group>

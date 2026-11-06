@@ -2,18 +2,23 @@ import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { configure, resumeView } from "./client";
 import { AccountPage } from "./components/AccountPage";
-import { Shell, type Section } from "./components/Shell";
+import { Shell } from "./components/Shell";
 import { getConfig } from "./config";
 import { useIdleLogout, usePrivacyCover, useWipeOnLeave } from "./hooks";
 import { appMessages } from "./i18nApp";
 import { useLangStore } from "./lang";
 import { Api } from "./net/api";
 import { armSound } from "./sound";
-import { PATH_ACCOUNT, PATH_HOME, PATH_MANAGEMENT, showPath, wantsManagement } from "./route";
+import { CHAT_PATHS, PATH, isChatPath, sectionOf, showPath, startPath, useLocation } from "./route";
 import { useChat } from "./store";
 import { useLang } from "./useChat";
 
-const startedOnManagement = wantsManagement(window.location.pathname);
+/** Where a sign-in continues: the page the browser loaded, when it is a screen that needs nothing else (not the sign-in page, not a chat, which is picked from the list). */
+const resumePath = (isAdmin: boolean): string => {
+  if (!CHAT_PATHS.includes(startPath) || startPath === PATH.account || isChatPath(startPath)) return PATH.home;
+  return sectionOf(startPath) === "manage" && !isAdmin ? PATH.home : startPath;
+};
+
 
 export function App() {
   const { m, a } = useLang();
@@ -61,10 +66,16 @@ export function App() {
     });
   }, [api]);
 
-  const section: Section = startedOnManagement && role === "admin" ? "manage" : "contacts";
+  // Signed out, the address is the sign-in page; signing in lands on the page that was asked for (or the chat list).
   useEffect(() => {
-    showPath(ready ? (section === "manage" ? PATH_MANAGEMENT : PATH_HOME) : PATH_ACCOUNT);
-  }, [ready, section]);
+    showPath(ready ? resumePath(role === "admin") : PATH.account);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+  // Going back to an old entry while signed out must not show a signed-in address.
+  const here = useLocation().path;
+  useEffect(() => {
+    if (!ready && here !== PATH.account) showPath(PATH.account);
+  }, [ready, here]);
 
   useWipeOnLeave(ready);
   const { warning } = useIdleLogout(ready, a.lockedExpired);
@@ -72,7 +83,7 @@ export function App() {
 
   return (
     <>
-      {ready ? <Shell initial={section} /> : <AccountPage />}
+      {ready ? <Shell /> : <AccountPage />}
       {warning && (
         <div className="ch-toast" role="alert">
           {a.idleWarning}

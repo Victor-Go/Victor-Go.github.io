@@ -45,7 +45,7 @@ describe("connectSrc", () => {
 describe("script-src of the chat pages", () => {
   // OPAQUE runs as WebAssembly (compiled from the bundle, same origin). 'wasm-unsafe-eval' allows WebAssembly.compile and nothing else:
   // no eval, no inline scripts, no 'unsafe-eval', no other origin. It is the only addition to 'self'.
-  for (const page of ["chat/index.html", "chat/account/index.html", "chat/management/index.html"]) {
+  for (const page of ["chat/index.html"]) {
     it(`${page} allows WebAssembly and nothing broader`, () => {
       const html = readFileSync(resolve(__dirname, "../../..", page), "utf8");
       const policy = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/.exec(html)?.[1] ?? "";

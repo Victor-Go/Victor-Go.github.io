@@ -285,6 +285,26 @@ textarea:focus-visible {
   border-color: var(--c-fg);
 }
 
+.c-idle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  color: var(--c-muted);
+  font-size: 0.85rem;
+}
+
+.c-select {
+  font: inherit;
+  font-size: 16px;
+  color: var(--c-fg);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
 .c-hint {
   color: var(--c-muted);
   font-size: 0.8rem;

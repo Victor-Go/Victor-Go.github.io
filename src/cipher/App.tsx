@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyExchange } from "./components/KeyExchange";
 import { FileCrypto } from "./components/FileCrypto";
 import { PasswordCrypto } from "./components/PasswordCrypto";
-import { AutoClearSwitch, Tabs } from "./components/Fields";
+import { IdleSelect, Tabs } from "./components/Fields";
 import { wipeTracked } from "./crypto/secrets";
 import { getDefaultLang, messages, type Lang } from "./i18n";
 import { cancelPendingKdf } from "./workers/kdfClient";
 import { isEmbeddedOrOpened } from "./isolation";
 import { epochsAvailable } from "./crypto/epochsEnv";
-import { CIPHER_IDLE_MILLISECONDS, useWipeTriggers } from "./wipe";
+import { DEFAULT_WIPE_MINUTES, useWipeTriggers } from "./wipe";
 
 type Mode = "kx" | "pw" | "file";
 
@@ -30,7 +30,7 @@ export function App() {
   const [lang, setLang] = useState<Lang>(getDefaultLang);
   const [epoch, setEpoch] = useState(0);
   const [clearedNote, setClearedNote] = useState(false);
-  const [autoClear, setAutoClear] = useState(true);
+  const [idleMinutes, setIdleMinutes] = useState<number>(DEFAULT_WIPE_MINUTES);
   const m = messages[lang];
 
   const wipe = useCallback(() => {
@@ -38,7 +38,7 @@ export function App() {
     wipeTracked();
     setEpoch((e) => e + 1);
   }, []);
-  useWipeTriggers(wipe, autoClear ? CIPHER_IDLE_MILLISECONDS : null);
+  useWipeTriggers(wipe, idleMinutes * 60_000);
 
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
@@ -76,7 +76,7 @@ export function App() {
       <p className="c-notice" role="note">
         {m.notice}
       </p>
-      <AutoClearSwitch checked={autoClear} onChange={setAutoClear} label={m.autoClear} />
+      <IdleSelect minutes={idleMinutes} onChange={setIdleMinutes} label={m.autoClear} option={m.autoClearOption} />
       {clearedNote && <p role="status" className="c-hint">{m.cleared}</p>}
       <Workspace key={epoch} lang={lang} />
     </main>

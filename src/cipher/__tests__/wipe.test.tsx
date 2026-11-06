@@ -106,13 +106,56 @@ describe('wipe on page lifecycle', () => {
   });
 });
 
-describe('auto-clear switch', () => {
-  it('is on by default, wipes after ten minutes idle, and can be switched off', () => {
+describe('idle clock', () => {
+  it('judges idleness from the time of the last interaction, so a frozen background tab still wipes when it returns', () => {
+    vi.useFakeTimers();
+    const onWipe = vi.fn();
+    const detach = attachWipeListeners(onWipe, window, 10 * 60 * 1000);
+    // The page was frozen: no timer ran, but the clock moved on.
+    vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+    expect(onWipe).not.toHaveBeenCalled();
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(onWipe).toHaveBeenCalledTimes(1);
+    detach();
+  });
+
+  it('counts a pointer move or a touch as activity', () => {
+    vi.useFakeTimers();
+    const onWipe = vi.fn();
+    const detach = attachWipeListeners(onWipe, window, 5 * 60 * 1000);
+    for (const name of ['pointermove', 'touchmove', 'scroll']) {
+      vi.advanceTimersByTime(4 * 60 * 1000);
+      window.dispatchEvent(new Event(name));
+    }
+    expect(onWipe).not.toHaveBeenCalled();
+    detach();
+  });
+
+  it('never waits longer than an hour', () => {
+    vi.useFakeTimers();
+    const onWipe = vi.fn();
+    const detach = attachWipeListeners(onWipe, window, 5 * 60 * 60 * 1000);
+    vi.advanceTimersByTime(59 * 60 * 1000);
+    expect(onWipe).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(60 * 1000);
+    expect(onWipe).toHaveBeenCalledTimes(1);
+    detach();
+  });
+});
+
+describe('auto-clear selector', () => {
+  const selector = () => screen.getByRole('combobox', { name: /Auto-clear everything after inactivity/ }) as HTMLSelectElement;
+
+  it('offers 5, 10, 30 and 60 minutes only, and starts at 10', () => {
+    renderEn();
+    expect(Array.from(selector().options).map((o) => o.value)).toEqual(['5', '10', '30', '60']);
+    expect(selector().value).toBe('10');
+  });
+
+  it('wipes after the chosen idle time', () => {
     vi.useFakeTimers();
     renderEn();
     openEncryptTab();
-    const sw = screen.getByRole('switch', { name: /Auto-clear everything after 10 minutes/ });
-    expect(sw).toHaveAttribute('aria-checked', 'true');
     typeInto('Plaintext', 'top secret');
     act(() => {
       vi.advanceTimersByTime(9 * 60 * 1000);
@@ -122,14 +165,34 @@ describe('auto-clear switch', () => {
       vi.advanceTimersByTime(60 * 1000);
     });
     expect(allTextareaValues().every((v) => v === '')).toBe(true);
+  });
 
-    fireEvent.click(screen.getByRole('switch'));
-    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-    typeInto('Plaintext', 'stay');
+  it('applies a shorter choice at once', () => {
+    vi.useFakeTimers();
+    renderEn();
+    openEncryptTab();
+    fireEvent.change(selector(), { target: { value: '5' } });
+    typeInto('Plaintext', 'short');
     act(() => {
-      vi.advanceTimersByTime(60 * 60 * 1000);
+      vi.advanceTimersByTime(5 * 60 * 1000);
     });
-    expect(allTextareaValues()).toContain('stay');
+    expect(allTextareaValues().every((v) => v === '')).toBe(true);
+  });
+
+  it('keeps content for a longer choice, up to an hour', () => {
+    vi.useFakeTimers();
+    renderEn();
+    openEncryptTab();
+    fireEvent.change(selector(), { target: { value: '60' } });
+    typeInto('Plaintext', 'long');
+    act(() => {
+      vi.advanceTimersByTime(59 * 60 * 1000);
+    });
+    expect(allTextareaValues()).toContain('long');
+    act(() => {
+      vi.advanceTimersByTime(60 * 1000);
+    });
+    expect(allTextareaValues().every((v) => v === '')).toBe(true);
   });
 });
 

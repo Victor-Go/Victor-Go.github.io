@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Messages } from "../i18n";
 import { copyText, downloadText } from "../output";
+import { WIPE_CHOICES } from "../wipe";
 
 /** Attributes that keep browsers, password managers and spellcheckers away from the content. */
 const NO_AUTOFILL = {
@@ -190,11 +191,19 @@ export function Tabs({ label, tabs, active, onChange, className }: TabsProps) {
   );
 }
 
-export function AutoClearSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+/** Idle time before everything is cleared: 5, 10, 30 or 60 minutes (never longer). It is not remembered. */
+export function IdleSelect({ minutes, onChange, label, option }: { minutes: number; onChange: (m: number) => void; label: string; option: (n: number) => string }) {
+  const id = useId();
   return (
-    <button type="button" role="switch" aria-checked={checked} className="c-switch" onClick={() => onChange(!checked)}>
-      <span className="c-switch-box" aria-hidden="true">{checked ? "✓" : ""}</span>
-      {label}
-    </button>
+    <div className="c-idle">
+      <label htmlFor={id}>{label}</label>
+      <select id={id} className="c-select" value={minutes} onChange={(e) => onChange(Number(e.target.value))}>
+        {WIPE_CHOICES.map((n) => (
+          <option key={n} value={n}>
+            {option(n)}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

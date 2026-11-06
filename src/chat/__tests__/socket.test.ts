@@ -8,7 +8,9 @@ class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((e: { data: string }) => void) | null = null;
   onclose: ((e: { code: number; reason: string }) => void) | null = null;
-  constructor(public url: string) {
+  readonly url: string;
+  constructor(url: string) {
+    this.url = url;
     FakeSocket.last = this;
   }
   send() {}

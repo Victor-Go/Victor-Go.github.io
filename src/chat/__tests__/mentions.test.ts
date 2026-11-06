@@ -6,7 +6,8 @@ describe("mentionsHandle", () => {
     expect(mentionsHandle("hi @alice how are you", "alice")).toBe(true);
     expect(mentionsHandle("@alice hello", "alice")).toBe(true);
     expect(mentionsHandle("hi @ALICE hello", "alice")).toBe(true);
-    expect(mentionsHandle("hi @alice", "alice")).toBe(false);
+    expect(mentionsHandle("hi @alice", "alice")).toBe(true);
+    expect(mentionsHandle("@alice", "alice")).toBe(true);
     expect(mentionsHandle("hi @alice, hello", "alice")).toBe(false);
     expect(mentionsHandle("mail me at x@alice hello", "alice")).toBe(false);
     expect(mentionsHandle("hi @alice2 hello", "alice")).toBe(false);

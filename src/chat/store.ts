@@ -89,6 +89,8 @@ export interface ChatState {
   unread: Record<string, number>;
   /** Conversations with an unread message that mentions me (their badge turns red). */
   mentions: Record<string, boolean>;
+  /** Unsent text per conversation. Memory only: never stored, and gone on sign-out, lock or reload. */
+  drafts: Record<string, string>;
   /** How far the other person has read in each 1:1 chat (a message sequence number). */
   reads: Record<string, number>;
   /** Chime on incoming messages; kept in the encrypted vault with the language. */
@@ -124,6 +126,7 @@ export const initialState: ChatState = {
   messages: {},
   unread: {},
   mentions: {},
+  drafts: {},
   reads: {},
   sound: true,
   notifyDismissed: false,
@@ -143,3 +146,6 @@ export const useChat = create<ChatState>(() => initialState);
 
 export const patch = (p: Partial<ChatState>): void => useChat.setState(p);
 export const reset = (notice: string | null = null): void => useChat.setState({ ...initialState, notice });
+
+// A hot update would split the app between an old and a new store: reload the page instead.
+if (import.meta.hot) import.meta.hot.decline();

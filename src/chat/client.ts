@@ -54,6 +54,8 @@ interface WireMessage {
   role: string;
 }
 
+type LockWhy = "expired" | "kicked" | "replaced";
+
 /** Everything secret lives here, never in the React store, and is zeroed by lock(). */
 const s = {
   api: null as Api | null,
@@ -76,10 +78,10 @@ const s = {
   retried: new Set<string>(),
   lastTouch: 0,
   notifyTitle: (_handle: string) => "",
-  lockNotice: (_why: "expired" | "kicked") => "",
+  lockNotice: (_why: LockWhy) => "",
 };
 
-export function configure(api: Api | null, wsUrl: string | null, texts: { notifyTitle: (handle: string) => string; lockNotice: (why: "expired" | "kicked") => string }): void {
+export function configure(api: Api | null, wsUrl: string | null, texts: { notifyTitle: (handle: string) => string; lockNotice: (why: LockWhy) => string }): void {
   s.api = api;
   s.wsUrl = wsUrl;
   s.notifyTitle = texts.notifyTitle;
@@ -89,6 +91,11 @@ export function configure(api: Api | null, wsUrl: string | null, texts: { notify
 
 const api = (): Api => {
   if (!s.api) throw new ApiError(0, "network");
+  // Showing the signed-in view without a session (the page's code was swapped under it, say) must never look like a working one: sign out for real.
+  if (!s.api.token && useChat.getState().phase === "ready") {
+    lock(s.lockNotice("expired"));
+    throw new ApiError(401, "unauthorized");
+  }
   return s.api;
 };
 const me = () => {
@@ -155,13 +162,16 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
     await loadVault();
     if (!s.seed) throw new ApiError(0, "internal");
     if (publicKeyOf(s.seed) !== session.publicKey) throw new ApiError(0, "internal");
-    s.ws = new ChatSocket({
+    // A socket of an earlier sign-in that is still winding down must not touch this one: no state, no frames, and above all no "kicked" lock.
+    const mine = (): boolean => s.ws === sock;
+    const sock: ChatSocket = new ChatSocket({
       url: s.wsUrl ?? a.base.replace(/^http/, "ws") + "/ws",
       getTicket: async () => (await a.post<{ ticket: string }>("/auth/ws-ticket")).ticket,
-      onFrame: (f) => void onFrame(f),
-      onState: (socket) => patch({ socket }),
-      onFinal: () => lock(s.lockNotice("kicked")),
+      onFrame: (f) => mine() && void onFrame(f),
+      onState: (socket) => mine() && patch({ socket }),
+      onFinal: (reason) => mine() && lock(s.lockNotice(reason === "replaced" ? "replaced" : "kicked")),
     });
+    s.ws = sock;
     await Promise.all([refreshContacts(), refreshGroups()]);
     await refreshUsage();
     s.ws.start();
@@ -354,7 +364,9 @@ export async function refreshContacts(): Promise<void> {
       user: r.to.userId === myId ? r.from : r.to,
       createdAt: r.createdAt,
     }));
+  const before = useChat.getState().contacts.map((c) => c.convId);
   patch({ contacts, requests });
+  forgetChats(before.filter((id) => !contacts.some((c) => c.convId === id)));
   // The starting contact with the admin: accepting it creates the chat key and wraps it to the admin, who picks it up on their next sign-in.
   for (const r of reqs) {
     if (!(r.auto && r.status === "pending" && r.to.userId === myId) || s.autoBusy.has(r.id)) continue;
@@ -453,7 +465,7 @@ function addMessage(conv: string, msg: Msg): boolean {
     patch({ unread: { ...useChat.getState().unread, [conv]: (st.unread[conv] ?? 0) + 1 } });
     // "@name " in a group message to me turns that group's badge red.
     const me = st.me;
-    if (me && msg.payload?.k === "text" && st.groups.some((g) => g.id === conv) && mentionsHandle(msg.payload.text, me.handle)) {
+    if (me && msg.payload?.k === "text" && !st.contacts.some((c) => c.convId === conv) && mentionsHandle(msg.payload.text, me.handle)) {
       patch({ mentions: { ...useChat.getState().mentions, [conv]: true } });
     }
     notifyIncoming(conv);
@@ -688,7 +700,22 @@ export async function refreshGroups(): Promise<void> {
     }
     groups.push({ ...g, keys });
   }
+  const before = useChat.getState().groups.map((g) => g.id);
   patch({ groups });
+  forgetChats(before.filter((id) => !groups.some((g) => g.id === id)));
+}
+
+/** A group I was removed from (or a contact that is gone) leaves no badge, draft or open chat behind. */
+function forgetChats(gone: string[]): void {
+  if (gone.length === 0) return;
+  const st = useChat.getState();
+  const drop = <T,>(r: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(r).filter(([k]) => !gone.includes(k)));
+  patch({
+    unread: drop(st.unread),
+    mentions: drop(st.mentions),
+    drafts: drop(st.drafts),
+    activeConv: st.activeConv && gone.includes(st.activeConv) ? null : st.activeConv,
+  });
 }
 
 const saveGroupKeys = (gid: string): Promise<void> =>
@@ -883,3 +910,6 @@ export async function refreshUsage(): Promise<void> {
 }
 
 export const rawApi = (): Api => api();
+
+// In development a hot update of this module would leave the old and the new copy sharing one signed-in screen: reload the page instead.
+if (import.meta.hot) import.meta.hot.decline();

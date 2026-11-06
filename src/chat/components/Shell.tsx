@@ -14,7 +14,8 @@ export type Section = "contacts" | "me" | "manage";
 export function Shell({ initial }: { initial: Section }) {
   const { a } = useLang();
   const me = useChat((s) => s.me)!;
-  const activeConv = useChat((s) => s.activeConv);
+  // A chat counts as open only while it still exists; otherwise the phone layout would sit on an empty pane with no way back.
+  const activeConv = useChat((s) => (s.activeConv && (s.contacts.some((c) => c.convId === s.activeConv) || s.groups.some((g) => g.id === s.activeConv)) ? s.activeConv : null));
   const unread = useChat((s) => Object.values(s.unread).reduce((n, v) => n + v, 0) + s.requests.filter((r) => r.direction === "in").length);
   const anyMention = useChat((s) => Object.values(s.mentions).some(Boolean));
   const [section, setSection] = useState<Section>(initial);

@@ -1,13 +1,13 @@
 /**
  * @mentions. The rule is "@username followed by one space". The composer inserts exactly that when a suggestion is picked, so a mention
- * is always @name plus a space, and a name typed without the space is just text.
+ * is always @name plus a space. A sent message is trimmed, so a trailing "@name " ends the text as "@name": the end counts like the space.
  */
 const NAME = "[A-Za-z0-9_-]{3,32}";
 
-/** True when `text` mentions `handle` (case-insensitive): @handle with a space right after it, at the start or after whitespace. */
+/** True when `text` mentions `handle` (case-insensitive): @handle with a space (or the end of the text) right after it, at the start or after whitespace. */
 export function mentionsHandle(text: string, handle: string): boolean {
   if (!/^[A-Za-z0-9_-]{3,32}$/.test(handle)) return false;
-  return new RegExp(`(?:^|\\s)@${handle} `, "i").test(text);
+  return new RegExp(`(?:^|\\s)@${handle}(?: |$)`, "i").test(text);
 }
 
 export interface Segment {
@@ -21,7 +21,7 @@ export function splitMentions(text: string, handles: readonly string[]): Segment
   const known = new Map(handles.map((h) => [h.toLowerCase(), h]));
   const out: Segment[] = [];
   let last = 0;
-  for (const m of text.matchAll(new RegExp(`(^|\\s)@(${NAME}) `, "g"))) {
+  for (const m of text.matchAll(new RegExp(`(^|\\s)@(${NAME})(?= |$)`, "g"))) {
     const name = known.get(m[2].toLowerCase());
     if (!name) continue;
     const start = (m.index ?? 0) + m[1].length;

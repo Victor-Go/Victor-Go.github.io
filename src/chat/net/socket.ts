@@ -17,8 +17,8 @@ interface Options {
   getTicket: () => Promise<string>;
   onFrame: (frame: Frame) => void;
   onState: (state: SocketState) => void;
-  /** The server closed the socket for good (deleted account, forced logout). */
-  onFinal: () => void;
+  /** The server closed the socket for good (deleted account, forced logout, signed in elsewhere); `reason` is the close reason ("replaced" for a newer sign-in). */
+  onFinal: (reason: string) => void;
 }
 
 /** One WebSocket that reconnects with backoff, pings every 5 minutes and rolls over before the 2 hour limit. */
@@ -96,7 +96,7 @@ export class ChatSocket {
       if (FINAL_CLOSES.has(e.code)) {
         this.stopped = true;
         this.o.onState("closed");
-        this.o.onFinal();
+        this.o.onFinal(e.reason);
         return;
       }
       this.retry();

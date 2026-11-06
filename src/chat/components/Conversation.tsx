@@ -9,22 +9,38 @@ import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions"
 import { useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
 import { GroupInfo } from "./GroupInfo";
-import { Avatar } from "./ui";
+import { splitLinks } from "../links";
+import { Avatar, Modal } from "./ui";
 
 /** A message's text with @mentions of group members highlighted (as spans, never as markup). */
-function MessageText({ text, handles, me }: { text: string; handles: string[]; me: string }) {
-  if (handles.length === 0) return <>{text}</>;
+function MessageText({ text, handles, me, onLink }: { text: string; handles: string[]; me: string; onLink: (href: string) => void }) {
   return (
     <>
-      {splitMentions(text, handles).map((seg, i) =>
-        seg.mention ? (
-          <span key={i} className={seg.mention.toLowerCase() === me.toLowerCase() ? "ch-at-me" : "ch-at-other"}>
-            {seg.text}
-          </span>
-        ) : (
-          <Fragment key={i}>{seg.text}</Fragment>
-        ),
-      )}
+      {splitLinks(text).map((piece, i) => {
+        // A link is a button without an address, so it can only be opened through the confirmation.
+        if (piece.href) {
+          const href = piece.href;
+          return (
+            <button key={i} type="button" className="ch-url" onClick={() => onLink(href)}>
+              {piece.text}
+            </button>
+          );
+        }
+        if (handles.length === 0) return <Fragment key={i}>{piece.text}</Fragment>;
+        return (
+          <Fragment key={i}>
+            {splitMentions(piece.text, handles).map((seg, j) =>
+              seg.mention ? (
+                <span key={j} className={seg.mention.toLowerCase() === me.toLowerCase() ? "ch-at-me" : "ch-at-other"}>
+                  {seg.text}
+                </span>
+              ) : (
+                <Fragment key={j}>{seg.text}</Fragment>
+              ),
+            )}
+          </Fragment>
+        );
+      })}
     </>
   );
 }
@@ -32,11 +48,21 @@ function MessageText({ text, handles, me }: { text: string; handles: string[]; m
 export function Conversation() {
   const { lang, a } = useLang();
   const { activeConv, contacts, groups, messages, me, retentionDays, favorites, reads, olderMore } = useChat();
-  const [draft, setDraft] = useState("");
+  // Drafts live in memory only, one per conversation, so switching chats keeps what was typed.
+  const draft = useChat((s) => (s.activeConv ? (s.drafts[s.activeConv] ?? "") : ""));
+  const setDraft = (text: string) => {
+    const conv = useChat.getState().activeConv;
+    if (!conv) return;
+    const drafts = { ...useChat.getState().drafts };
+    if (text) drafts[conv] = text;
+    else delete drafts[conv];
+    useChat.setState({ drafts });
+  };
   const [caret, setCaret] = useState(0);
   const [pick, setPick] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [info, setInfo] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
   const [favError, setFavError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -51,7 +77,10 @@ export function Conversation() {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [visible.length, activeConv]);
-  useEffect(() => setDraft(""), [activeConv]);
+  useEffect(() => {
+    setCaret(inputRef.current?.value.length ?? 0);
+    setDismissed(false);
+  }, [activeConv]);
   // After picking a suggestion the caret goes right behind the inserted "@name ".
   useLayoutEffect(() => {
     if (nextCaret.current !== null && inputRef.current) {
@@ -83,6 +112,21 @@ export function Conversation() {
     setDraft(r.text);
     setCaret(r.caret);
     nextCaret.current = r.caret;
+    setPick(0);
+    inputRef.current?.focus();
+  };
+
+  // Clicking someone's avatar in a group puts "@name " into the composer at the caret.
+  const mentionSender = (handle: string) => {
+    if (!group || !canSend || handle.toLowerCase() === me.handle.toLowerCase()) return;
+    const at = Math.min(inputRef.current?.selectionStart ?? draft.length, draft.length);
+    const before = draft.slice(0, at);
+    const lead = before && !/\s$/.test(before) ? " " : "";
+    const insert = `${lead}@${handle} `;
+    const after = draft.slice(at).replace(/^ /, "");
+    setDraft(before + insert + after);
+    nextCaret.current = at + insert.length;
+    setCaret(at + insert.length);
     setPick(0);
     inputRef.current?.focus();
   };
@@ -143,7 +187,13 @@ export function Conversation() {
                 </div>
               ) : (
               <div className={"ch-msgrow" + (m.mine ? " ch-mine" : "")}>
-                <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
+                {group && !m.mine ? (
+                  <button type="button" className="ch-avatar-btn" aria-label={`@${nameOf(m)}`} onClick={() => mentionSender(nameOf(m))}>
+                    <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
+                  </button>
+                ) : (
+                  <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
+                )}
                 <div className={"ch-msg" + (m.mine ? " ch-mine" : "") + (m.payload ? "" : " ch-gone")}>
                   {!m.mine && group && (
                     <div className="ch-sender">
@@ -152,7 +202,7 @@ export function Conversation() {
                   )}
                   {m.payload?.k === "text" ? (
                     <div className="ch-text">
-                      <MessageText text={m.payload.text} handles={memberHandles} me={me.handle} />
+                      <MessageText text={m.payload.text} handles={memberHandles} me={me.handle} onLink={setLink} />
                     </div>
                   ) : (
                     <div className="ch-text ch-gone-text">{a.undecryptable}</div>
@@ -257,6 +307,25 @@ export function Conversation() {
         </div>
       </footer>
       {info && group && <GroupInfo group={group} onClose={() => setInfo(false)} />}
+      {link && (
+        <Modal title={a.linkTitle} onClose={() => setLink(null)} closeLabel={a.close}>
+          <p className="ch-hint">{a.linkWarn}</p>
+          <p className="ch-link-target">{link}</p>
+          <button
+            type="button"
+            className="ch-primary"
+            onClick={() => {
+              window.open(link, "_blank", "noopener,noreferrer");
+              setLink(null);
+            }}
+          >
+            {a.linkOpen}
+          </button>
+          <button type="button" className="ch-secondary" onClick={() => setLink(null)}>
+            {a.cancel}
+          </button>
+        </Modal>
+      )}
     </section>
   );
 }

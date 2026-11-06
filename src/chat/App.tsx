@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { configure, resumeView } from "./client";
 import { AccountPage } from "./components/AccountPage";
 import { Shell, type Section } from "./components/Shell";
@@ -56,7 +57,7 @@ export function App() {
     const text = () => appMessages[useLangStore.getState().lang];
     configure(api, getConfig().ws, {
       notifyTitle: (who) => text().notifyTitle(who),
-      lockNotice: (why) => (why === "expired" ? text().lockedExpired : text().lockedKicked),
+      lockNotice: (why) => (why === "expired" ? text().lockedExpired : why === "replaced" ? text().lockedReplaced : text().lockedKicked),
     });
   }, [api]);
 
@@ -77,12 +78,15 @@ export function App() {
           {a.idleWarning}
         </div>
       )}
-      {covered && (
-        <div className="ch-cover" onPointerDown={uncover} role="button" tabIndex={0} onKeyDown={uncover}>
-          <strong>{a.privacyCover}</strong>
-          <span>{a.privacyHint}</span>
-        </div>
-      )}
+      {/* Outside #root: that element is blurred while covered, and a blurred (or filtered-ancestor) cover would blur its own text and be sized by the page content. */}
+      {covered &&
+        createPortal(
+          <div className="ch-cover" onPointerDown={uncover} role="button" tabIndex={0} onKeyDown={uncover}>
+            <strong>{a.privacyCover}</strong>
+            <span>{a.privacyHint}</span>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

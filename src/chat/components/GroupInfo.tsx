@@ -79,7 +79,11 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
             }}
             onEnter={() => void sendInvite()}
           />
-          {ok && <div className="ch-notice ch-ok">{ok}</div>}
+          {ok && (
+            <div className="ch-notice ch-ok ch-spaced" role="status">
+              {ok}
+            </div>
+          )}
           <button type="button" className="ch-primary" disabled={busy || !invite || !!checkHandle(invite) || group.members.length >= group.max} onClick={() => void sendInvite()}>
             {a.invite}
           </button>

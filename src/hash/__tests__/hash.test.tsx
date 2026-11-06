@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { App } from '../App';
 import { ALGORITHMS, hashHex } from '../hash';
 
@@ -50,5 +50,42 @@ describe('hash page', () => {
     expect(await box('哈希值(小写)')).toBe(ABC.sha256);
     fireEvent.change(screen.getByRole('combobox', { name: '哈希算法' }), { target: { value: 'sha1' } });
     expect(await box('哈希值(小写)')).toBe(ABC.sha1);
+  });
+});
+
+describe('hash page auto-clear', () => {
+  afterEach(() => vi.useRealTimers());
+  const selector = () => screen.getByRole('combobox', { name: '无操作自动清除所有信息' }) as HTMLSelectElement;
+  const typed = () => (screen.getByRole('textbox', { name: /^要计算的文本/ }) as HTMLTextAreaElement).value;
+
+  it('offers 5, 10, 30 and 60 minutes only, starting at 10', () => {
+    render(<App />);
+    expect(Array.from(selector().options).map((o) => o.value)).toEqual(['5', '10', '30', '60']);
+    expect(selector().value).toBe('10');
+  });
+
+  it('clears after the chosen time and never later than an hour', () => {
+    vi.useFakeTimers();
+    render(<App />);
+    fireEvent.change(screen.getByRole('textbox', { name: /^要计算的文本/ }), { target: { value: 'abc' } });
+    act(() => {
+      vi.advanceTimersByTime(9 * 60 * 1000);
+    });
+    expect(typed()).toBe('abc');
+    act(() => {
+      vi.advanceTimersByTime(60 * 1000);
+    });
+    expect(typed()).toBe('');
+
+    fireEvent.change(selector(), { target: { value: '60' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /^要计算的文本/ }), { target: { value: 'abc' } });
+    act(() => {
+      vi.advanceTimersByTime(59 * 60 * 1000);
+    });
+    expect(typed()).toBe('abc');
+    act(() => {
+      vi.advanceTimersByTime(60 * 1000);
+    });
+    expect(typed()).toBe('');
   });
 });

@@ -148,4 +148,4 @@ export const patch = (p: Partial<ChatState>): void => useChat.setState(p);
 export const reset = (notice: string | null = null): void => useChat.setState({ ...initialState, notice });
 
 // A hot update would split the app between an old and a new store: reload the page instead.
-if (import.meta.hot) import.meta.hot.decline();
+import.meta.hot?.accept(() => window.location.reload());

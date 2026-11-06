@@ -912,4 +912,4 @@ export async function refreshUsage(): Promise<void> {
 export const rawApi = (): Api => api();
 
 // In development a hot update of this module would leave the old and the new copy sharing one signed-in screen: reload the page instead.
-if (import.meta.hot) import.meta.hot.decline();
+import.meta.hot?.accept(() => window.location.reload());

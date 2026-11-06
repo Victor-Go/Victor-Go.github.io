@@ -5,7 +5,7 @@ import { openFavoriteText, sealFavoriteText } from "./crypto/favorite";
 import { deriveAuth } from "./crypto/devAuth";
 import { generateIdentity, publicKeyOf, toEpochs } from "./crypto/keys";
 import { KX_EPOCHS, unwrapKey, wrapKey } from "./crypto/kx";
-import { MESSAGE_MAX_CHARS, decryptMessage, encryptMessage, epochOfCiphertext, type Binding, type Payload } from "./crypto/message";
+import { MESSAGE_MAX_CHARS, decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, voiceBinding, type Binding, type Payload } from "./crypto/message";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
 import { ChatSocket, type Frame } from "./net/socket";
@@ -16,6 +16,8 @@ import { mentionsHandle } from "./mentions";
 import { playChime } from "./sound";
 import { stripControls } from "./text";
 import { canonicalHandle } from "./validation";
+import { fitsServer } from "./voice";
+import { playVoice, stopVoice } from "./voicePlayer";
 import { Cancelled, cancelWork, solveInWorkers, workerKdf } from "./workers/client";
 import type { Challenge } from "./workers/solve";
 
@@ -76,6 +78,8 @@ const s = {
   autoBusy: new Set<string>(),
   /** Messages already sent again once after the server said their epoch is gone. */
   retried: new Set<string>(),
+  /** Decrypted recordings, by voice id: memory only, zeroed by lock(). */
+  voice: new Map<string, Uint8Array>(),
   lastTouch: 0,
   notifyTitle: (_handle: string) => "",
   lockNotice: (_why: LockWhy) => "",
@@ -202,6 +206,9 @@ export function lock(notice: string | null = null): void {
   s.sentRead.clear();
   s.autoBusy.clear();
   s.retried.clear();
+  stopVoice();
+  for (const b of s.voice.values()) b.fill(0);
+  s.voice.clear();
   if (s.api) s.api.token = null;
   reset(notice);
 }
@@ -449,7 +456,7 @@ async function toMsg(w: WireMessage, mine: boolean): Promise<Msg> {
   } else {
     lost = "unverified";
   }
-  return { id: w.clientMsgId, seq: w.seq, senderId: w.senderId, role: w.role, time: w.serverTime, mine, payload, epoch, lost, status: "sent" };
+  return { id: w.clientMsgId, seq: w.seq, senderId: w.senderId, role: w.role, time: w.serverTime, mine, payload, epoch, gen: w.gen, lost, status: "sent" };
 }
 
 /** Returns true when the message was not in the list yet. */
@@ -570,7 +577,7 @@ export async function sendText(conv: string, text: string): Promise<void> {
   if (!key) throw new ApiError(0, "forbidden");
   const id = newId();
   const sentAt = Date.now();
-  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: { k: "text", text: clean, sentAt }, status: "sending" };
+  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: { k: "text", text: clean, sentAt }, gen, status: "sending" };
   addMessage(conv, optimistic);
   try {
     await transmit(conv, optimistic);
@@ -589,6 +596,89 @@ export async function sendText(conv: string, text: string): Promise<void> {
     if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
     addMessage(conv, { ...optimistic, status: "failed" });
   }
+}
+
+/**
+ * Sends a recording: the MP3 is sealed like a message body (bound to the message that will carry it), uploaded, and then a message with the
+ * returned id and the duration goes out like text. A 403 from the upload means the administrator switched voice off.
+ */
+export async function sendVoice(conv: string, mp3: Uint8Array, ms: number): Promise<void> {
+  const myId = me().userId;
+  const gen = currentGen(conv);
+  if (!keyFor(conv, gen)) throw new ApiError(0, "forbidden");
+  const id = newId();
+  const sentAt = Date.now();
+  // The bubble shows at once; it has no id to play from until the upload is done.
+  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: { k: "voice", voice: { id: "", ms }, sentAt }, gen, status: "sending" };
+  addMessage(conv, optimistic);
+  const attempt = async (): Promise<void> => {
+    const key = keyFor(conv, gen);
+    if (!key) throw new ApiError(0, "forbidden");
+    const sealed = await encryptBytes(key, epochs(), mp3, voiceBinding({ conv, senderId: myId, clientMsgId: id, gen }));
+    if (!fitsServer(sealed.ct)) throw new ApiError(413, "too_large");
+    const up = await api().post<{ voiceId: string }>("/voice", { conv, ct: sealed.ct });
+    const m: Msg = { ...optimistic, payload: { k: "voice", voice: { id: up.voiceId, ms }, sentAt } };
+    addMessage(conv, m);
+    await transmit(conv, m);
+  };
+  try {
+    await attempt();
+  } catch (e) {
+    if (e instanceof ApiError && e.code === "gone" && !s.retried.has(id)) {
+      s.retried.add(id);
+      try {
+        await refreshEpochs();
+        await attempt();
+        return;
+      } catch {
+        /* falls through to failed */
+      }
+    }
+    if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
+    if (e instanceof ApiError && e.status === 403 && e.code === "forbidden") patch({ voiceOff: true });
+    addMessage(conv, { ...(useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine) ?? optimistic), status: "failed" });
+  }
+}
+
+/** Downloads, opens and plays a recording. The bytes stay in memory until the chat locks. Throws ApiError / CipherError for the caller to show. */
+export async function playVoiceMessage(conv: string, m: Msg): Promise<void> {
+  const p = m.payload;
+  if (p?.k !== "voice" || !p.voice.id) return;
+  const voiceId = p.voice.id;
+  let bytes = s.voice.get(voiceId);
+  if (!bytes) {
+    const gen = m.gen ?? currentGen(conv);
+    const key = keyFor(conv, gen);
+    const epoch = m.epoch;
+    const gone = epoch !== undefined && !s.epochs?.labels.has(epoch);
+    if (!key || gone) {
+      markLost(conv, m, gone && epoch !== undefined && epoch < s.nextEpoch ? "destroyed" : "unverified");
+      return;
+    }
+    let ct: string;
+    try {
+      ct = (await api().get<{ ct: string }>(`/voice/${encodeURIComponent(voiceId)}`)).ct;
+    } catch (e) {
+      // Older than the retention period, or removed with a wipe: the recording is gone for good.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 410)) {
+        markLost(conv, m, "destroyed");
+        return;
+      }
+      throw e;
+    }
+    try {
+      bytes = await decryptBytes(key, epochs(), ct, voiceBinding({ conv, senderId: m.senderId, clientMsgId: m.id, gen }));
+    } catch {
+      markLost(conv, m, "unverified");
+      return;
+    }
+    s.voice.set(voiceId, bytes);
+  }
+  await playVoice(voiceId, bytes);
+}
+
+function markLost(conv: string, m: Msg, lost: "destroyed" | "unverified"): void {
+  addMessage(conv, { ...m, payload: null, lost });
 }
 
 /** Seals the message under the current epoch and sends it: over the socket when it is up (the answer arrives as a frame), else over HTTP. */

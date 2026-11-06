@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hslToHex, avatarUri } from "../avatar";
+import { avatarUri } from "../avatar";
 import { deliveryOf } from "../delivery";
 
 describe("deliveryOf", () => {
@@ -24,19 +24,15 @@ describe("deliveryOf", () => {
   });
 });
 
-describe("avatar background", () => {
-  it("converts hsl to hex", () => {
-    expect(hslToHex(0, 1, 0.5)).toBe("#ff0000");
-    expect(hslToHex(120, 1, 0.5)).toBe("#00ff00");
-    expect(hslToHex(240, 1, 0.5)).toBe("#0000ff");
-    expect(hslToHex(50, 0.6, 0.88)).toMatch(/^#[0-9a-f]{6}$/);
+describe("avatar", () => {
+  it("is a stable SVG data URI per user id", () => {
+    const uri = avatarUri("u1");
+    expect(uri).toMatch(/^data:image\/svg\+xml/);
+    expect(avatarUri("u1")).toBe(uri);
   });
 
-  it("gives users different pastel backgrounds", () => {
-    const backs = new Set(
-      ["u1", "u2", "u3", "u4", "u5", "u6"].map((id) => /<rect[^>]*fill="(#[0-9a-f]{6})"/i.exec(decodeURIComponent(avatarUri(id).split(",")[1]))?.[1]),
-    );
-    expect(backs.size).toBeGreaterThan(3);
-    for (const b of backs) expect(b).toBeTruthy();
+  it("gives different users different pictures", () => {
+    const uris = new Set(["u1", "u2", "u3", "u4", "u5", "u6"].map(avatarUri));
+    expect(uris.size).toBeGreaterThan(3);
   });
 });

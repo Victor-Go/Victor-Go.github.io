@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 import { epochHosts } from './src/cipher/epochsHosts.ts'
 import { DEFAULT_EPOCH_CURRENT, DEFAULT_EPOCH_TABLE, parseEpochs } from './src/cipher/crypto/epochs.ts'
+import { connectSrc } from './src/chat/csp.ts'
 
 // The dev server injects inline scripts (React refresh preamble) that the strict
 // /cipher CSP forbids, so the CSP meta is dropped for `vite dev` only. Built output keeps it.
@@ -18,7 +19,7 @@ const cipherDevWithoutCsp = (): Plugin => ({
 const cipherTrailingSlash = (): Plugin => {
   const redirect = (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
     const [path, query = ''] = (req.url ?? '').split('?')
-    if (path === '/cipher' || path === '/btc' || path === '/scan' || path === '/hash' || path === '/pdf') {
+    if (['/cipher', '/btc', '/scan', '/hash', '/pdf', '/chat', '/chat/account', '/chat/management'].includes(path)) {
       res.statusCode = 301
       res.setHeader('Location', path + '/' + (query ? '?' + query : ''))
       res.end()
@@ -74,9 +75,28 @@ const cipherEpochsFile = (): Plugin => {
   }
 }
 
+// The chat pages may talk only to the server given at build time (VITE_CHAT_API / VITE_CHAT_WS);
+// without them connect-src stays 'none'. Nothing about the server is hard-coded in the sources.
+const chatConnectSrc = (): Plugin => {
+  let value = "'none'"
+  return {
+    name: 'chat-connect-src',
+    apply: 'build',
+    configResolved(config) {
+      const env = loadEnv(config.mode, config.envDir || config.root, 'VITE_CHAT_')
+      value = connectSrc(env.VITE_CHAT_API, env.VITE_CHAT_WS)
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html) => html.replace('__CHAT_CONNECT__', value),
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash(), cipherEpochsFile()],
+  define: { __CHAT_COMMIT__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)) },
+  plugins: [react(), cipherDevWithoutCsp(), cipherTrailingSlash(), cipherEpochsFile(), chatConnectSrc()],
   build: {
     // The polyfill issues network requests for modulepreload links, which /cipher's CSP forbids;
     // every supported browser has native modulepreload.
@@ -89,6 +109,9 @@ export default defineConfig({
         scan: fileURLToPath(new URL('./scan/index.html', import.meta.url)),
         hash: fileURLToPath(new URL('./hash/index.html', import.meta.url)),
         pdf: fileURLToPath(new URL('./pdf/index.html', import.meta.url)),
+        chat: fileURLToPath(new URL('./chat/index.html', import.meta.url)),
+        chatAccount: fileURLToPath(new URL('./chat/account/index.html', import.meta.url)),
+        chatManagement: fileURLToPath(new URL('./chat/management/index.html', import.meta.url)),
       },
     },
   },

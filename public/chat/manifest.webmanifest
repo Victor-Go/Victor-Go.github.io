@@ -1,0 +1,12 @@
+{
+  "name": "Chat",
+  "short_name": "Chat",
+  "description": "Private end-to-end encrypted chat.",
+  "start_url": "/chat/",
+  "scope": "/chat/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [{ "src": "/chat/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

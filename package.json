@@ -20,6 +20,7 @@
     "@scure/bip32": "2.4.0",
     "@scure/bip39": "2.4.0",
     "@scure/btc-signer": "2.4.1",
+    "@serenity-kit/opaque": "1.1.0",
     "dompurify": "3.4.17",
     "jdenticon": "3.3.0",
     "katex": "^0.18.7",

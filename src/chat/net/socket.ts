@@ -83,6 +83,8 @@ export class ChatSocket {
     ws.onmessage = (e) => {
       try {
         const frame = JSON.parse(String(e.data)) as Frame;
+        // API Gateway cannot pick a close code, so the server says "do not come back" in a last frame before it closes.
+        if (frame?.t === "bye" && FINAL_CLOSES.has(Number(frame.code))) return this.final(String(frame.reason ?? ""));
         if (typeof frame?.t === "string") this.o.onFrame(frame);
       } catch {
         /* ignore malformed frames */
@@ -93,14 +95,18 @@ export class ChatSocket {
       clearTimeout(this.rollTimer);
       if (this.ws === ws) this.ws = null;
       if (this.stopped) return;
-      if (FINAL_CLOSES.has(e.code)) {
-        this.stopped = true;
-        this.o.onState("closed");
-        this.o.onFinal(e.reason);
-        return;
-      }
+      if (FINAL_CLOSES.has(e.code)) return this.final(e.reason);
       this.retry();
     };
+  }
+
+  /** The server ended this sign-in for good: no reconnect, and the owner is told why. Only the first of a "bye" frame and its close counts. */
+  private final(reason: string): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.clearTimers();
+    this.o.onState("closed");
+    this.o.onFinal(reason);
   }
 
   private retry(): void {

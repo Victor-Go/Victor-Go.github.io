@@ -193,6 +193,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
     s.ws = sock;
     await Promise.all([refreshContacts(), refreshGroups()]);
     await refreshUsage();
+    await loadUnread().catch(() => {});
     s.ws.start();
     unlockedNow(); // the server opens the management lock at sign-in too
     patch({ phase: "ready" });
@@ -505,6 +506,25 @@ function noteActive(conv: string, time: number): void {
   if ((cur[conv] ?? 0) < time) patch({ lastActive: { ...cur, [conv]: time } });
 }
 
+/**
+ * What arrived while nobody was signed in: the server keeps how far I have read in each conversation (myRead, moved by my own reading and
+ * by anything I write), so the difference to its newest message is the unread count. One request covers every conversation. A conversation
+ * whose newest message is older than the retention period has nothing left to read.
+ */
+async function loadUnread(): Promise<void> {
+  const r = await api().get<{ conversations: { conv: string; lastSeq: number; myRead?: number }[] }>("/conversations");
+  const st = useChat.getState();
+  const oldest = Date.now() - st.retentionDays * 86_400_000;
+  const unread = { ...st.unread };
+  for (const c of r.conversations) {
+    if ((st.lastActive[c.conv] ?? 0) < oldest) continue;
+    if (c.myRead === undefined) continue; // a server that does not say how far I have read (older version): no guess
+    const n = c.lastSeq - c.myRead;
+    if (n > 0) unread[c.conv] = Math.max(unread[c.conv] ?? 0, n);
+  }
+  patch({ unread });
+}
+
 /** A page of history: small, so a chat costs the server little; older pages come as the reader scrolls up. */
 const PAGE = 20;
 /** Catching up on what arrived while away may need larger steps. */
@@ -584,11 +604,14 @@ export function resumeView(): void {
   markRead(st.activeConv);
 }
 
-/** Tells the other person (in a 1:1 chat, never in a group) that I have read everything up to the latest message, while I am looking at it. */
+/**
+ * Tells the server that I have read everything up to the latest message, while I am looking at it. In a 1:1 chat the server passes this on
+ * to the other person; in a group it only keeps my own position (so the unread count is right after the next sign-in) and shows it to nobody.
+ */
 export function markRead(conv: string | null): void {
   if (!conv || document.hidden || !s.api?.token) return;
   const st = useChat.getState();
-  if (st.section !== "contacts" || st.activeConv !== conv || !st.contacts.some((c) => c.convId === conv)) return;
+  if (st.section !== "contacts" || st.activeConv !== conv) return;
   const upTo = (st.messages[conv] ?? []).reduce((n, m) => (m.mine ? n : Math.max(n, m.seq)), 0);
   if (upTo <= (s.sentRead.get(conv) ?? 0)) return;
   s.sentRead.set(conv, upTo);

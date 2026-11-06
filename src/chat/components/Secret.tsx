@@ -15,7 +15,12 @@ interface SecretProps {
   onEnter?: () => void;
 }
 
-/** A masked single-line field. Plain text input masked in CSS (no password-manager hooks). */
+/**
+ * A real password field. Browsers switch the input method off for it (a Chinese IME would otherwise see, learn and sync what is typed),
+ * and phone keyboards neither learn from it nor offer it to cloud suggestions. While "show" is on it is a plain text field, so the
+ * input method is back for that time. It sits in no <form> and has no name, so a browser has little to latch onto, but no page can stop
+ * a browser from offering to remember a password: that is the browser's own setting.
+ */
 export function Secret({ label, value, onChange, showLabel, hideLabel, countLabel, invalid, describedBy, onEnter: enter }: SecretProps) {
   const id = useId();
   const [reveal, setReveal] = useState(false);
@@ -29,9 +34,9 @@ export function Secret({ label, value, onChange, showLabel, hideLabel, countLabe
       </div>
       <input
         id={id}
-        type="text"
+        type={reveal ? "text" : "password"}
         {...NO_AUTOFILL}
-        className={reveal ? "ch-input" : "ch-input ch-masked"}
+        className="ch-input"
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         value={value}

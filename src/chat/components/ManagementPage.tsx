@@ -10,7 +10,7 @@ import { useLang } from "../useChat";
 import { ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
 import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
-import { Avatar, Steps } from "./ui";
+import { Avatar, Loading, Steps } from "./ui";
 
 const PAGE_SIZE = 20;
 
@@ -72,9 +72,13 @@ function useWhen(): (t: number) => string {
 function useAdmin() {
   const { a } = useLang();
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(0);
+  // true once the first call of the page has finished (answer or error): until then the page shows the spinner instead of an empty list
+  const [loaded, setLoaded] = useState(false);
   const run = useCallback(
     async <T,>(fn: () => Promise<T>): Promise<T | null> => {
       setError(null);
+      setPending((n) => n + 1);
       try {
         const r = await fn();
         markAdminAction();
@@ -83,11 +87,14 @@ function useAdmin() {
         if (e instanceof ApiError && e.code === "stepup_required") lockAdmin();
         else setError(errorText(a, e instanceof ApiError ? e.code : "internal"));
         return null;
+      } finally {
+        setPending((n) => n - 1);
+        setLoaded(true);
       }
     },
     [a],
   );
-  return { error, run };
+  return { error, run, busy: pending > 0, loaded };
 }
 
 function Pager({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
@@ -162,7 +169,7 @@ function LockScreen() {
 function UsersView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -176,6 +183,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
   }, [q, page, run]);
   return (
     <Page title={a.manage.users} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       <input
         className="ios-search"
         {...NO_AUTOFILL}
@@ -212,10 +220,11 @@ function UsersView({ go }: { go: (v: View) => void }) {
 function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy } = useAdmin();
   const done = (fn: () => Promise<unknown>) => void run(fn).then((r) => r !== null && go({ k: "users" }));
   return (
     <Page title={`@${user.handle}`} onBack={() => go({ k: "users" })} backLabel={a.manage.users}>
+      <Loading busy={busy} first={false} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <Group>
         <Row title={a.manage.registeredAt} value={when(user.createdAt)} />
@@ -256,7 +265,7 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
 function InvitesView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [note, setNote] = useState("");
   const [days, setDays] = useState(7);
@@ -283,6 +292,7 @@ function InvitesView({ go }: { go: (v: View) => void }) {
   };
   return (
     <Page title={a.manage.invites} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <Group header={a.manage.newInvite} footer={a.manage.invitesNote}>
         <Row title={a.manage.note}>
@@ -337,7 +347,7 @@ function InvitesView({ go }: { go: (v: View) => void }) {
 
 function ConfigView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [cfg, setCfg] = useState<Config | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
@@ -353,6 +363,7 @@ function ConfigView({ go }: { go: (v: View) => void }) {
   };
   return (
     <Page title={a.manage.config} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {cfg && (
         <>
@@ -387,7 +398,7 @@ function ConfigView({ go }: { go: (v: View) => void }) {
 
 function WipeView({ scope, go }: { scope: "messages" | "favorites"; go: (v: View) => void }) {
   const { a } = useLang();
-  const { error, run } = useAdmin();
+  const { error, run, busy } = useAdmin();
   const [word, setWord] = useState("");
   const title = scope === "messages" ? a.manage.wipeMessages : a.manage.wipeFavorites;
   const wipe = () => {
@@ -395,6 +406,7 @@ function WipeView({ scope, go }: { scope: "messages" | "favorites"; go: (v: View
   };
   return (
     <Page title={title} onBack={() => go({ k: "epochs" })} backLabel={a.manage.epochs}>
+      <Loading busy={busy} label={a.loading} />
       <Group footer={scope === "messages" ? a.manage.wipeMessagesHint : a.manage.wipeFavoritesHint}>
         <FormRow>
           <input className="ch-input" {...NO_AUTOFILL} value={word} aria-label={title} onChange={(e) => setWord(e.target.value)} onKeyDown={onEnter(wipe)} />
@@ -418,7 +430,7 @@ interface EpochRows {
 function EpochsView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [rows, setRows] = useState<EpochRows | null>(null);
   const load = useCallback(() => run(() => rawApi().get<EpochRows>("/admin/epochs")).then((r) => r && setRows(r)), [run]);
   useEffect(() => {
@@ -430,6 +442,7 @@ function EpochsView({ go }: { go: (v: View) => void }) {
   };
   return (
     <Page title={a.manage.epochs} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {rows && (
         <>
@@ -523,7 +536,7 @@ function WipeAllView({ go }: { go: (v: View) => void }) {
 function JobsView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [jobs, setJobs] = useState<Job[]>([]);
   const load = useCallback(() => run(() => rawApi().get<{ jobs: Job[] }>("/admin/jobs")).then((r) => r && setJobs(r.jobs)), [run]);
   useEffect(() => {
@@ -531,6 +544,7 @@ function JobsView({ go }: { go: (v: View) => void }) {
   }, [load]);
   return (
     <Page title={a.manage.jobs} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <Group footer={a.manage.jobsNote}>
         {jobs.map((j) => (
@@ -556,13 +570,14 @@ function JobsView({ go }: { go: (v: View) => void }) {
 function StatusView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [s, setS] = useState<Status | null>(null);
   useEffect(() => {
     void run(() => rawApi().get<Status>("/admin/status")).then((r) => r && setS(r));
   }, [run]);
   return (
     <Page title={a.manage.status} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {s && (
         <>
@@ -597,7 +612,7 @@ function StatusView({ go }: { go: (v: View) => void }) {
 function AuditView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
-  const { error, run } = useAdmin();
+  const { error, run, busy, loaded } = useAdmin();
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<{ at: number; actor: string; action: string; target: string }[]>([]);
   const [total, setTotal] = useState(0);
@@ -610,9 +625,10 @@ function AuditView({ go }: { go: (v: View) => void }) {
   }, [page, run]);
   return (
     <Page title={a.manage.audit} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <Group>
-        {rows.length === 0 && <Row title={a.manage.empty} />}
+        {loaded && rows.length === 0 && <Row title={a.manage.empty} />}
         {rows.map((r, i) => (
           <Row key={i} title={`${r.action}${r.target ? ` · ${r.target}` : ""}`} subtitle={`@${r.actor}`} value={when(r.at)} />
         ))}

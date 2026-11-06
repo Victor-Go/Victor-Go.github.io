@@ -64,3 +64,18 @@ export function Steps({ progress, m }: { progress: Progress | null; m: Messages 
     </div>
   );
 }
+
+/** A thin bar under the title that moves while a call is running (it always takes its 3px, so nothing jumps), and, before the first answer, a spinner with a word. */
+export function Loading({ busy, first = false, label }: { busy: boolean; first?: boolean; label: string }) {
+  return (
+    <>
+      <div className={"ch-loadbar" + (busy ? " ch-loadbar-on" : "")} role="progressbar" aria-hidden={!busy} aria-label={label} />
+      {first && (
+        <div className="ch-loading" role="status" aria-live="polite">
+          <span className="ch-spinner" aria-hidden="true" />
+          {label}
+        </div>
+      )}
+    </>
+  );
+}

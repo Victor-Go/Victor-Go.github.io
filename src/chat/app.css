@@ -928,11 +928,26 @@ section > .ch-primary {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  min-width: 180px;
+  gap: 4px 10px;
+  width: 210px;
+  max-width: 100%;
+  padding: 2px 2px 2px 0;
+}
+
+.ch-voice > .ch-hint {
+  flex-basis: 100%;
+}
+
+.ch-voice-label {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ch-voice-btn {
+  flex: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -955,6 +970,6 @@ section > .ch-primary {
 }
 
 .ch-voice-time {
-  margin-left: auto;
+  flex: none;
   font-variant-numeric: tabular-nums;
 }

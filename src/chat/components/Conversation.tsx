@@ -11,6 +11,8 @@ import { useLang } from "../useChat";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
 import { Avatar, Modal } from "./ui";
+import { VoiceBubble } from "./VoiceBubble";
+import { VoiceComposer } from "./VoiceComposer";
 
 /** A message's text with @mentions of group members highlighted (as spans, never as markup). */
 function MessageText({ text, handles, me, onLink }: { text: string; handles: string[]; me: string; onLink: (href: string) => void }) {
@@ -64,6 +66,7 @@ export function Conversation() {
   const [info, setInfo] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [favError, setFavError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextCaret = useRef<number | null>(null);
@@ -204,6 +207,8 @@ export function Conversation() {
                     <div className="ch-text">
                       <MessageText text={m.payload.text} handles={memberHandles} me={me.handle} onLink={setLink} />
                     </div>
+                  ) : m.payload?.k === "voice" ? (
+                    <VoiceBubble conv={activeConv} m={m} />
                   ) : (
                     <div className="ch-text ch-gone-text">{a.undecryptable}</div>
                   )}
@@ -256,6 +261,7 @@ export function Conversation() {
             ))}
           </ul>
         )}
+        {!recording && (
         <textarea
           ref={inputRef}
           className="ch-input"
@@ -299,12 +305,16 @@ export function Conversation() {
             }
           }}
         />
+        )}
+        <VoiceComposer key={activeConv} conv={activeConv} disabled={!canSend} onBusy={setRecording} onError={setFavError} />
+        {!recording && (
         <div className="ch-composer-side">
           {length > MESSAGE_MAX_CHARS * 0.8 && <span className={length > MESSAGE_MAX_CHARS ? "ch-bad ch-hint" : "ch-hint"}>{a.charCount(length, MESSAGE_MAX_CHARS)}</span>}
           <button type="button" className="ch-send" aria-label={a.send} disabled={!draft.trim() || length > MESSAGE_MAX_CHARS || !canSend} onClick={submit}>
             <Send size={20} />
           </button>
         </div>
+        )}
       </footer>
       {info && group && <GroupInfo group={group} onClose={() => setInfo(false)} />}
       {link && (

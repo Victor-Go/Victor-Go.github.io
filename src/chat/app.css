@@ -889,3 +889,72 @@ section > .ch-primary {
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* ---------- voice ---------- */
+.ch-rec {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.ch-rec-time {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ch-rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e5484d;
+  animation: ch-rec-blink 1s ease-in-out infinite;
+}
+
+@keyframes ch-rec-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-rec-dot {
+    animation: none;
+  }
+}
+
+.ch-voice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.ch-voice-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: var(--ch-accent);
+  color: var(--ch-accent-fg);
+}
+
+.ch-mine .ch-voice-btn {
+  background: var(--ch-accent-fg);
+  color: var(--ch-accent);
+}
+
+.ch-voice-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ch-voice-time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}

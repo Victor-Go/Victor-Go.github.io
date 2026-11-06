@@ -39,16 +39,23 @@ async function subkey(chatKey: Uint8Array, epochConstant: string, salt: Uint8Arr
   }
 }
 
-/** `ct` of protocol §9: ver(1) | epoch(2) | salt(16) | nonce(12) | AES-256-GCM. A fresh subkey per message makes random nonces safe. */
-export async function encryptMessage(chatKey: Uint8Array, epochs: Epochs, payload: Payload, b: Binding): Promise<{ epoch: number; ct: string }> {
+/** Seals raw bytes: ver(1) | epoch(2) | salt(16) | nonce(12) | AES-256-GCM. A fresh subkey per message makes random nonces safe. */
+export async function encryptBytes(chatKey: Uint8Array, epochs: Epochs, bytes: Uint8Array, b: Binding): Promise<{ epoch: number; ct: string }> {
   const epoch = epochs.current;
   const constant = epochs.labels.get(epoch);
   if (constant === undefined) throw new CipherError("format");
   const salt = randomBytes(SALT_LEN);
   const nonce = randomBytes(NONCE_LEN);
-  const body = await seal(await subkey(chatKey, constant, salt), nonce, aadOf(epoch, b), utf8(JSON.stringify(payload)));
+  const body = await seal(await subkey(chatKey, constant, salt), nonce, aadOf(epoch, b), bytes);
   return { epoch, ct: toB64(concat(Uint8Array.of(VERSION, epoch >> 8, epoch & 0xff), salt, nonce, body)) };
 }
+
+/** `ct` of protocol §9 for a message body. */
+export const encryptMessage = (chatKey: Uint8Array, epochs: Epochs, payload: Payload, b: Binding): Promise<{ epoch: number; ct: string }> =>
+  encryptBytes(chatKey, epochs, utf8(JSON.stringify(payload)), b);
+
+/** The binding of a voice recording: tied to the message that carries it, but never interchangeable with that message's own body. */
+export const voiceBinding = (b: Binding): Binding => ({ ...b, clientMsgId: `voice:${b.clientMsgId}` });
 
 /** The epoch id in a ciphertext's header (not authenticated until it opens), or null when it is too short or of an unknown version. */
 export function epochOfCiphertext(ct: string): number | null {
@@ -60,8 +67,8 @@ export function epochOfCiphertext(ct: string): number | null {
   }
 }
 
-/** Throws CipherError("decrypt") for a retired epoch, wrong key, wrong binding or tampering. */
-export async function decryptMessage(chatKey: Uint8Array, epochs: Epochs, ct: string, b: Binding): Promise<Payload> {
+/** Opens raw bytes. Throws CipherError("decrypt") for a retired epoch, wrong key, wrong binding or tampering. */
+export async function decryptBytes(chatKey: Uint8Array, epochs: Epochs, ct: string, b: Binding): Promise<Uint8Array> {
   try {
     const data = fromB64(ct);
     if (data.length < HEAD_LEN + 16 || data[0] !== VERSION) throw new CipherError("decrypt");
@@ -70,10 +77,19 @@ export async function decryptMessage(chatKey: Uint8Array, epochs: Epochs, ct: st
     if (constant === undefined) throw new CipherError("decrypt");
     const salt = data.subarray(3, 3 + SALT_LEN);
     const nonce = data.subarray(3 + SALT_LEN, HEAD_LEN);
-    const pt = await open(await subkey(chatKey, constant, salt), nonce, aadOf(epoch, b), data.subarray(HEAD_LEN));
-    const payload = JSON.parse(utf8Decode(pt)) as Payload;
+    return await open(await subkey(chatKey, constant, salt), nonce, aadOf(epoch, b), data.subarray(HEAD_LEN));
+  } catch {
+    throw new CipherError("decrypt");
+  }
+}
+
+/** Throws CipherError("decrypt") for a retired epoch, wrong key, wrong binding or tampering. */
+export async function decryptMessage(chatKey: Uint8Array, epochs: Epochs, ct: string, b: Binding): Promise<Payload> {
+  try {
+    const payload = JSON.parse(utf8Decode(await decryptBytes(chatKey, epochs, ct, b))) as Payload;
     if (payload.k === "text" && typeof payload.text === "string") return payload;
-    if (payload.k === "voice" && typeof payload.voice?.id === "string") return payload;
+    const v = payload.k === "voice" ? payload.voice : null;
+    if (v && typeof v.id === "string" && v.id.length > 0 && v.id.length <= 128 && typeof v.ms === "number" && Number.isFinite(v.ms) && v.ms >= 0) return payload;
     throw new CipherError("decrypt");
   } catch {
     throw new CipherError("decrypt");

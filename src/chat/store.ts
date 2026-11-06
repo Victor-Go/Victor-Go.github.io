@@ -42,6 +42,8 @@ export interface Msg {
   epoch?: number;
   /** Why there is no payload: its epoch was destroyed ("message key destroyed"), or it cannot be verified (cannot be opened, forged, unknown epoch). */
   lost?: "destroyed" | "unverified";
+  /** Group key generation the message was sealed under (0 in 1:1 chats). */
+  gen?: number;
   status: "sending" | "sent" | "failed";
 }
 
@@ -105,6 +107,8 @@ export interface ChatState {
   retentionDays: number;
   groupMax: number;
   voiceMaxSec: number;
+  /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
+  voiceOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
   usage: { used: number; limit: number | null; resetAt: number; favoriteCount?: number; favoriteMax?: number } | null;
   /** The part of the app being looked at; a conversation counts as read only while this is "contacts". */
@@ -137,6 +141,7 @@ export const initialState: ChatState = {
   retentionDays: 30,
   groupMax: 32,
   voiceMaxSec: 60,
+  voiceOff: false,
   usage: null,
   section: "contacts",
   olderMore: {},

@@ -96,6 +96,9 @@ textarea:disabled {
 }
 
 .ch-icon {
+  /* In a flex row (the composer) a narrow screen would squeeze the round button into an oval. */
+  flex: none;
+  aspect-ratio: 1;
   background: none;
   border: 0;
   color: var(--ch-muted);
@@ -528,6 +531,10 @@ textarea:disabled {
   display: inline-grid;
 }
 
+.ch-star:disabled {
+  cursor: progress;
+}
+
 .ch-star.ch-on {
   color: #f5b301;
 }
@@ -554,6 +561,7 @@ textarea:disabled {
 }
 
 .ch-send {
+  flex: none;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -972,4 +980,18 @@ section > .ch-primary {
 .ch-voice-time {
   flex: none;
   font-variant-numeric: tabular-nums;
+}
+
+/* The row above the messages while older ones load as the reader scrolls up. */
+.ch-more-spin {
+  display: flex;
+  justify-content: center;
+  min-height: 34px;
+  align-items: center;
+}
+
+.ch-spinner.ch-spinner-sm {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
 }

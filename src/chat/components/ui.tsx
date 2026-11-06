@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { avatarUri } from "../avatar";
 import type { Progress } from "../client";
 import type { Messages } from "../i18n";
@@ -78,4 +78,35 @@ export function Loading({ busy, first = false, label }: { busy: boolean; first?:
       )}
     </>
   );
+}
+
+/**
+ * Guards a click handler that starts asynchronous work: while the promise it returns is pending, further clicks are ignored (even
+ * ones that land before React has re-rendered) and `busy` is true so the control can disable itself and show a spinner.
+ */
+export function usePending(): [boolean, (fn: () => unknown) => void] {
+  const [busy, setBusy] = useState(false);
+  const locked = useRef(false);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const run = (fn: () => unknown): void => {
+    if (locked.current) return;
+    const r = fn();
+    if (r && typeof (r as Promise<unknown>).then === "function") {
+      locked.current = true;
+      setBusy(true);
+      void Promise.resolve(r)
+        .catch(() => {})
+        .finally(() => {
+          locked.current = false;
+          if (live.current) setBusy(false);
+        });
+    }
+  };
+  return [busy, run];
 }

@@ -115,6 +115,8 @@ export interface ChatState {
   section: "contacts" | "me" | "manage";
   /** Conversations that still have older messages on the server to page back to. */
   olderMore: Record<string, boolean>;
+  /** Server time of the newest message known in each conversation, for ordering the list (most recent first). */
+  lastActive: Record<string, number>;
 }
 
 export const DEFAULT_IDLE_MINUTES = 10;
@@ -145,6 +147,7 @@ export const initialState: ChatState = {
   usage: null,
   section: "contacts",
   olderMore: {},
+  lastActive: {},
 };
 
 export const useChat = create<ChatState>(() => initialState);

@@ -30,10 +30,11 @@ describe("static source guard for src/chat", () => {
   });
 
   it("stores nothing: no cookies, web storage, IndexedDB, caches, service workers or history state", () => {
-    // route.ts alone may call replaceState to keep the address bar in step (the session lives in memory, so no reload).
+    // route.ts alone may call pushState / replaceState: every screen has an address so the back gesture works. Only an opaque key and a
+    // depth go into the entry; the session lives in memory, and moving between addresses never reloads the page.
     const hits = files.flatMap((f) =>
       findForbidden(readFileSync(f, "utf8"))
-        .filter((label) => !NETWORK.has(label) && !(label === "replaceState" && f === join(chatDir, "route.ts")))
+        .filter((label) => !NETWORK.has(label) && !((label === "replaceState" || label === "pushState") && f === join(chatDir, "route.ts")))
         .map((h) => `${relative(srcDir, f)}: ${h}`),
     );
     expect(hits).toEqual([]);

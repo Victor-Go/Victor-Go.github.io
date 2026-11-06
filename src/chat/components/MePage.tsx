@@ -2,19 +2,34 @@ import { useState } from "react";
 import { Settings as SettingsIcon, Star } from "lucide-react";
 import { logout, removeFavorite } from "../client";
 import { formatClock, formatDay } from "../format";
+import { PATH, go, useLocation } from "../route";
 import { useChat } from "../store";
 import { useLang } from "../useChat";
 import { Empty, Group, Icon, Page, Row } from "./ios";
 import { SettingsFlow } from "./SettingsPage";
 import { Avatar } from "./ui";
 
-function FavoritesPage({ onBack }: { onBack: () => void }) {
+function FavoritesPage() {
   const { lang, a } = useLang();
   const favorites = useChat((s) => s.favorites);
   const usage = useChat((s) => s.usage);
+  const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
+  const remove = (id: string) => {
+    if (removing.has(id)) return;
+    setRemoving((r) => new Set(r).add(id));
+    void removeFavorite(id)
+      .catch(() => {})
+      .finally(() =>
+        setRemoving((r) => {
+          const next = new Set(r);
+          next.delete(id);
+          return next;
+        }),
+      );
+  };
   const now = Date.now();
   return (
-    <Page title={a.favorites} onBack={onBack} backLabel={a.tabMe}>
+    <Page title={a.favorites} onBack={() => go(PATH.me)} backLabel={a.tabMe}>
       {favorites.length === 0 ? (
         <Empty icon={<Star size={40} />}>{a.noFavorites}</Empty>
       ) : (
@@ -33,8 +48,8 @@ function FavoritesPage({ onBack }: { onBack: () => void }) {
                 <span>
                   @{f.from} · {formatDay(f.time, now, lang, { today: a.today, yesterday: a.yesterday })} {formatClock(f.time, lang)}
                 </span>
-                <button type="button" className="ios-link ios-destructive" onClick={() => void removeFavorite(f.id)}>
-                  {a.removeFavorite}
+                <button type="button" className="ios-link ios-destructive" disabled={removing.has(f.id)} aria-busy={removing.has(f.id)} onClick={() => remove(f.id)}>
+                  {removing.has(f.id) ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : a.removeFavorite}
                 </button>
               </div>
             </div>
@@ -51,9 +66,9 @@ export function MePage() {
   const me = useChat((s) => s.me)!;
   const count = useChat((s) => s.favorites.length);
   const usage = useChat((s) => s.usage);
-  const [route, setRoute] = useState<"root" | "favorites" | "settings">("root");
-  if (route === "favorites") return <FavoritesPage onBack={() => setRoute("root")} />;
-  if (route === "settings") return <SettingsFlow onBack={() => setRoute("root")} />;
+  const { path } = useLocation();
+  if (path === PATH.favourites) return <FavoritesPage />;
+  if (path.startsWith(PATH.settings)) return <SettingsFlow />;
   return (
     <Page title={a.tabMe}>
       <Group>
@@ -71,11 +86,11 @@ export function MePage() {
         </Group>
       )}
       <Group>
-        <Row icon={<Icon color="#ff9f0a"><Star size={18} /></Icon>} title={a.favorites} value={count > 0 ? count : undefined} chevron onClick={() => setRoute("favorites")} />
-        <Row icon={<Icon color="#8e8e93"><SettingsIcon size={18} /></Icon>} title={a.tabSettings} chevron onClick={() => setRoute("settings")} />
+        <Row icon={<Icon color="#ff9f0a"><Star size={18} /></Icon>} title={a.favorites} value={count > 0 ? count : undefined} chevron onClick={() => go(PATH.favourites)} />
+        <Row icon={<Icon color="#8e8e93"><SettingsIcon size={18} /></Icon>} title={a.tabSettings} chevron onClick={() => go(PATH.settings)} />
       </Group>
       <Group>
-        <Row title={a.logout} center destructive onClick={() => void logout()} />
+        <Row title={a.logout} center destructive onClick={() => logout()} />
       </Group>
     </Page>
   );

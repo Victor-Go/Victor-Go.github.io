@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Star } from "lucide-react";
-import { ApiError, addFavorite, loadOlder, openConversation, removeFavorite, sendText } from "../client";
+import { PATH, go } from "../route";
+import { ApiError, addFavorite, loadOlder, removeFavorite, sendText } from "../client";
 import { errorText } from "../i18nApp";
 import { MESSAGE_MAX_CHARS } from "../crypto/message";
 import { deliveryOf } from "../delivery";
@@ -67,6 +68,11 @@ export function Conversation() {
   const [link, setLink] = useState<string | null>(null);
   const [favError, setFavError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
+  // Messages whose favourite star is being saved or removed; the star ignores taps until that finishes.
+  const [favBusy, setFavBusy] = useState<ReadonlySet<string>>(new Set());
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  // Scroll position to restore after older messages were put above: [scrollHeight, scrollTop] from before the load.
+  const keepAt = useRef<[number, number] | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextCaret = useRef<number | null>(null);
@@ -78,8 +84,32 @@ export function Conversation() {
 
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (keepAt.current) {
+      // Older messages arrived above: stay on the message that was being read.
+      el.scrollTop = el.scrollHeight - keepAt.current[0] + keepAt.current[1];
+      keepAt.current = null;
+    } else el.scrollTop = el.scrollHeight;
   }, [visible.length, activeConv]);
+  // Scrolling to the top loads the next 20 older messages. A chat too short to scroll loads on its own until it fills the screen or runs out.
+  const more = activeConv ? !!olderMore[activeConv] : false;
+  const pageOlder = () => {
+    const el = listRef.current;
+    if (!activeConv || !more || loadingOlder || !el) return;
+    keepAt.current = [el.scrollHeight, el.scrollTop];
+    setLoadingOlder(true);
+    void loadOlder(activeConv)
+      .catch(() => {})
+      .finally(() => {
+        keepAt.current = null;
+        setLoadingOlder(false);
+      });
+  };
+  useEffect(() => {
+    const el = listRef.current;
+    if (el && more && !loadingOlder && el.scrollHeight <= el.clientHeight + 40) pageOlder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [more, loadingOlder, visible.length, activeConv]);
   useEffect(() => {
     setCaret(inputRef.current?.value.length ?? 0);
     setDismissed(false);
@@ -145,7 +175,7 @@ export function Conversation() {
   return (
     <section className="ch-conv" aria-label={title}>
       <header className="ch-conv-head">
-        <button type="button" className="ch-icon ch-only-mobile" aria-label={a.back} onClick={() => void openConversation(null)}>
+        <button type="button" className="ch-icon ch-only-mobile" aria-label={a.back} onClick={() => go(PATH.home)}>
           <ArrowLeft size={22} />
         </button>
         <Avatar userId={contact?.userId ?? group!.id} size={36} admin={contact?.role === "admin"} />
@@ -162,12 +192,12 @@ export function Conversation() {
         )}
       </header>
 
-      <div className="ch-messages" ref={listRef}>
+      <div className="ch-messages" ref={listRef} onScroll={(e) => e.currentTarget.scrollTop < 60 && pageOlder()}>
         <div className="ch-retention">{a.retentionTop(retentionDays)}</div>
-        {activeConv && olderMore[activeConv] && (
-          <button type="button" className="ch-more" onClick={() => void loadOlder(activeConv).catch(() => {})}>
-            {a.loadOlder}
-          </button>
+        {more && (
+          <div className="ch-more-spin" role="status" aria-label={a.working}>
+            {loadingOlder ? <span className="ch-spinner" /> : <button type="button" className="ch-more" onClick={pageOlder}>{a.loadOlder}</button>}
+          </div>
         )}
         {favError && <div className="ch-notice">{favError}</div>}
         {contact?.deleted && <div className="ch-notice">{a.contactDeleted}</div>}
@@ -223,13 +253,26 @@ export function Conversation() {
                         type="button"
                         className={"ch-star" + (fav ? " ch-on" : "")}
                         aria-pressed={fav}
+                        aria-busy={favBusy.has(favId(m))}
+                        disabled={favBusy.has(favId(m))}
                         aria-label={fav ? a.unfavorite : a.favorite}
                         onClick={() => {
+                          const id = favId(m);
+                          if (favBusy.has(id)) return;
                           setFavError(null);
-                          void (fav ? removeFavorite(favId(m)) : addFavorite(activeConv, m, nameOf(m))).catch((e) => setFavError(errorText(a, e instanceof ApiError ? e.code : "internal")));
+                          setFavBusy((b) => new Set(b).add(id));
+                          void (fav ? removeFavorite(id) : addFavorite(activeConv, m, nameOf(m)))
+                            .catch((e) => setFavError(errorText(a, e instanceof ApiError ? e.code : "internal")))
+                            .finally(() =>
+                              setFavBusy((b) => {
+                                const next = new Set(b);
+                                next.delete(id);
+                                return next;
+                              }),
+                            );
                         }}
                       >
-                        <Star size={14} fill={fav ? "currentColor" : "none"} />
+                        {favBusy.has(favId(m)) ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : <Star size={14} fill={fav ? "currentColor" : "none"} />}
                       </button>
                     )}
                   </div>

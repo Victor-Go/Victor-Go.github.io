@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { acceptOwnership, ApiError, deleteGroup, inviteToGroup, kickMember, leaveGroup, openConversation, rekeyGroup, transferGroup } from "../client";
+import { acceptOwnership, ApiError, deleteGroup, inviteToGroup, kickMember, leaveGroup, rekeyGroup, transferGroup } from "../client";
 import { errorText } from "../i18nApp";
+import { PATH, go } from "../route";
 import { useChat, type Group } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
@@ -24,7 +25,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
     try {
       await fn();
       if (closeAfter) {
-        await openConversation(null);
+        go(PATH.home);
         onClose();
       }
     } catch (e) {

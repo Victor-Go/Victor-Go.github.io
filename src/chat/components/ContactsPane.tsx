@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { UserPlus, Users } from "lucide-react";
-import { acceptRequest, createGroup, declineRequest, openConversation, requestContact, ApiError, type Progress } from "../client";
+import { acceptRequest, createGroup, declineRequest, requestContact, ApiError, type Progress } from "../client";
 import { errorText } from "../i18nApp";
+import { PATH, go } from "../route";
 import { useChat } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
@@ -102,13 +103,24 @@ function NewGroupDialog({ onClose }: { onClose: () => void }) {
 
 export function ContactsPane() {
   const { a } = useLang();
-  const { contacts, groups, requests, unread, mentions, activeConv, me } = useChat();
+  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, me, lastActive } = useChat();
+  // Most recently used first; conversations with nothing known yet keep the server's order after them (the sort is stable).
+  const contacts = useMemo(() => [...contactList].sort((x, y) => (lastActive[y.convId] ?? 0) - (lastActive[x.convId] ?? 0)), [contactList, lastActive]);
+  const groups = useMemo(() => [...groupList].sort((x, y) => (lastActive[y.id] ?? 0) - (lastActive[x.id] ?? 0)), [groupList, lastActive]);
   const [dialog, setDialog] = useState<"add" | "group" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const isAdmin = me?.role === "admin";
-  const row = (id: string, userId: string, title: string, sub?: string, admin = false) => (
+  // One answer at a time: both buttons stay disabled until the server has replied, so a request cannot be accepted or declined twice.
+  const answer = (id: string, fn: (id: string) => Promise<void>) => {
+    if (busy !== null) return;
+    setBusy(id);
+    void fn(id)
+      .catch(() => {})
+      .finally(() => setBusy(null));
+  };
+  const row = (id: string, userId: string, title: string, sub?: string, admin = false, group = false) => (
     <li key={id}>
-      <button type="button" className={"ch-row ch-row-btn" + (activeConv === id ? " ch-active" : "")} onClick={() => void openConversation(id)}>
+      <button type="button" className={"ch-row ch-row-btn" + (activeConv === id ? " ch-active" : "")} onClick={() => go(group ? PATH.group : PATH.conversation, id)}>
         <Avatar userId={userId} admin={admin} />
         <div className="ch-row-text">
           <div className="ch-row-title">{title}</div>
@@ -152,10 +164,10 @@ export function ContactsPane() {
                   </div>
                   {r.direction === "in" && (
                     <span className="ch-actions">
-                      <button type="button" className="ch-primary ch-small" disabled={busy === r.id} onClick={() => { setBusy(r.id); void acceptRequest(r.id).finally(() => setBusy(null)); }}>
-                        {a.accept}
+                      <button type="button" className="ch-primary ch-small" disabled={busy !== null} aria-busy={busy === r.id} onClick={() => answer(r.id, acceptRequest)}>
+                        {busy === r.id ? a.working : a.accept}
                       </button>
-                      <button type="button" className="ch-secondary ch-small" disabled={busy === r.id} onClick={() => void declineRequest(r.id)}>
+                      <button type="button" className="ch-secondary ch-small" disabled={busy !== null} onClick={() => answer(r.id, declineRequest)}>
                         {a.decline}
                       </button>
                     </span>
@@ -168,7 +180,7 @@ export function ContactsPane() {
         {groups.length > 0 && (
           <section>
             <h3 className="ch-section">{a.groups}</h3>
-            <ul className="ch-list-plain">{groups.map((g) => row(g.id, g.id, g.name, a.memberCount(g.members.length)))}</ul>
+            <ul className="ch-list-plain">{groups.map((g) => row(g.id, g.id, g.name, a.memberCount(g.members.length), false, true))}</ul>
           </section>
         )}
         <section>

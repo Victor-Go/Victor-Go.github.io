@@ -5,6 +5,7 @@ import { ApiError, adminDeleteUser, rawApi, unlockAdmin, wipeEverything, type Pr
 import { formatClock, formatDay } from "../format";
 import { errorText } from "../i18nApp";
 import { onEnter } from "../keys";
+import { PATH, go as navigate, useLocation } from "../route";
 import { useChat } from "../store";
 import { useLang } from "../useChat";
 import { ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
@@ -61,6 +62,52 @@ interface Job {
 }
 
 type View = { k: "root" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "config" } | { k: "status" } | { k: "audit" };
+
+/** Each screen has its own address (so the back gesture works); the selected user rides along in memory, never in the address. */
+function addressOf(v: View): { path: string; payload?: unknown } {
+  switch (v.k) {
+    case "users":
+    case "invites":
+    case "config":
+    case "epochs":
+    case "jobs":
+    case "status":
+    case "audit":
+      return { path: PATH.managementPage(v.k) };
+    case "user":
+      return { path: PATH.managementPage("users/user"), payload: v.user };
+    case "wipe":
+      return { path: PATH.managementPage(v.scope === "messages" ? "epochs/wipe-messages" : "epochs/wipe-favourites") };
+    case "wipeAll":
+      return { path: PATH.managementPage("config/wipe-all") };
+    default:
+      return { path: PATH.management };
+  }
+}
+
+function viewAt(path: string, payload: unknown): View {
+  const name = path.startsWith(PATH.management) ? path.slice(PATH.management.length).replace(/\/$/, "") : "";
+  switch (name) {
+    case "users":
+    case "invites":
+    case "config":
+    case "epochs":
+    case "jobs":
+    case "status":
+    case "audit":
+      return { k: name };
+    case "users/user":
+      return payload ? { k: "user", user: payload as AdminUser } : { k: "users" };
+    case "epochs/wipe-messages":
+      return { k: "wipe", scope: "messages" };
+    case "epochs/wipe-favourites":
+      return { k: "wipe", scope: "favorites" };
+    case "config/wipe-all":
+      return { k: "wipeAll" };
+    default:
+      return { k: "root" };
+  }
+}
 
 /** Date and time in the device's time zone: "Today 14:05", or the full date for older days. */
 function useWhen(): (t: number) => string {
@@ -242,15 +289,16 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
       {user.role !== "admin" && (
         <>
           <Group>
-            <Row title={a.manage.resetFailures} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/reset-failures`))} />
-            <Row title={a.manage.forceLogout} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/logout`))} />
-            <Row title={user.suspended ? a.manage.unsuspend : a.manage.suspend} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/suspend`, { suspended: !user.suspended }))} />
+            <Row disabled={busy} title={a.manage.resetFailures} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/reset-failures`))} />
+            <Row disabled={busy} title={a.manage.forceLogout} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/logout`))} />
+            <Row disabled={busy} title={user.suspended ? a.manage.unsuspend : a.manage.suspend} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/suspend`, { suspended: !user.suspended }))} />
           </Group>
           <Group>
             <Row
               title={a.manage.delete}
               center
               destructive
+              disabled={busy}
               onClick={() => {
                 if (window.prompt(a.manage.confirmDelete(user.handle)) === user.handle) done(() => adminDeleteUser(user.userId, user.handle));
               }}
@@ -310,7 +358,7 @@ function InvitesView({ go }: { go: (v: View) => void }) {
             onKeyDown={onEnter(() => void create())}
           />
         </Row>
-        <Row title={a.manage.createInvite} center onClick={() => void create()} />
+        <Row title={a.manage.createInvite} center onClick={() => create()} />
       </Group>
       {invites.length > 0 && (
         <Group header={a.manage.invites}>
@@ -332,7 +380,7 @@ function InvitesView({ go }: { go: (v: View) => void }) {
                   <button type="button" className="ios-link" onClick={() => copy(i.code!)}>
                     {copied === i.code ? a.manage.copied : a.manage.copy}
                   </button>
-                  <button type="button" className="ios-link ios-destructive" onClick={() => void run(() => rawApi().post(`/admin/invites/${i.id}/revoke`)).then(load)}>
+                  <button type="button" className="ios-link ios-destructive" disabled={busy} onClick={() => void run(() => rawApi().post(`/admin/invites/${i.id}/revoke`)).then(load)}>
                     {a.manage.revoke}
                   </button>
                 </div>
@@ -368,13 +416,13 @@ function ConfigView({ go }: { go: (v: View) => void }) {
       {cfg && (
         <>
           <Group footer={a.manage.registrationHint}>
-            <SwitchRow title={a.manage.registrationOpen} checked={cfg.registrationOpen} onChange={(v) => void save({ ...cfg, registrationOpen: v })} />
+            <SwitchRow title={a.manage.registrationOpen} checked={cfg.registrationOpen} onChange={(v) => save({ ...cfg, registrationOpen: v })} />
           </Group>
           <Group footer={a.manage.inviteRequiredHint}>
-            <SwitchRow title={a.manage.inviteRequired} checked={cfg.inviteRequired} onChange={(v) => void save({ ...cfg, inviteRequired: v })} />
+            <SwitchRow title={a.manage.inviteRequired} checked={cfg.inviteRequired} onChange={(v) => save({ ...cfg, inviteRequired: v })} />
           </Group>
           <Group>
-            <SwitchRow title={a.manage.voiceEnabled} checked={cfg.voiceEnabled} onChange={(v) => void save({ ...cfg, voiceEnabled: v })} />
+            <SwitchRow title={a.manage.voiceEnabled} checked={cfg.voiceEnabled} onChange={(v) => save({ ...cfg, voiceEnabled: v })} />
           </Group>
           <Group footer={saved ? <span className="ios-ok">{a.manage.saved}</span> : undefined}>
             <Row title={a.manage.groupMax}>
@@ -457,11 +505,11 @@ function EpochsView({ go }: { go: (v: View) => void }) {
                 </div>
                 <div className="ios-actions">
                   {e.current ? (
-                    <button type="button" className="ios-link" onClick={() => act(() => rawApi().post(`/admin/epochs/${e.id}/prepare`))}>
+                    <button type="button" className="ios-link" disabled={busy} onClick={() => act(() => rawApi().post(`/admin/epochs/${e.id}/prepare`))}>
                       {a.manage.prepare}
                     </button>
                   ) : (
-                    <button type="button" className="ios-link ios-destructive" onClick={() => destroy(`#${e.id}`, () => rawApi().post(`/admin/epochs/${e.id}/revoke`))}>
+                    <button type="button" className="ios-link ios-destructive" disabled={busy} onClick={() => destroy(`#${e.id}`, () => rawApi().post(`/admin/epochs/${e.id}/revoke`))}>
                       {a.manage.destroy}
                     </button>
                   )}
@@ -479,13 +527,13 @@ function EpochsView({ go }: { go: (v: View) => void }) {
                   {a.manage.created}: {when(e.createdAt)}
                 </div>
                 <div className="ios-actions">
-                  <button type="button" className="ios-link ios-destructive" onClick={() => destroy(`#${e.id}`, () => rawApi().post(`/admin/fav-epochs/${e.id}/revoke`))}>
+                  <button type="button" className="ios-link ios-destructive" disabled={busy} onClick={() => destroy(`#${e.id}`, () => rawApi().post(`/admin/fav-epochs/${e.id}/revoke`))}>
                     {a.manage.destroy}
                   </button>
                 </div>
               </div>
             ))}
-            <Row title={a.manage.newFavEpoch} center onClick={() => act(() => rawApi().post("/admin/fav-epochs/new"))} />
+            <Row disabled={busy} title={a.manage.newFavEpoch} center onClick={() => act(() => rawApi().post("/admin/fav-epochs/new"))} />
           </Group>
           <Group>
             <Row title={a.manage.wipeMessages} destructive chevron onClick={() => go({ k: "wipe", scope: "messages" })} />
@@ -556,7 +604,7 @@ function JobsView({ go }: { go: (v: View) => void }) {
             </div>
             {j.error && <div className="ios-sub ios-destructive">{j.error}</div>}
             <div className="ios-actions">
-              <button type="button" className="ios-link" onClick={() => void run(() => rawApi().post(`/admin/jobs/${j.name}/run`)).then(load)}>
+              <button type="button" className="ios-link" disabled={busy} onClick={() => void run(() => rawApi().post(`/admin/jobs/${j.name}/run`)).then(load)}>
                 {a.manage.runNow}
               </button>
             </div>
@@ -643,7 +691,12 @@ export function ManagementPage() {
   const { a } = useLang();
   const me = useChat((s) => s.me);
   const locked = useAdminLock((s) => s.locked);
-  const [view, setView] = useState<View>({ k: "root" });
+  const loc = useLocation();
+  const view = viewAt(loc.path, loc.payload);
+  const setView = (v: View) => {
+    const { path, payload } = addressOf(v);
+    navigate(path, payload);
+  };
   // Mirrors the server's rule; a wrong guess here only shows the lock screen early or late, the server decides.
   useEffect(() => {
     const timer = setInterval(() => {

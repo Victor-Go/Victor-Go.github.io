@@ -123,18 +123,6 @@ label {
   border-color: var(--ch-bad);
 }
 
-/* Passwords are plain text inputs (no password-manager hooks), masked in CSS. */
-.ch-masked {
-  -webkit-text-security: disc;
-}
-
-@supports not (-webkit-text-security: disc) {
-  .ch-masked {
-    color: transparent;
-    caret-color: var(--ch-fg);
-  }
-}
-
 .ch-handle {
   display: flex;
   align-items: center;

@@ -128,7 +128,7 @@ export function ContactsPane() {
         </div>
         {(unread[id] ?? 0) > 0 && (
           <span className={"ch-badge" + (mentions[id] ? " ch-mention" : "")}>
-            {unread[id]}
+            {unread[id] > 99 ? "99+" : unread[id]}
           </span>
         )}
       </button>

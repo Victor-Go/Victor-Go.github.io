@@ -1,0 +1,330 @@
+:root {
+  --ch-bg: #f1f3f5;
+  --ch-card: #ffffff;
+  --ch-fg: #0f1419;
+  --ch-muted: #6b7785;
+  --ch-line: #dfe3e8;
+  --ch-accent: #3390ec;
+  --ch-accent-fg: #ffffff;
+  --ch-good: #2e9e5b;
+  --ch-warn: #c9840a;
+  --ch-bad: #d33f49;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ch-bg: #0e1621;
+    --ch-card: #17212b;
+    --ch-fg: #f5f5f5;
+    --ch-muted: #8b9aa8;
+    --ch-line: #243242;
+    --ch-accent: #4da3f5;
+    --ch-accent-fg: #0b1220;
+    --ch-good: #4cc38a;
+    --ch-warn: #e5a93c;
+    --ch-bad: #ff6b74;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--ch-bg);
+  color: var(--ch-fg);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+.ch-page {
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+
+.ch-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--ch-card);
+  border: 1px solid var(--ch-line);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 4vh;
+}
+
+.ch-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+.ch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ch-field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* 16px prevents iOS from zooming the page on focus. */
+.ch-input {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--ch-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+
+.ch-input:focus-visible,
+.ch-tab:focus-visible,
+.ch-primary:focus-visible,
+.ch-link:focus-visible {
+  outline: 2px solid var(--ch-accent);
+  outline-offset: 2px;
+}
+
+.ch-input[aria-invalid="true"] {
+  border-color: var(--ch-bad);
+}
+
+/* Passwords are plain text inputs (no password-manager hooks), masked in CSS. */
+.ch-masked {
+  -webkit-text-security: disc;
+}
+
+@supports not (-webkit-text-security: disc) {
+  .ch-masked {
+    color: transparent;
+    caret-color: var(--ch-fg);
+  }
+}
+
+.ch-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ch-at {
+  font-weight: 700;
+  color: var(--ch-muted);
+}
+
+.ch-hint {
+  font-size: 0.8rem;
+  color: var(--ch-muted);
+}
+
+.ch-bad {
+  color: var(--ch-bad);
+}
+
+.ch-ok {
+  color: var(--ch-good);
+}
+
+.ch-link {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  min-height: 32px;
+  color: var(--ch-accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.ch-primary {
+  min-height: 46px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ch-accent);
+  color: var(--ch-accent-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ch-linkbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.ch-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ch-line);
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.ch-status-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ch-muted);
+  flex: none;
+}
+
+.ch-good .ch-dot {
+  background: var(--ch-good);
+}
+
+.ch-warn .ch-dot {
+  background: var(--ch-warn);
+}
+
+.ch-bad.ch-status .ch-dot {
+  background: var(--ch-bad);
+}
+
+.ch-bad.ch-status {
+  color: inherit;
+}
+
+.ch-idle .ch-dot {
+  animation: ch-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ch-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-idle .ch-dot {
+    animation: none;
+  }
+}
+
+.ch-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  background: var(--ch-bg);
+  border-radius: 12px;
+}
+
+.ch-tab {
+  flex: 1;
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ch-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ch-tab[aria-selected="true"] {
+  background: var(--ch-card);
+  color: var(--ch-fg);
+}
+
+.ch-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.85rem;
+  color: var(--ch-muted);
+}
+
+.ch-strength {
+  font-size: 0.8rem;
+  color: var(--ch-muted);
+}
+
+.ch-meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ch-line);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.ch-meter span {
+  display: block;
+  height: 100%;
+  background: var(--ch-bad);
+}
+
+.ch-s-fair .ch-meter span {
+  background: var(--ch-warn);
+}
+
+.ch-s-strong .ch-meter span {
+  background: var(--ch-good);
+}
+
+.ch-callout {
+  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ch-bg);
+}
+
+.ch-callout p {
+  margin: 0;
+}
+
+.ch-callout p + p {
+  margin-top: 6px;
+}
+
+.ch-notice {
+  font-size: 0.9rem;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--ch-warn);
+}

@@ -1,0 +1,842 @@
+/* Layout and controls for the signed-in app. Tokens come from chat.css. */
+button:disabled,
+input:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ch-secondary,
+.ch-danger {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ch-accent);
+  border: 1px solid var(--ch-line);
+}
+
+.ch-danger {
+  color: var(--ch-bad);
+  border-color: var(--ch-bad);
+}
+
+.ch-primary {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.ch-secondary,
+.ch-danger {
+  min-height: 44px;
+}
+
+.ch-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.ch-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.ch-title-row h1 {
+  margin: 0;
+}
+
+.ch-grid-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.ch-grid-form .ch-span {
+  grid-column: 1 / -1;
+}
+
+.ch-lock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+  margin: 24px auto 0;
+  padding: 16px;
+  border: 1px solid var(--ch-line);
+  border-radius: 14px;
+}
+
+.ch-lock h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.ch-admin-row .ch-actions {
+  margin-top: 4px;
+}
+
+.ch-small {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.85rem;
+}
+
+.ch-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.ch-icon {
+  background: none;
+  border: 0;
+  color: var(--ch-muted);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.ch-icon:hover {
+  background: var(--ch-bg);
+}
+
+.ch-avatar {
+  border-radius: 50%;
+  flex: none;
+  display: block;
+  box-sizing: border-box;
+  border: 2px solid var(--ch-accent);
+  background: var(--ch-card);
+}
+
+.ch-avatar.ch-gold {
+  border-color: var(--ch-gold);
+}
+
+.ch-avatar.ch-avatar-big {
+  border-width: 3px;
+}
+
+.ch-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--ch-accent);
+  color: var(--ch-accent-fg);
+  font-size: 0.75rem;
+  display: inline-grid;
+  place-items: center;
+}
+
+.ch-badge-dot {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+}
+
+.ch-admin {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--ch-accent);
+  color: var(--ch-accent-fg);
+  vertical-align: middle;
+}
+
+.ch-muted {
+  color: var(--ch-muted);
+}
+
+.ch-narrow {
+  width: 84px;
+  flex: none;
+}
+
+.ch-row-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ch-row-form > .ch-input:first-child {
+  flex: 1;
+  min-width: 140px;
+}
+
+.ch-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ch-actions-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ch-steps {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ch-bg);
+  display: grid;
+  gap: 6px;
+}
+
+.ch-steps-title {
+  font-weight: 600;
+}
+
+.ch-code {
+  display: block;
+  padding: 8px 10px;
+  margin-top: 6px;
+  border-radius: 8px;
+  background: var(--ch-card);
+  border: 1px solid var(--ch-line);
+  word-break: break-all;
+  user-select: all;
+}
+
+.ch-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ch-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.ch-kv dt {
+  color: var(--ch-muted);
+}
+
+.ch-kv dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+/* ---------- app shell ---------- */
+.ch-app {
+  display: flex;
+  height: 100dvh;
+  background: var(--ch-card);
+  overflow: hidden;
+}
+
+.ch-rail {
+  display: none;
+}
+
+.ch-nav {
+  position: relative;
+  background: none;
+  border: 0;
+  color: var(--ch-muted);
+  font: inherit;
+  font-size: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.ch-nav.ch-active {
+  color: var(--ch-accent);
+}
+
+.ch-nav-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.ch-tabbar {
+  display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  background: var(--ch-card);
+  border-top: 1px solid var(--ch-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.ch-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 56px;
+}
+
+.ch-list-head,
+.ch-conv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+  border-bottom: 1px solid var(--ch-line);
+}
+
+.ch-list-head {
+  justify-content: space-between;
+}
+
+.ch-scroll {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ch-section {
+  margin: 14px 12px 4px;
+  font-size: 0.8rem;
+  color: var(--ch-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ch-list-plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ch-pad {
+  padding: 0 12px;
+}
+
+.ch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.ch-row-btn {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ch-row-btn:hover,
+.ch-row-btn.ch-active {
+  background: var(--ch-bg);
+}
+
+.ch-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+:root {
+  --ch-gold: #d99a0b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ch-gold: #f2b632;
+  }
+}
+
+.ch-row-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ch-main {
+  display: none;
+}
+
+.ch-app[data-chat="open"] .ch-main {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--ch-card);
+}
+
+.ch-app[data-chat="open"] .ch-tabbar,
+.ch-app[data-chat="open"] .ch-list {
+  display: none;
+}
+
+.ch-page-main {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 72px;
+}
+
+.ch-page-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ch-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ch-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ch-line);
+}
+
+.ch-settings-section > .ch-section {
+  margin-left: 0;
+}
+
+.ch-fav,
+.ch-admin-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ch-line);
+  display: grid;
+  gap: 4px;
+}
+
+/* ---------- conversation ---------- */
+.ch-conv {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.ch-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--ch-muted);
+}
+
+.ch-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--ch-bg);
+}
+
+.ch-retention,
+.ch-day {
+  align-self: center;
+  font-size: 0.75rem;
+  color: var(--ch-muted);
+  background: var(--ch-card);
+  border-radius: 10px;
+  padding: 2px 10px;
+  text-align: center;
+}
+
+.ch-msgrow {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.ch-msgrow.ch-mine {
+  flex-direction: row-reverse;
+  align-self: flex-end;
+}
+
+.ch-msg {
+  max-width: min(78%, 520px);
+  min-width: 0;
+  background: var(--ch-card);
+  border-radius: 14px 14px 14px 4px;
+  padding: 6px 10px;
+}
+
+.ch-msg.ch-mine {
+  background: var(--ch-accent);
+  color: var(--ch-accent-fg);
+  border-radius: 14px 14px 4px 14px;
+}
+
+.ch-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ch-sender {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ch-accent);
+}
+
+.ch-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+.ch-star {
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 2px;
+  cursor: pointer;
+  display: inline-grid;
+}
+
+.ch-star.ch-on {
+  color: #f5b301;
+}
+
+.ch-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--ch-line);
+  background: var(--ch-card);
+}
+
+.ch-composer .ch-input {
+  resize: none;
+  max-height: 140px;
+  field-sizing: content;
+}
+
+.ch-composer-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ch-send {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ch-accent);
+  color: var(--ch-accent-fg);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* ---------- modal, toast, privacy cover ---------- */
+.ch-modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.ch-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  background: var(--ch-card);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ch-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ch-modal-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.ch-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 80px;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: var(--ch-warn);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 12px;
+}
+
+html[data-covered] #root {
+  filter: blur(24px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.ch-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  background: color-mix(in srgb, var(--ch-bg) 70%, transparent);
+  backdrop-filter: blur(24px);
+  cursor: pointer;
+}
+
+/* ---------- wide screens: rail on the left, settings at its bottom ---------- */
+@media (min-width: 900px) {
+  .ch-rail {
+    display: flex;
+    flex-direction: column;
+    width: 76px;
+    flex: none;
+    border-right: 1px solid var(--ch-line);
+    padding: 12px 0;
+    background: var(--ch-card);
+  }
+
+  .ch-nav {
+    flex: none;
+    padding: 12px 4px;
+  }
+
+  .ch-rail-spacer {
+    flex: 1;
+  }
+
+  .ch-tabbar,
+  .ch-only-mobile {
+    display: none;
+  }
+
+  .ch-list,
+  .ch-app[data-chat="open"] .ch-list {
+    display: flex;
+    flex: none;
+    width: 340px;
+    padding-bottom: 0;
+    border-right: 1px solid var(--ch-line);
+  }
+
+  .ch-main,
+  .ch-app[data-chat="open"] .ch-main {
+    display: flex;
+    position: static;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ch-page-main {
+    padding-bottom: 24px;
+  }
+}
+
+/* ---------- mentions, suggestions ---------- */
+.ch-badge.ch-mention {
+  background: var(--ch-bad);
+  color: #fff;
+}
+
+.ch-at-other {
+  font-weight: 700;
+}
+
+.ch-at-me {
+  font-weight: 700;
+  background: rgba(255, 90, 90, 0.28);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.ch-composer {
+  position: relative;
+}
+
+.ch-suggest {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 100%;
+  margin: 0 0 4px;
+  padding: 4px;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--ch-card);
+  border: 1px solid var(--ch-line);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  z-index: 20;
+}
+
+.ch-suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 8px;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ch-suggest-item.ch-active,
+.ch-suggest-item:hover {
+  background: var(--ch-bg);
+}
+
+/* ---------- management ---------- */
+.ch-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.ch-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ch-code-row .ch-code {
+  flex: 1;
+  min-width: 160px;
+  margin-top: 0;
+}
+
+.ch-indent {
+  margin-left: 26px;
+}
+
+.ch-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+/* ---------- messages that can no longer be opened (after a wipe): who and when stay, the text is a red note ---------- */
+.ch-msg.ch-gone,
+.ch-msg.ch-mine.ch-gone {
+  background: var(--ch-card);
+  color: var(--ch-fg);
+  border: 1px solid var(--ch-line);
+}
+
+.ch-gone-text {
+  color: var(--ch-bad);
+  font-weight: 600;
+}
+
+/* ---------- notification prompt ---------- */
+.ch-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ch-bg);
+  border: 1px solid var(--ch-line);
+  flex-wrap: wrap;
+}
+
+.ch-banner-text {
+  flex: 1;
+  min-width: 180px;
+}
+
+.ch-more {
+  align-self: center;
+  margin: 4px auto 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--ch-border, rgba(127, 127, 127, 0.3));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* A system card: full width, boxed, with an icon. Message text only ever appears in a bubble, so nothing a person types can look like this. */
+.ch-system {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 6px auto;
+  padding: 6px 14px;
+  width: fit-content;
+  max-width: 92%;
+  border: 1px dashed #ff3b30;
+  border-radius: 10px;
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.07);
+  font-size: 13px;
+  user-select: none;
+}
+.ch-system[data-lost="unverified"] {
+  border-color: #ff9500;
+  color: #c77700;
+  background: rgba(255, 149, 0, 0.08);
+}
+.ch-system span {
+  opacity: 0.75;
+  font-size: 12px;
+}

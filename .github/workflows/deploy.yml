@@ -44,6 +44,9 @@ jobs:
         env:
           VITE_CIPHER_EPOCHS: ${{ secrets.CIPHER_EPOCHS }}
           VITE_CIPHER_EPOCH_CURRENT: ${{ vars.CIPHER_EPOCH_CURRENT }}
+          # Optional: server endpoints for /chat. Unset means the chat pages report "server not configured".
+          VITE_CHAT_API: ${{ vars.CHAT_API }}
+          VITE_CHAT_WS: ${{ vars.CHAT_WS }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -1,0 +1,430 @@
+/* iOS Settings look: grouped inset lists on a grey ground. */
+:root {
+  --ios-bg: #f2f2f7;
+  --ios-cell: #ffffff;
+  --ios-sep: rgba(60, 60, 67, 0.2);
+  --ios-label: #000000;
+  --ios-label2: rgba(60, 60, 67, 0.6);
+  --ios-label3: rgba(60, 60, 67, 0.3);
+  --ios-fill: rgba(118, 118, 128, 0.12);
+  --ios-red: #ff3b30;
+  --ios-green: #34c759;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ios-bg: #000000;
+    --ios-cell: #1c1c1e;
+    --ios-sep: rgba(84, 84, 88, 0.6);
+    --ios-label: #ffffff;
+    --ios-label2: rgba(235, 235, 245, 0.6);
+    --ios-label3: rgba(235, 235, 245, 0.3);
+    --ios-fill: rgba(118, 118, 128, 0.24);
+    --ios-red: #ff453a;
+    --ios-green: #30d158;
+  }
+}
+
+.ch-page-main {
+  background: var(--ios-bg);
+  color: var(--ios-label);
+}
+
+.ios-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) 16px 32px;
+}
+
+/* ---- headers ---- */
+.ios-large {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 12px 4px 6px;
+}
+
+.ios-large h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.ios-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 -4px 4px;
+}
+
+.ios-nav-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 55vw;
+}
+
+.ios-nav-right {
+  justify-self: end;
+}
+
+.ios-back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: 0;
+  padding: 8px 4px 8px 0;
+  color: var(--ch-accent);
+  font: inherit;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+/* ---- grouped lists ---- */
+.ios-section {
+  margin-top: 22px;
+}
+
+.ios-header {
+  margin: 0 0 7px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 400;
+  text-transform: uppercase;
+  color: var(--ios-label2);
+}
+
+.ios-footer {
+  margin: 7px 0 0;
+  padding: 0 16px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ios-label2);
+}
+
+.ios-group {
+  background: var(--ios-cell);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ios-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 16px;
+  background: none;
+  border: 0;
+  color: var(--ios-label);
+  font: inherit;
+  font-size: 17px;
+  text-align: left;
+  --sep-left: 16px;
+}
+
+.ios-row.ios-has-icon {
+  --sep-left: 58px;
+}
+
+.ios-row + .ios-row::before,
+.ios-row + .ios-form::before,
+.ios-form + .ios-row::before,
+.ios-form + .ios-form::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--sep-left, 16px);
+  right: 0;
+  height: 0.5px;
+  background: var(--ios-sep);
+}
+
+.ios-tap {
+  cursor: pointer;
+}
+
+.ios-tap:active {
+  background: var(--ios-fill);
+}
+
+.ios-tap:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ios-destructive {
+  color: var(--ios-red);
+}
+
+.ios-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ios-title.ios-center {
+  align-items: center;
+}
+
+.ios-title > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ios-sub {
+  font-size: 13px;
+  color: var(--ios-label2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ios-value {
+  color: var(--ios-label2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-align: right;
+  min-width: 0;
+}
+
+.ios-chevron {
+  color: var(--ios-label3);
+  flex: none;
+  margin-right: -6px;
+}
+
+.ios-check {
+  color: var(--ch-accent);
+}
+
+.ios-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.ios-form {
+  position: relative;
+  padding: 12px 16px;
+  --sep-left: 16px;
+}
+
+.ios-form .ch-input {
+  background: transparent;
+}
+
+/* ---- controls ---- */
+.ios-switch {
+  position: relative;
+  flex: none;
+  width: 51px;
+  height: 31px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(120, 120, 128, 0.32);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.ios-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+
+.ios-switch[aria-checked="true"] {
+  background: var(--ios-green);
+}
+
+.ios-switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+}
+
+.ios-field {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  outline: none;
+}
+
+.ios-search {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ios-fill);
+  color: var(--ios-label);
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 17px;
+  outline: none;
+}
+
+.ios-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--ios-red);
+  font-size: 15px;
+}
+
+.ios-ok {
+  color: var(--ios-green);
+}
+
+.ios-empty {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 56px 24px;
+  color: var(--ios-label2);
+  text-align: center;
+}
+
+.ios-empty p {
+  margin: 8px 0 0;
+  max-width: 28ch;
+}
+
+.ios-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+.ios-profile h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.ios-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--ios-label2);
+  font-size: 15px;
+}
+
+.ios-pager button {
+  background: none;
+  border: 0;
+  color: var(--ch-accent);
+  font: inherit;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.ios-pager button:disabled {
+  color: var(--ios-label3);
+  cursor: default;
+}
+
+.ios-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.ios-lock {
+  margin: 48px auto 0;
+  max-width: 420px;
+}
+
+.ios-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ios-link {
+  background: none;
+  border: 0;
+  color: var(--ch-accent);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ios-sub {
+  font-size: 13px;
+  color: var(--ios-label2);
+}
+
+.ios-badge {
+  margin-left: 0;
+}
+
+.ios-fav,
+.ios-invite {
+  display: grid;
+  gap: 4px;
+}
+
+.ios-fav-meta,
+.ios-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ios-label2);
+}
+
+.ios-actions {
+  justify-content: flex-start;
+  gap: 20px;
+  font-size: 15px;
+}
+
+.ios-invite-note {
+  font-weight: 600;
+}
+
+.ios-link.ios-destructive {
+  color: var(--ios-red);
+}
+
+.ios-row .ch-admin {
+  margin-left: 6px;
+}
+
+/* number and text inputs sitting in a row */
+.ios-field[type="number"] {
+  max-width: 120px;
+}
+
+.ios-gone {
+  color: var(--ios-red);
+  font-weight: 600;
+}

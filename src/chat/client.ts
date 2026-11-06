@@ -507,20 +507,15 @@ function noteActive(conv: string, time: number): void {
 }
 
 /**
- * What arrived while nobody was signed in: the server keeps how far I have read in each conversation (myRead, moved by my own reading and
- * by anything I write), so the difference to its newest message is the unread count. One request covers every conversation. A conversation
- * whose newest message is older than the retention period has nothing left to read.
+ * What arrived while nobody was signed in: the server keeps how far I have read in each conversation and counts, from there on, the
+ * messages other people wrote that have not expired (never my own; at most 100, shown as "99+"). One request covers every conversation.
  */
 async function loadUnread(): Promise<void> {
-  const r = await api().get<{ conversations: { conv: string; lastSeq: number; myRead?: number }[] }>("/conversations");
-  const st = useChat.getState();
-  const oldest = Date.now() - st.retentionDays * 86_400_000;
-  const unread = { ...st.unread };
+  const r = await api().get<{ conversations: { conv: string; unread?: number }[] }>("/conversations");
+  const unread = { ...useChat.getState().unread };
   for (const c of r.conversations) {
-    if ((st.lastActive[c.conv] ?? 0) < oldest) continue;
-    if (c.myRead === undefined) continue; // a server that does not say how far I have read (older version): no guess
-    const n = c.lastSeq - c.myRead;
-    if (n > 0) unread[c.conv] = Math.max(unread[c.conv] ?? 0, n);
+    // A server that does not count (older version) leaves no badge rather than a guess.
+    if (typeof c.unread === "number" && c.unread > 0) unread[c.conv] = Math.max(unread[c.conv] ?? 0, c.unread);
   }
   patch({ unread });
 }

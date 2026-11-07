@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Activity, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, Users } from "lucide-react";
 import { ADMIN_LOCK_MS, lockAdmin, markAdminAction, unlockedNow, useAdminLock } from "../adminLock";
 import { ApiError, adminDeleteUser, rawApi, unlockAdmin, wipeEverything, type Progress } from "../client";
-import { formatClock, formatDay } from "../format";
+import { formatBytes, formatClock, formatDay } from "../format";
 import { errorText } from "../i18nApp";
 import { onEnter } from "../keys";
 import { PATH, go as navigate, useLocation } from "../route";
@@ -26,6 +26,9 @@ interface AdminUser {
   loginCount: number;
   failedCount: number;
   suspended: boolean;
+  /** Voice uploaded this (UTC) month; absent from an older server. */
+  voiceBytes?: number;
+  voiceCount?: number;
 }
 interface Invite {
   id: string;
@@ -253,7 +256,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
                 @{u.handle} {u.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>} {u.suspended && <span className="ios-destructive">⏸</span>}
               </>
             }
-            subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}`}
+            subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.voiceCount ? ` · ${a.manage.voiceSummary(u.voiceCount, formatBytes(u.voiceBytes ?? 0))}` : ""}`}
             chevron
             onClick={() => go({ k: "user", user: u })}
           />
@@ -278,6 +281,8 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
         <Row title={a.manage.lastLogin} value={when(user.lastLoginAt)} />
         <Row title={a.manage.logins} value={user.loginCount} />
         <Row title={a.manage.failures} value={user.failedCount} />
+        <Row title={a.manage.voiceCountMonth} value={user.voiceCount ?? 0} />
+        <Row title={a.manage.voiceBytesMonth} value={formatBytes(user.voiceBytes ?? 0)} />
         <Row title={a.manage.state} value={user.suspended ? a.manage.suspendedState : a.manage.activeState} />
       </Group>
       <Group header={a.manage.ips}>
@@ -635,7 +640,7 @@ function StatusView({ go }: { go: (v: View) => void }) {
             <Row title={a.manage.online} value={s.online} />
             <Row title={a.groups} value={s.groups} />
             <Row title={a.manage.messages} value={s.counters.messages} />
-            <Row title={a.manage.voiceBytes} value={s.counters.voiceBytes} />
+            <Row title={a.manage.voiceBytes} value={formatBytes(s.counters.voiceBytes)} />
             <Row
               title={a.manage.errors}
               value={

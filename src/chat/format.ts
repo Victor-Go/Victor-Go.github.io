@@ -6,6 +6,19 @@ const locale = (lang: Lang): string => (lang === "zh" ? "zh-CN" : "en");
 export const formatClock = (ms: number, lang: Lang): string =>
   new Intl.DateTimeFormat(locale(lang), { hour: "2-digit", minute: "2-digit" }).format(ms);
 
+/** A size in bytes as B, KB, MB or GB (1024 steps), one decimal from KB up. */
+export function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return i === 0 ? `${Math.round(v)} B` : `${v.toFixed(1)} ${units[i]}`;
+}
+
 /** Same local calendar day gives the same key, whatever the time zone. */
 export function dayKey(ms: number): string {
   const d = new Date(ms);

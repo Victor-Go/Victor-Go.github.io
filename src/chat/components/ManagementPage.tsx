@@ -29,6 +29,9 @@ interface AdminUser {
   /** Voice uploaded this (UTC) month; absent from an older server. */
   voiceBytes?: number;
   voiceCount?: number;
+  /** Messages sent this (UTC) month, and the monthly limit (null for the administrator); absent from an older server. */
+  messageCount?: number;
+  messageLimit?: number | null;
 }
 interface Invite {
   id: string;
@@ -256,7 +259,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
                 @{u.handle} {u.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>} {u.suspended && <span className="ios-destructive">⏸</span>}
               </>
             }
-            subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.voiceCount ? ` · ${a.manage.voiceSummary(u.voiceCount, formatBytes(u.voiceBytes ?? 0))}` : ""}`}
+            subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.voiceCount ? ` · ${a.manage.voiceSummary(u.voiceCount, formatBytes(u.voiceBytes ?? 0))}` : ""}`}
             chevron
             onClick={() => go({ k: "user", user: u })}
           />
@@ -281,6 +284,7 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
         <Row title={a.manage.lastLogin} value={when(user.lastLoginAt)} />
         <Row title={a.manage.logins} value={user.loginCount} />
         <Row title={a.manage.failures} value={user.failedCount} />
+        {user.messageCount !== undefined && <Row title={a.manage.messageCountMonth} value={a.usageValue(user.messageCount, user.messageLimit ?? null)} />}
         <Row title={a.manage.voiceCountMonth} value={user.voiceCount ?? 0} />
         <Row title={a.manage.voiceBytesMonth} value={formatBytes(user.voiceBytes ?? 0)} />
         <Row title={a.manage.state} value={user.suspended ? a.manage.suspendedState : a.manage.activeState} />

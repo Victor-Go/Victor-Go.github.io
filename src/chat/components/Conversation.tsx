@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Smile, Star } from "lucide-react";
+import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
-import { ApiError, addFavorite, loadOlder, removeFavorite, sendText } from "../client";
+import { ApiError, addFavorite, deleteMessages, favoritesAmong, loadOlder, removeFavorite, sendText } from "../client";
 import { errorText } from "../i18nApp";
 import { MESSAGE_MAX_CHARS } from "../crypto/message";
 import { deliveryOf } from "../delivery";
@@ -11,6 +11,7 @@ import { useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
+import { DELETE_MAX, canDelete } from "../selection";
 import { Avatar, Modal } from "./ui";
 import { VoiceBubble } from "./VoiceBubble";
 import { VoiceComposer } from "./VoiceComposer";
@@ -50,6 +51,11 @@ function MessageText({ text, handles, me, onLink }: { text: string; handles: str
   );
 }
 
+/** Holding a message this long on a phone starts selecting. */
+const HOLD_MS = 1000;
+/** The side-by-side layout (a mouse is the main pointer there); below it is the phone layout. */
+const isWide = (): boolean => typeof window.matchMedia === "function" && window.matchMedia("(min-width: 900px)").matches;
+
 export function Conversation() {
   const { lang, a } = useLang();
   const { activeConv, contacts, groups, messages, me, retentionDays, favorites, reads, olderMore } = useChat();
@@ -73,8 +79,6 @@ export function Conversation() {
   // Messages whose favourite star is being saved or removed; the star ignores taps until that finishes.
   const [favBusy, setFavBusy] = useState<ReadonlySet<string>>(new Set());
   const [loadingOlder, setLoadingOlder] = useState(false);
-  // Scroll position to restore after older messages were put above: [scrollHeight, scrollTop] from before the load.
-  const keepAt = useRef<[number, number] | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextCaret = useRef<number | null>(null);
@@ -101,26 +105,181 @@ export function Conversation() {
   const now = Date.now();
   const visible = list.filter((msg) => !isExpired(msg.time, now, retentionDays));
 
+  // Selecting messages to delete. Only my own sent messages can be picked; the picked set holds sequence numbers.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
+  const swallowClick = useRef(false);
+  const drag = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const raf = useRef(0);
+  const deletable = new Set(visible.filter(canDelete).map((m) => m.seq));
+  // A message that was deleted meanwhile (by the push, by a reload) drops out of the selection by itself.
+  const chosen = visible.filter((m) => picked.has(m.seq) && canDelete(m));
+  const stopSelecting = () => {
+    setSelecting(false);
+    setPicked(new Set());
+    setConfirming(false);
+    setBox(null);
+    drag.current = null;
+    pointer.current = null;
+  };
+  useEffect(stopSelecting, [activeConv]);
+  useEffect(() => {
+    if (!selecting) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && !confirming && stopSelecting();
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [selecting, confirming]);
+  const toggle = (seq: number) => {
+    if (!deletable.has(seq)) return;
+    setPicked((p) => {
+      const next = new Set(p);
+      if (next.has(seq)) next.delete(seq);
+      else if (next.size < DELETE_MAX) next.add(seq);
+      return next;
+    });
+  };
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+    // The click that ends a long press is swallowed; if the browser sends none (a cancelled touch), do not keep swallowing the next real one.
+    if (swallowClick.current) setTimeout(() => (swallowClick.current = false), 50);
+  };
+  // Phone layout: holding one of my messages for a second starts selecting, with that message picked.
+  const beginPress = (e: React.PointerEvent, seq: number) => {
+    if (selecting || isWide() || !deletable.has(seq) || (e.target as HTMLElement).closest("a, button")) return;
+    cancelPress();
+    const timer = setTimeout(() => {
+      press.current = null;
+      swallowClick.current = true;
+      window.getSelection()?.removeAllRanges();
+      setSelecting(true);
+      setPicked(new Set([seq]));
+      try {
+        navigator.vibrate?.(15);
+      } catch {
+        /* not every browser has it */
+      }
+    }, HOLD_MS);
+    press.current = { timer, x: e.clientX, y: e.clientY };
+  };
+  const movePress = (e: React.PointerEvent) => {
+    const p = press.current;
+    if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) cancelPress();
+  };
+  // Wide layout: dragging from the empty background draws a box; the messages of mine it touches are picked.
+  const contentPoint = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    return { x: e.clientX - r.left + el.scrollLeft, y: e.clientY - r.top + el.scrollTop };
+  };
+  const dragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    // Only the bare background (not a bubble, not the scrollbar), with the primary button.
+    if (e.target !== el || e.button !== 0 || !isWide() || e.clientX >= el.getBoundingClientRect().left + el.clientWidth) return;
+    drag.current = { ...contentPoint(e), active: false };
+    pointer.current = { x: e.clientX, y: e.clientY };
+    el.setPointerCapture(e.pointerId);
+  };
+  // Recomputes the box and the picked messages from the pointer's last position and the list's current scroll.
+  const updateDrag = () => {
+    const d = drag.current;
+    const el = listRef.current;
+    const ptr = pointer.current;
+    if (!d || !el || !ptr) return;
+    const base = el.getBoundingClientRect();
+    const p = { x: ptr.x - base.left + el.scrollLeft, y: ptr.y - base.top + el.scrollTop };
+    if (!d.active && Math.hypot(p.x - d.x, p.y - d.y) < 6) return;
+    d.active = true;
+    const rect = { x: Math.min(d.x, p.x), y: Math.min(d.y, p.y), w: Math.abs(p.x - d.x), h: Math.abs(p.y - d.y) };
+    setBox(rect);
+    setSelecting(true);
+    const hit = new Set<number>();
+    for (const row of el.querySelectorAll<HTMLElement>("[data-seq]")) {
+      const seq = Number(row.dataset.seq);
+      if (!deletable.has(seq) || hit.size >= DELETE_MAX) continue;
+      const r = row.getBoundingClientRect();
+      const left = r.left - base.left + el.scrollLeft;
+      const top = r.top - base.top + el.scrollTop;
+      if (left < rect.x + rect.w && left + r.width > rect.x && top < rect.y + rect.h && top + r.height > rect.y) hit.add(seq);
+    }
+    setPicked(hit);
+  };
+  const updateRef = useRef(updateDrag);
+  updateRef.current = updateDrag;
+  // While the pointer is held near the top or bottom edge the list keeps scrolling, faster the closer to (or past) the edge.
+  const autoScroll = () => {
+    raf.current = 0;
+    const el = listRef.current;
+    const ptr = pointer.current;
+    if (!drag.current?.active || !el || !ptr) return;
+    const r = el.getBoundingClientRect();
+    const zone = 56;
+    const dy = ptr.y < r.top + zone ? -Math.min(24, 2 + (r.top + zone - ptr.y) / 3) : ptr.y > r.bottom - zone ? Math.min(24, 2 + (ptr.y - (r.bottom - zone)) / 3) : 0;
+    if (dy !== 0) {
+      el.scrollTop += dy;
+      updateRef.current();
+    }
+    raf.current = requestAnimationFrame(autoScroll);
+  };
+  const dragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    pointer.current = { x: e.clientX, y: e.clientY };
+    updateDrag();
+    if (drag.current.active && !raf.current) raf.current = requestAnimationFrame(autoScroll);
+  };
+  const dragEnd = () => {
+    drag.current = null;
+    pointer.current = null;
+    if (raf.current) cancelAnimationFrame(raf.current);
+    raf.current = 0;
+    setBox(null);
+  };
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  const confirmDelete = () => {
+    if (!activeConv || deleting || chosen.length === 0) return;
+    setDeleting(true);
+    void deleteMessages(activeConv, chosen.map((m) => m.seq))
+      .then((r) => {
+        setFavError(r.error ? errorText(a, r.error.code) : null);
+        stopSelecting();
+      })
+      .finally(() => setDeleting(false));
+  };
+
+  // Where the list was after the last change: which messages were first and last, and how tall it was.
+  const drawn = useRef<{ conv: string | null; first: string; last: string; height: number } | null>(null);
+  const firstKey = visible.length > 0 ? String(visible[0].seq || visible[0].id) : "";
+  const lastKey = visible.length > 0 ? String(visible[visible.length - 1].seq || visible[visible.length - 1].id) : "";
   useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    if (keepAt.current) {
-      // Older messages arrived above: stay on the message that was being read.
-      el.scrollTop = el.scrollHeight - keepAt.current[0] + keepAt.current[1];
-      keepAt.current = null;
-    } else el.scrollTop = el.scrollHeight;
-  }, [visible.length, activeConv]);
+    const was = drawn.current;
+    if (was && was.conv === activeConv && was.first !== "" && was.first !== firstKey && was.last === lastKey) {
+      // Older messages were put above: the reader stays on the message they were reading, whatever scrolling or loading happened meanwhile.
+      el.scrollTop += el.scrollHeight - was.height;
+    } else if (!was || was.conv !== activeConv || was.last !== lastKey) {
+      // A new chat, or a new message at the bottom: go to the bottom.
+      el.scrollTop = el.scrollHeight;
+    }
+    drawn.current = { conv: activeConv, first: firstKey, last: lastKey, height: el.scrollHeight };
+  }, [visible.length, activeConv, firstKey, lastKey]);
   // Scrolling to the top loads the next 20 older messages. A chat too short to scroll loads on its own until it fills the screen or runs out.
   const more = activeConv ? !!olderMore[activeConv] : false;
+  const paging = useRef(false);
   const pageOlder = () => {
     const el = listRef.current;
-    if (!activeConv || !more || loadingOlder || !el) return;
-    keepAt.current = [el.scrollHeight, el.scrollTop];
+    if (!activeConv || !more || loadingOlder || paging.current || !el) return;
+    paging.current = true;
     setLoadingOlder(true);
     void loadOlder(activeConv)
       .catch(() => {})
       .finally(() => {
-        keepAt.current = null;
+        paging.current = false;
         setLoadingOlder(false);
       });
   };
@@ -224,7 +383,16 @@ export function Conversation() {
         )}
       </header>
 
-      <div className="ch-messages" ref={listRef} onScroll={(e) => e.currentTarget.scrollTop < 60 && pageOlder()}>
+      <div
+        className={"ch-messages" + (selecting ? " ch-selecting" : "") + (box ? " ch-dragging" : "")}
+        ref={listRef}
+        onScroll={(e) => e.currentTarget.scrollTop < 60 && pageOlder()}
+        onPointerDown={dragStart}
+        onPointerMove={dragMove}
+        onPointerUp={dragEnd}
+        onPointerCancel={dragEnd}
+      >
+        {box && <div className="ch-marquee" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} aria-hidden="true" />}
         <div className="ch-retention">{a.retentionTop(retentionDays)}</div>
         {more && (
           <div className="ch-more-spin" role="status" aria-label={a.working}>
@@ -241,7 +409,15 @@ export function Conversation() {
           return (
             <Fragment key={`${m.senderId}.${m.id}`}>
               {newDay && <div className="ch-day">{formatDay(m.time, now, lang, { today: a.today, yesterday: a.yesterday })}</div>}
-              {!m.payload ? (
+              {m.deleted ? (
+                <div className="ch-system" role="note" data-lost="deleted">
+                  <Trash2 size={16} aria-hidden="true" />
+                  <strong>{a.messageDeleted}</strong>
+                  <span>
+                    @{nameOf(m)} · {formatClock(m.time, lang)}
+                  </span>
+                </div>
+              ) : !m.payload ? (
                 // A destroyed or unverifiable message is a full-width system card with an icon, which no message text can imitate (text only ever appears in a bubble).
                 <div className="ch-system" role="note" data-lost={m.lost ?? "unverified"}>
                   {m.lost === "destroyed" ? <ShieldOff size={16} aria-hidden="true" /> : <ShieldAlert size={16} aria-hidden="true" />}
@@ -251,8 +427,27 @@ export function Conversation() {
                   </span>
                 </div>
               ) : (
-              <div className={"ch-msgrow" + (m.mine ? " ch-mine" : "")}>
-                {group && !m.mine ? (
+              <div
+                className={"ch-msgrow" + (m.mine ? " ch-mine" : "") + (selecting && deletable.has(m.seq) ? " ch-pickable" : "") + (picked.has(m.seq) && deletable.has(m.seq) ? " ch-picked" : "")}
+                data-seq={m.seq > 0 ? m.seq : undefined}
+                onPointerDown={(e) => beginPress(e, m.seq)}
+                onPointerMove={movePress}
+                onPointerUp={cancelPress}
+                onPointerCancel={cancelPress}
+                onPointerLeave={cancelPress}
+                onContextMenu={(e) => {
+                  if (!isWide() && deletable.has(m.seq)) e.preventDefault();
+                }}
+                onClick={() => {
+                  if (swallowClick.current) swallowClick.current = false;
+                  else if (selecting) toggle(m.seq);
+                }}
+              >
+                {selecting && deletable.has(m.seq) ? (
+                  <button type="button" role="checkbox" aria-checked={picked.has(m.seq)} aria-label={`${formatClock(m.time, lang)}`} className="ch-check">
+                    {picked.has(m.seq) && <Check size={16} aria-hidden="true" />}
+                  </button>
+                ) : group && !m.mine ? (
                   <button type="button" className="ch-avatar-btn" aria-label={`@${nameOf(m)}`} onClick={() => mentionSender(nameOf(m))}>
                     <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
                   </button>
@@ -316,6 +511,19 @@ export function Conversation() {
         })}
       </div>
 
+      {selecting ? (
+        <footer className="ch-composer ch-selectbar">
+          <button type="button" className="ch-secondary" onClick={stopSelecting}>
+            {a.cancel}
+          </button>
+          <span className="ch-hint ch-select-count" role="status">
+            {a.selectedCount(chosen.length)}
+          </span>
+          <button type="button" className="ch-danger" disabled={chosen.length === 0 || deleting} onClick={() => setConfirming(true)}>
+            <Trash2 size={18} aria-hidden="true" /> {a.deleteSelected}
+          </button>
+        </footer>
+      ) : (
       <footer className="ch-composer">
         {open && (
           <ul className="ch-suggest" role="listbox" aria-label={a.mentionSuggestions}>
@@ -428,6 +636,19 @@ export function Conversation() {
         </div>
         )}
       </footer>
+      )}
+      {confirming && (
+        <Modal title={a.deleteTitle} onClose={() => !deleting && setConfirming(false)} closeLabel={a.close}>
+          <p>{a.deleteBody(chosen.length, favoritesAmong(activeConv, chosen))}</p>
+          <p className="ch-hint">{a.deleteWarn}</p>
+          <button type="button" className="ch-danger" disabled={deleting} aria-busy={deleting} onClick={confirmDelete}>
+            {deleting ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : <Trash2 size={18} aria-hidden="true" />} {a.deleteConfirm}
+          </button>
+          <button type="button" className="ch-secondary" disabled={deleting} onClick={() => setConfirming(false)}>
+            {a.cancel}
+          </button>
+        </Modal>
+      )}
       {info && group && <GroupInfo group={group} onClose={() => setInfo(false)} />}
       {link && (
         <Modal title={a.linkTitle} onClose={() => setLink(null)} closeLabel={a.close}>

@@ -17,7 +17,8 @@ import { playChime } from "./sound";
 import { stripControls } from "./text";
 import { canonicalHandle } from "./validation";
 import { fitsServer } from "./voice";
-import { playVoice, stopVoice } from "./voicePlayer";
+import { canDelete, planDeleteBatches } from "./selection";
+import { playVoice, stopVoice, stopVoiceIf } from "./voicePlayer";
 import { Cancelled, cancelWork, solveInWorkers } from "./workers/client";
 import type { Challenge } from "./workers/solve";
 
@@ -54,6 +55,8 @@ interface WireMessage {
   ct: string;
   serverTime: number;
   role: string;
+  /** Set by the server on a message its sender deleted; ct and clientMsgId are then empty. */
+  deleted?: boolean;
 }
 
 type LockWhy = "expired" | "kicked" | "replaced";
@@ -74,6 +77,12 @@ const s = {
   contactKeys: new Map<string, { key: Uint8Array; convId: string }>(),
   groupKeys: new Map<string, Map<number, Uint8Array>>(),
   lastSeq: new Map<string, number>(),
+  /** Sequence numbers deleted this session, per conversation (numbers only, no content): a page fetched before the push arrived must not bring a message back. */
+  tombs: new Map<string, Set<number>>(),
+  /** Bumped when a conversation's cache is replaced or dropped; a slower request that started before it is thrown away. */
+  loadGen: new Map<string, number>(),
+  /** Favourite records (vault ids) whose message was deleted and whose removal the server has not confirmed yet. */
+  favRetry: new Set<string>(),
   sentRead: new Map<string, number>(),
   autoBusy: new Set<string>(),
   /** Messages already sent again once after the server said their epoch is gone. */
@@ -183,11 +192,20 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
     if (publicKeyOf(s.seed) !== session.publicKey) throw new ApiError(0, "internal");
     // A socket of an earlier sign-in that is still winding down must not touch this one: no state, no frames, and above all no "kicked" lock.
     const mine = (): boolean => s.ws === sock;
+    let firstOpen = true;
     const sock: ChatSocket = new ChatSocket({
       url: s.wsUrl ?? a.base.replace(/^http/, "ws") + "/ws",
       getTicket: async () => (await a.post<{ ticket: string }>("/auth/ws-ticket")).ticket,
       onFrame: (f) => mine() && void onFrame(f),
-      onState: (socket) => mine() && patch({ socket }),
+      onState: (socket) => {
+        if (!mine()) return;
+        patch({ socket });
+        // Every time the socket comes up (first connection, reconnect, the two-hour roll-over) pushes may have been missed: read again.
+        if (socket === "open") {
+          void resync(!firstOpen);
+          firstOpen = false;
+        }
+      },
       onFinal: (reason) => mine() && lock(s.lockNotice(reason === "replaced" ? "replaced" : "kicked")),
     });
     s.ws = sock;
@@ -219,6 +237,9 @@ export function lock(notice: string | null = null): void {
   s.contactKeys.clear();
   s.groupKeys.clear();
   s.lastSeq.clear();
+  s.tombs.clear();
+  s.loadGen.clear();
+  s.favRetry.clear();
   s.sentRead.clear();
   s.autoBusy.clear();
   s.retried.clear();
@@ -456,7 +477,21 @@ const keyFor = (conv: string, gen: number): Uint8Array | null => {
 };
 const currentGen = (conv: string): number => useChat.getState().groups.find((g) => g.id === conv)?.gen ?? 0;
 
+/** What is left of a deleted message: who and when, nothing else. It is told apart by its sequence number. */
+const marker = (m: Pick<Msg, "seq" | "senderId" | "role" | "time" | "mine">): Msg => ({
+  id: `deleted:${m.seq}`,
+  seq: m.seq,
+  senderId: m.senderId,
+  role: m.role,
+  time: m.time,
+  mine: m.mine,
+  payload: null,
+  deleted: true,
+  status: "sent",
+});
+
 async function toMsg(w: WireMessage, mine: boolean): Promise<Msg> {
+  if (w.deleted || s.tombs.get(w.conv)?.has(w.seq)) return marker({ seq: w.seq, senderId: w.senderId, role: w.role, time: w.serverTime, mine });
   let payload: Payload | null = null;
   let lost: Msg["lost"];
   const epoch = epochOfCiphertext(w.ct) ?? undefined;
@@ -497,6 +532,8 @@ function addMessage(conv: string, msg: Msg): boolean {
     notifyIncoming(conv);
   }
   if (i < 0 && !msg.mine) markRead(conv);
+  // A chat that is not open keeps only its newest messages.
+  if (useChat.getState().activeConv !== conv) trimConversation(conv);
   return i < 0;
 }
 
@@ -507,23 +544,28 @@ function noteActive(conv: string, time: number): void {
 }
 
 /**
- * What arrived while nobody was signed in: the server keeps how far I have read in each conversation and counts, from there on, the
- * messages other people wrote that have not expired (never my own; at most 100, shown as "99+"). One request covers every conversation.
+ * What the server counts as unread: messages other people wrote after my read position that have not expired or been deleted (never my own; at
+ * most 100, shown as "99+"). One request covers every conversation. The server's number replaces the local one, so a deletion lowers the badge.
  */
 async function loadUnread(): Promise<void> {
   const r = await api().get<{ conversations: { conv: string; unread?: number }[] }>("/conversations");
-  const unread = { ...useChat.getState().unread };
+  const st = useChat.getState();
+  const looking = st.section === "contacts" && !document.hidden ? st.activeConv : null;
+  const unread = { ...st.unread };
+  const mentions = { ...st.mentions };
   for (const c of r.conversations) {
-    // A server that does not count (older version) leaves no badge rather than a guess.
-    if (typeof c.unread === "number" && c.unread > 0) unread[c.conv] = Math.max(unread[c.conv] ?? 0, c.unread);
+    // A server that does not count (older version) leaves the badge as it is rather than a guess.
+    if (typeof c.unread !== "number") continue;
+    unread[c.conv] = c.conv === looking ? 0 : c.unread;
+    if (unread[c.conv] === 0) mentions[c.conv] = false;
   }
-  patch({ unread });
+  patch({ unread, mentions });
 }
 
-/** A page of history: small, so a chat costs the server little; older pages come as the reader scrolls up. */
+/** A page of older history: small, so a chat costs the server little; more come as the reader scrolls up. */
 const PAGE = 20;
-/** Catching up on what arrived while away may need larger steps. */
-const CATCHUP = 50;
+/** A chat keeps at most this many of its newest messages once it is left (and while it is not the open one). */
+export const CACHE_MAX = 50;
 interface HistoryPage {
   messages: WireMessage[];
   lastSeq: number;
@@ -531,52 +573,223 @@ interface HistoryPage {
   peerRead?: number;
 }
 
+function wipeVoiceId(id: string): void {
+  stopVoiceIf(id);
+  s.voice.get(id)?.fill(0);
+  s.voice.delete(id);
+}
+const wipeVoice = (m: Msg): void => {
+  if (m.payload?.k === "voice" && m.payload.voice.id) wipeVoiceId(m.payload.voice.id);
+};
+const favoriteIdOf = (conv: string, m: Msg): string => `${conv}.${m.id}`.slice(0, 70);
+
 /**
- * The first time a chat is opened it loads the newest page (older ones are requested on demand); after that it only asks for what is newer than
- * the last sequence number it has. Pages are cut by sequence number, so messages arriving meanwhile can neither shift nor repeat a page.
+ * Removes the favourites whose message was deleted, at once on screen and then on the server in one request (the server takes up to 50 ids).
+ * A failure is kept and tried again with the next deletion or reconnect; nothing is kept in the browser.
  */
-export async function loadHistory(conv: string): Promise<void> {
-  const myId = me().userId;
-  const first = !s.lastSeq.has(conv);
-  let after = s.lastSeq.get(conv) ?? 0;
-  for (let round = 0; round < 200; round++) {
-    const q = first && round === 0 ? `limit=${PAGE}` : `afterSeq=${after}&limit=${CATCHUP}`;
-    const r = await api().get<HistoryPage>(`/messages?conv=${encodeURIComponent(conv)}&${q}`);
-    if (r.peerRead !== undefined) patch({ reads: { ...useChat.getState().reads, [conv]: Math.max(useChat.getState().reads[conv] ?? 0, r.peerRead) } });
-    for (const w of r.messages) {
-      addMessage(conv, await toMsg({ ...w, conv }, w.senderId === myId));
-      after = Math.max(after, w.seq);
-    }
-    if (first && round === 0) {
-      patch({ olderMore: { ...useChat.getState().olderMore, [conv]: r.hasMore } });
-      after = Math.max(after, r.lastSeq);
-      s.lastSeq.set(conv, after);
-      break;
-    }
-    s.lastSeq.set(conv, after);
-    if (!r.hasMore) break;
-  }
+async function dropFavorites(ids: ReadonlySet<string>): Promise<void> {
+  const st = useChat.getState();
+  const gone = st.favorites.filter((f) => ids.has(f.id));
+  if (gone.length > 0) patch({ favorites: st.favorites.filter((f) => !ids.has(f.id)) });
+  for (const f of gone) s.favRetry.add(`fav:${f.gen}:${f.id}`);
+  await flushFavorites();
 }
 
-/** Pages back: the newest messages older than the oldest one on screen. */
+async function flushFavorites(): Promise<void> {
+  const all = [...s.favRetry];
+  for (let i = 0; i < all.length; i += 50) {
+    const chunk = all.slice(i, i + 50);
+    try {
+      await api().post("/favorites/delete", { ids: chunk });
+    } catch {
+      return;
+    }
+    for (const id of chunk) {
+      s.favRetry.delete(id);
+      s.versions.delete(id);
+    }
+  }
+  if (all.length > 0) void refreshUsage();
+}
+
+/**
+ * Puts `incoming` in place of the cached messages that `keep` does not keep. Nothing is appended: a message that was cached and is gone from the
+ * answer (deleted, expired) is gone from the cache too. A message that is deleted now but was readable in the cache loses its recording and favourite.
+ * Does not touch unread counts, chimes or notifications: those belong to messages that arrive, not to messages that are read again.
+ */
+function replaceRange(conv: string, incoming: Msg[], keep: (m: Msg) => boolean): void {
+  const st = useChat.getState();
+  const cur = st.messages[conv] ?? [];
+  const tomb = s.tombs.get(conv);
+  const favs = new Set<string>();
+  const fresh = incoming.map((m) => (!m.deleted && m.seq > 0 && tomb?.has(m.seq) ? marker(m) : m));
+  const bySeq = new Map(fresh.filter((m) => m.seq > 0).map((m) => [m.seq, m]));
+  const seen = new Set(fresh.map((m) => `${m.senderId}.${m.id}`));
+  const kept: Msg[] = [];
+  for (const m of cur) {
+    const now = m.seq > 0 ? bySeq.get(m.seq) : undefined;
+    if (keep(m) && !now && !seen.has(`${m.senderId}.${m.id}`)) {
+      kept.push(m);
+      continue;
+    }
+    if (!m.deleted && (now?.deleted || tomb?.has(m.seq))) favs.add(favoriteIdOf(conv, m));
+    if (!now || now.deleted) wipeVoice(m);
+  }
+  const next = [...kept, ...fresh].sort((a, b) => (a.seq || Infinity) - (b.seq || Infinity) || a.time - b.time);
+  patch({ messages: { ...st.messages, [conv]: next } });
+  const newest = fresh.reduce((n, m) => Math.max(n, m.time), 0);
+  if (newest > 0) noteActive(conv, newest);
+  if (favs.size > 0) void dropFavorites(favs);
+}
+
+/** Cuts a chat down to its newest messages; what was cut is still on the server, so "load earlier" is offered again. */
+function trimConversation(conv: string): void {
+  const st = useChat.getState();
+  const cur = st.messages[conv];
+  if (!cur) return;
+  const seqs = cur.filter((m) => m.seq > 0).map((m) => m.seq).sort((a, b) => b - a);
+  if (seqs.length <= CACHE_MAX) return;
+  const cutoff = seqs[CACHE_MAX - 1];
+  const next = cur.filter((m) => m.seq === 0 || m.seq >= cutoff);
+  for (const m of cur) if (m.seq > 0 && m.seq < cutoff) wipeVoice(m);
+  patch({ messages: { ...st.messages, [conv]: next }, olderMore: { ...st.olderMore, [conv]: true } });
+}
+
+/** Forgets everything loaded for a chat except what is still being sent; the next time it is opened it loads from the server again. */
+function dropCached(conv: string): void {
+  const st = useChat.getState();
+  s.loadGen.set(conv, (s.loadGen.get(conv) ?? 0) + 1);
+  s.lastSeq.delete(conv);
+  const cur = st.messages[conv];
+  if (!cur) return;
+  for (const m of cur) if (m.seq > 0) wipeVoice(m);
+  const pending = cur.filter((m) => m.seq === 0);
+  const messages = { ...st.messages };
+  if (pending.length > 0) messages[conv] = pending;
+  else delete messages[conv];
+  const olderMore = { ...st.olderMore };
+  delete olderMore[conv];
+  patch({ messages, olderMore });
+}
+
+/**
+ * Reads the newest page of a chat and makes it the whole cache (older pages that were loaded go). Called when the chat is opened, after the
+ * socket reconnects, and when a gap in the sequence shows that something was missed. A slower, older answer never overwrites a newer one.
+ */
+export async function loadHistory(conv: string): Promise<void> {
+  const token = s.api?.token ?? null;
+  const myId = me().userId;
+  const gen = (s.loadGen.get(conv) ?? 0) + 1;
+  s.loadGen.set(conv, gen);
+  const r = await api().get<HistoryPage>(`/messages?conv=${encodeURIComponent(conv)}&limit=${CACHE_MAX}`);
+  const incoming = await Promise.all(r.messages.map((w) => toMsg({ ...w, conv }, w.senderId === myId)));
+  if (!token || s.api?.token !== token || s.loadGen.get(conv) !== gen) return;
+  replaceRange(conv, incoming, (m) => m.seq === 0 || m.seq > r.lastSeq);
+  const st = useChat.getState();
+  patch({
+    olderMore: { ...st.olderMore, [conv]: r.hasMore },
+    ...(r.peerRead !== undefined ? { reads: { ...st.reads, [conv]: Math.max(st.reads[conv] ?? 0, r.peerRead) } } : {}),
+  });
+  s.lastSeq.set(conv, Math.max(r.lastSeq, ...(useChat.getState().messages[conv] ?? []).map((m) => m.seq)));
+}
+
+/** Pages back: the newest messages older than the oldest one on screen. What the cache holds for that stretch is replaced by the answer. */
 export async function loadOlder(conv: string): Promise<void> {
+  const token = s.api?.token ?? null;
   const myId = me().userId;
   const oldest = (useChat.getState().messages[conv] ?? []).reduce((n, m) => (m.seq > 0 ? Math.min(n, m.seq) : n), Infinity);
   if (!Number.isFinite(oldest)) return;
+  const gen = s.loadGen.get(conv) ?? 0;
   const r = await api().get<HistoryPage>(`/messages?conv=${encodeURIComponent(conv)}&beforeSeq=${oldest}&limit=${PAGE}`);
-  for (const w of r.messages) addMessage(conv, await toMsg({ ...w, conv }, w.senderId === myId));
+  const incoming = await Promise.all(r.messages.map((w) => toMsg({ ...w, conv }, w.senderId === myId)));
+  // The chat was reloaded or dropped meanwhile (reconnect, sign-out): these older messages no longer belong to what is cached.
+  if (!token || s.api?.token !== token || (s.loadGen.get(conv) ?? 0) !== gen) return;
+  const lo = incoming.reduce((n, m) => Math.min(n, m.seq), oldest);
+  replaceRange(conv, incoming, (m) => m.seq === 0 || m.seq < lo || m.seq >= oldest);
   patch({ olderMore: { ...useChat.getState().olderMore, [conv]: r.hasMore } });
+}
+
+/** After the socket is up: whatever it missed (deletions above all) is read again. A reconnect is treated like opening the chat again. */
+async function resync(reconnected: boolean): Promise<void> {
+  const active = useChat.getState().activeConv;
+  if (reconnected) {
+    for (const conv of Object.keys(useChat.getState().messages)) if (conv !== active) dropCached(conv);
+    void flushFavorites();
+  }
+  if (active) {
+    await loadHistory(active).catch(() => {});
+    markRead(active);
+  }
+  if (reconnected) await loadUnread().catch(() => {});
 }
 
 export async function openConversation(conv: string | null): Promise<void> {
   const st = useChat.getState();
+  const left = st.activeConv;
   patch({
     activeConv: conv,
     unread: conv ? { ...st.unread, [conv]: 0 } : st.unread,
     mentions: conv ? { ...st.mentions, [conv]: false } : st.mentions,
   });
+  // Leaving a chat drops everything older than its newest messages.
+  if (left && left !== conv) trimConversation(left);
   if (conv) await loadHistory(conv).catch(() => {});
   markRead(conv);
+}
+
+// ---------- deleting messages ----------
+/**
+ * Applies a deletion to the cache: the messages become bare markers, and everything made from their text goes with them (a recording kept in
+ * memory, a favourite). Safe to repeat. Works from sequence numbers, so it also serves the push, which names nothing else.
+ */
+function forgetDeleted(conv: string, seqs: readonly number[]): void {
+  let tomb = s.tombs.get(conv);
+  if (!tomb) s.tombs.set(conv, (tomb = new Set()));
+  for (const n of seqs) tomb.add(n);
+  const st = useChat.getState();
+  const cur = st.messages[conv];
+  if (!cur) return;
+  const favs = new Set<string>();
+  const next = cur.map((m) => {
+    if (m.deleted || m.seq <= 0 || !tomb.has(m.seq)) return m;
+    wipeVoice(m);
+    favs.add(favoriteIdOf(conv, m));
+    return marker(m);
+  });
+  if (favs.size === 0) return;
+  patch({ messages: { ...st.messages, [conv]: next } });
+  void dropFavorites(favs);
+}
+
+export interface DeleteOutcome {
+  /** The numbers the server deleted: the screen follows these. */
+  deleted: number[];
+  /** Set when a request failed; the ones before it are done. */
+  error: ApiError | null;
+}
+
+/** Deletes my own messages for everyone in the chat, in as many requests as the server's limits need (50 messages, 20 recordings each). */
+export async function deleteMessages(conv: string, seqs: readonly number[]): Promise<DeleteOutcome> {
+  const bySeq = new Map((useChat.getState().messages[conv] ?? []).map((m) => [m.seq, m]));
+  const picked = seqs.map((n) => bySeq.get(n)).filter((m): m is Msg => m !== undefined && canDelete(m));
+  const deleted: number[] = [];
+  for (const b of planDeleteBatches(picked)) {
+    try {
+      const r = await api().post<{ deleted: number[]; voiceDeleted: string[] }>("/messages/delete", { conv, seqs: b.seqs, ...(b.voiceIds.length > 0 ? { voiceIds: b.voiceIds } : {}) });
+      forgetDeleted(conv, r.deleted);
+      for (const id of r.voiceDeleted) wipeVoiceId(id);
+      deleted.push(...r.deleted);
+    } catch (e) {
+      return { deleted, error: e instanceof ApiError ? e : new ApiError(0, "internal") };
+    }
+  }
+  return { deleted, error: null };
+}
+
+/** How many of these messages I have saved as favourites (they go with the messages). */
+export function favoritesAmong(conv: string, msgs: readonly Msg[]): number {
+  const ids = new Set(msgs.map((m) => favoriteIdOf(conv, m)));
+  return useChat.getState().favorites.filter((f) => ids.has(f.id)).length;
 }
 
 /**
@@ -744,6 +957,8 @@ async function onFrame(f: Frame): Promise<void> {
   if (!myId) return;
   if (f.t === "message") {
     const w = f as unknown as WireMessage;
+    // Deleted before this push was handled (the delete push can overtake it): nothing to show, nothing to ring for.
+    if (w.deleted || s.tombs.get(w.conv)?.has(w.seq)) return;
     if (!s.epochs?.labels.has(w.epoch)) await refreshEpochs().catch(() => {});
     if (!keyFor(w.conv, w.gen) && s.groupKeys.has(w.conv)) await refreshGroups().catch(() => {});
     // A jump in the sequence means something was missed (the socket was down): load what is between.
@@ -753,6 +968,14 @@ async function onFrame(f: Frame): Promise<void> {
     // Only a chat that has been loaded keeps a position; for the others the first open loads the newest page itself.
     if (s.lastSeq.has(w.conv)) s.lastSeq.set(w.conv, Math.max(s.lastSeq.get(w.conv) ?? 0, w.seq));
     if (isNew && w.senderId !== myId && useChat.getState().sound) playChime();
+  } else if (f.t === "deleted") {
+    // Best effort on the server's side: this frame may never come, which is why the cache is read again on every open and reconnect.
+    const conv = String(f.conv);
+    const seqs = Array.isArray(f.seqs) ? f.seqs.filter((n): n is number => Number.isInteger(n) && n > 0) : [];
+    if (seqs.length > 0) {
+      forgetDeleted(conv, seqs);
+      void loadUnread().catch(() => {});
+    }
   } else if (f.t === "read") {
     const conv = String(f.conv);
     patch({ reads: { ...useChat.getState().reads, [conv]: Math.max(useChat.getState().reads[conv] ?? 0, Number(f.upTo) || 0) } });

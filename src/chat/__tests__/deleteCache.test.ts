@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Api } from "../net/api";
-import { CACHE_MAX, configure, deleteMessages, favoritesAmong, loadHistory, loadOlder, lock, openConversation } from "../client";
+import { CACHE_MAX, configure, deleteMessages, favoritesAmong, isLooking, loadHistory, loadOlder, lock, markRead, openConversation, resumeView } from "../client";
 import { DELETE_MAX, DELETE_MAX_VOICE, canDelete, planDeleteBatches } from "../selection";
 import { initialState, useChat, type Msg } from "../store";
 
@@ -189,5 +189,46 @@ describe("signing out", () => {
     useChat.setState({ messages: { [CONV]: [live(1)] } });
     lock(null);
     expect(useChat.getState().messages).toEqual({});
+  });
+});
+
+describe("read receipts only while someone is looking", () => {
+  const sent = (post: ReturnType<typeof vi.fn>) => post.mock.calls.filter(([p]) => p === "/conversations/read");
+  const state = (hidden: boolean, focus: boolean) => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    vi.spyOn(document, "hasFocus").mockReturnValue(focus);
+  };
+  afterEach(() => {
+    delete (document as unknown as Record<string, unknown>).hidden;
+    vi.restoreAllMocks();
+    document.documentElement.removeAttribute("data-covered");
+  });
+
+  it.each([
+    ["the page is hidden", true, true, false],
+    ["the window has lost focus", false, false, false],
+    ["the privacy cover is up", false, true, true],
+    ["someone is looking", false, true, false],
+  ])("%s", async (_name, hidden, focus, covered) => {
+    useChat.setState({ section: "contacts", activeConv: CONV, messages: { [CONV]: [live(4, { mine: false, senderId: "peer" })] }, unread: {} });
+    const api = fakeApi(() => ({}));
+    state(hidden, focus);
+    if (covered) document.documentElement.setAttribute("data-covered", "");
+    markRead(CONV);
+    const looking = !hidden && focus && !covered;
+    expect(sent(api.post).length).toBe(looking ? 1 : 0);
+    expect(isLooking(CONV)).toBe(looking);
+  });
+
+  it("a message that arrives while the window is blurred stays unread, and is read once focus returns", async () => {
+    useChat.setState({ section: "contacts", activeConv: CONV, messages: { [CONV]: [live(4, { mine: false, senderId: "peer" })] }, unread: { [CONV]: 1 } });
+    const api = fakeApi(() => ({}));
+    state(false, false);
+    resumeView();
+    expect(useChat.getState().unread[CONV]).toBe(1);
+    expect(sent(api.post)).toHaveLength(0);
+    state(false, true);
+    resumeView();
+    expect(useChat.getState().unread[CONV]).toBe(0);
   });
 });

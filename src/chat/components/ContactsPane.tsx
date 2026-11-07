@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { UserPlus, Users } from "lucide-react";
-import { acceptRequest, createGroup, declineRequest, requestContact, ApiError, type Progress } from "../client";
-import { errorText } from "../i18nApp";
+import { acceptRequest, createGroup, declineRequest, requestContact, type Progress } from "../client";
+import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
 import { useChat } from "../store";
 import { useLang } from "../useChat";
@@ -28,8 +28,7 @@ function AddContactDialog({ onClose }: { onClose: () => void }) {
       setMessage({ ok: true, text: a.addContactDone });
       setHandle("");
     } catch (e) {
-      const reason = e instanceof ApiError && e.code === "conflict" ? String(e.extra.reason ?? "") : "";
-      setMessage({ ok: false, text: a.addContactConflict[reason] ?? errorText(a, e instanceof ApiError ? e.code : "internal") });
+      setMessage({ ok: false, text: errorOf(a, e) });
     } finally {
       setProgress(null);
     }
@@ -72,7 +71,7 @@ function NewGroupDialog({ onClose }: { onClose: () => void }) {
       await createGroup(name.trim());
       onClose();
     } catch (e) {
-      setError(errorText(a, e instanceof ApiError ? e.code : "internal"));
+      setError(errorOf(a, e));
       setBusy(false);
     }
   };

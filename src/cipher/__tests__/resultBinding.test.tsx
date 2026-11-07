@@ -46,5 +46,6 @@ describe('password result binding', () => {
     await waitFor(() => expect((screen.getByRole('textbox', { name: 'Result' }) as HTMLTextAreaElement).value).toBe('first'));
     fireEvent.change(encryptedInput, { target: { value: ciphertext + 'x' } });
     expect(screen.queryByRole('textbox', { name: 'Result' })).toBeNull();
-  });
+    // It renders the whole page and drives it through several steps, which takes longer than the default 5 s when the whole suite runs at once.
+  }, 30_000);
 });

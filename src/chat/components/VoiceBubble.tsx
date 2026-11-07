@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { ApiError, playVoiceMessage } from "../client";
-import { errorText } from "../i18nApp";
+import { errorOf } from "../i18nApp";
 import type { Msg } from "../store";
 import { useLang } from "../useChat";
 import { formatDuration } from "../voice";
@@ -24,7 +24,7 @@ export function VoiceBubble({ conv, m }: { conv: string; m: Msg }) {
     try {
       await playVoiceMessage(conv, m);
     } catch (e) {
-      setError(e instanceof ApiError ? errorText(a, e.code) : a.voiceFailed);
+      setError(e instanceof ApiError ? errorOf(a, e) : a.voiceFailed);
     } finally {
       setBusy(false);
     }

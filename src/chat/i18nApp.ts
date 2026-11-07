@@ -1,5 +1,5 @@
 import type { Lang } from "./i18n";
-import type { ErrorCode } from "./net/api";
+import { ApiError, type ErrorCode } from "./net/api";
 
 const zh = {
   tabContacts: "联系人",
@@ -68,11 +68,6 @@ const zh = {
   addContactSubmit: "发送申请",
   refreshSignsOut: "刷新或关闭页面会自动退出登录。",
   addContactDone: "申请已发送,等待对方同意。",
-  addContactConflict: {
-    already_contacts: "你们已经是联系人了。",
-    request_sent: "你已经向对方发送过申请,正在等待对方同意。",
-    request_received: "对方已经向你发送了申请,请在申请列表里同意。",
-  } as Record<string, string>,
   working: "处理中……",
   loading: "加载中……",
   close: "关闭",
@@ -263,13 +258,34 @@ const zh = {
     wipeAllHint: "删除所有账号(包括你自己)、联系人、群、消息、收藏、邀请码、配置和日志,服务器回到从未部署过的状态,所有人立即下线。无法恢复。输入 WIPE ALL 并填写密码确认:",
     wipeAllWord: "WIPE ALL",
   },
+  /** What a refusal means when the server says why ("code:reason"); without a reason, or an unknown one, the text of the code is used. */
+  errorReasons: {
+    "conflict:already_contacts": "你们已经是联系人了。",
+    "conflict:request_sent": "你已经向对方发送过申请,正在等待对方同意。",
+    "conflict:request_received": "对方已经向你发送了申请,请在申请列表里同意。",
+    "conflict:full": "群人数已满。",
+    "conflict:offer_gone": "这个群主转让邀请已经失效。",
+    "conflict:spent": "这个邀请码已经被使用,不能撤销。",
+    "conflict:deleted": "对方账号已被删除,无法发送消息。",
+    "conflict:owner_must_transfer": "群主退出前必须先转让群主。",
+    "conflict:not_current": "这个密钥纪元已经不是当前使用的,不需要准备替换,可以直接撤销。",
+    "conflict:prepare_first": "撤销当前使用的密钥纪元之前,请先准备替换。",
+    "not_found:handle": "没有找到这个账户名。",
+    "not_found:self": "不能添加自己为联系人。",
+    "not_found:no_contact": "这个联系人已经不存在了。",
+    "not_found:group": "这个群不存在,或已被删除。",
+    "forbidden:not_member": "你不在这个聊天里。",
+    "forbidden:not_sender": "只能删除自己发送的消息。",
+    "forbidden:voice_not_yours": "这条语音不是你发送的,不能删除。",
+    "forbidden:account_deleted": "对方账号已被删除,聊天记录会自己过期,不能手动删除。",
+  } as Record<string, string>,
   errors: {
     network: "无法连接服务器,请检查网络后重试。",
     timeout: "连接超时,请稍后重试。",
     unauthorized: "账户名或密码不正确。",
     forbidden: "没有权限执行此操作。",
-    not_found: "没有找到对应的账户。",
-    conflict: "操作冲突(可能已经存在或已满)。",
+    not_found: "没有找到对应的内容,可能已被删除。",
+    conflict: "操作冲突,请刷新后重试。",
     rate_limited: "操作太频繁,请稍后再试。",
     monthly_limit: "本月发送的消息已达上限,下个月初恢复。",
     unavailable: "服务器正在维护,请稍后再试。",
@@ -360,11 +376,6 @@ const en: AppMessages = {
   addContactSubmit: "Send request",
   refreshSignsOut: "Reloading or closing the page signs you out automatically.",
   addContactDone: "Request sent. Waiting for them to accept.",
-  addContactConflict: {
-    already_contacts: "You are already contacts.",
-    request_sent: "You have already sent them a request. Waiting for them to accept.",
-    request_received: "They have already sent you a request. Accept it in your requests.",
-  } as Record<string, string>,
   working: "Working…",
   loading: "Loading…",
   close: "Close",
@@ -555,13 +566,34 @@ const en: AppMessages = {
     wipeAllHint: "Deletes every account (yours included), contact, group, message, favourite, invite, setting and log. The server returns to a state as if it had never been deployed and everyone is signed out at once. This cannot be undone. Type WIPE ALL and enter your password:",
     wipeAllWord: "WIPE ALL",
   },
+  /** What a refusal means when the server says why ("code:reason"); without a reason, or an unknown one, the text of the code is used. */
+  errorReasons: {
+    "conflict:already_contacts": "You are already contacts.",
+    "conflict:request_sent": "You have already sent them a request. Waiting for them to accept.",
+    "conflict:request_received": "They have already sent you a request. Accept it in your requests.",
+    "conflict:full": "The group is full.",
+    "conflict:offer_gone": "This ownership offer is no longer valid.",
+    "conflict:spent": "This invite was already used and cannot be revoked.",
+    "conflict:deleted": "That account was deleted. Nothing can be sent to it.",
+    "conflict:owner_must_transfer": "The owner must transfer ownership before leaving.",
+    "conflict:not_current": "This key epoch is no longer the one in use, so it needs no replacement. Revoke it directly.",
+    "conflict:prepare_first": "Prepare a replacement before revoking the key epoch in use.",
+    "not_found:handle": "No account with that username was found.",
+    "not_found:self": "You cannot add yourself as a contact.",
+    "not_found:no_contact": "This contact no longer exists.",
+    "not_found:group": "This group does not exist, or was deleted.",
+    "forbidden:not_member": "You are not in this chat.",
+    "forbidden:not_sender": "You can only delete messages you sent.",
+    "forbidden:voice_not_yours": "This recording is not yours, so you cannot delete it.",
+    "forbidden:account_deleted": "That account was deleted. The chat expires by itself and cannot be removed by hand.",
+  } as Record<string, string>,
   errors: {
     network: "Cannot reach the server. Check your network and try again.",
     timeout: "The connection timed out. Please try again later.",
     unauthorized: "Wrong username or password.",
     forbidden: "You are not allowed to do that.",
-    not_found: "No such account was found.",
-    conflict: "Conflict (it may already exist or be full).",
+    not_found: "That was not found. It may have been deleted.",
+    conflict: "Conflict. Please refresh and try again.",
     rate_limited: "Too many attempts. Please wait a moment.",
     monthly_limit: "You have reached this month's message limit. It resets at the start of next month.",
     unavailable: "The server is under maintenance. Please try again shortly.",
@@ -586,3 +618,10 @@ const en: AppMessages = {
 export const appMessages: Record<Lang, AppMessages> = { zh, en };
 
 export const errorText = (m: AppMessages, code: string): string => m.errors[code as ErrorCode] ?? m.errors.internal;
+
+/** The text for a failure: the server's reason when it gave one, else the text of its code, else the general one. */
+export const errorOf = (m: AppMessages, e: unknown): string => {
+  if (!(e instanceof ApiError)) return m.errors.internal;
+  const reason = typeof e.extra.reason === "string" ? m.errorReasons[`${e.code}:${e.extra.reason}`] : undefined;
+  return reason ?? errorText(m, e.code);
+};

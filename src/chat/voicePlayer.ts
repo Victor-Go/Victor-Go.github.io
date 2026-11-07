@@ -38,6 +38,11 @@ export function stopVoice(): void {
   setPlaying(null);
 }
 
+/** Stops playback only if it is this recording that plays (a deleted message must not keep sounding). */
+export function stopVoiceIf(key: string): void {
+  if (current?.key === key) stopVoice();
+}
+
 /** Plays MP3 bytes under `key`, replacing anything that plays now. Rejects when the browser cannot play them. */
 export async function playVoice(key: string, mp3: Uint8Array): Promise<void> {
   stopVoice();

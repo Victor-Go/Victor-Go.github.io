@@ -45,6 +45,8 @@ export interface Msg {
   /** Group key generation the message was sealed under (0 in 1:1 chats). */
   gen?: number;
   status: "sending" | "sent" | "failed";
+  /** The sender deleted it: no text, no recording, only who and when. Identified by seq (its client id is gone). */
+  deleted?: boolean;
 }
 
 export interface GroupMember {

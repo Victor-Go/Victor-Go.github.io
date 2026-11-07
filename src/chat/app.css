@@ -455,6 +455,7 @@ textarea:disabled {
 }
 
 .ch-messages {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding: 12px;
@@ -1027,4 +1028,85 @@ section > .ch-primary {
   width: 12px;
   height: 12px;
   border-width: 2px;
+}
+
+/* ---------- selecting messages to delete ---------- */
+.ch-system[data-lost="deleted"] {
+  border-style: solid;
+  border-color: var(--ch-line);
+  color: var(--ch-muted);
+  background: transparent;
+}
+
+.ch-check {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--ch-muted);
+  background: transparent;
+  color: var(--ch-accent-fg);
+  cursor: pointer;
+}
+
+.ch-picked .ch-check {
+  background: var(--ch-accent);
+  border-color: var(--ch-accent);
+}
+
+.ch-selecting .ch-msgrow {
+  cursor: default;
+}
+
+.ch-selecting .ch-pickable {
+  cursor: pointer;
+}
+
+/* A bubble in selecting mode is only a target for the row: its star, links and play button do nothing until selecting ends. */
+.ch-selecting .ch-msg {
+  pointer-events: none;
+}
+
+.ch-picked .ch-msg {
+  outline: 2px solid var(--ch-accent);
+  outline-offset: 1px;
+}
+
+/* On a phone a held message must not open the system's text menu. */
+@media (max-width: 899px) {
+  .ch-msgrow {
+    -webkit-touch-callout: none;
+  }
+}
+
+.ch-dragging {
+  user-select: none;
+  cursor: crosshair;
+}
+
+.ch-marquee {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  border: 1px solid var(--ch-accent);
+  background: color-mix(in srgb, var(--ch-accent) 15%, transparent);
+}
+
+.ch-selectbar {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ch-selectbar .ch-secondary,
+.ch-selectbar .ch-danger {
+  width: auto;
+  margin: 0;
+}
+
+.ch-select-count {
+  flex: 1;
+  text-align: center;
 }

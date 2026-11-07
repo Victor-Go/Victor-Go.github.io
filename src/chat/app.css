@@ -1032,6 +1032,24 @@ section > .ch-primary {
 }
 
 /* ---------- selecting messages to delete ---------- */
+/* A button with an icon (or a spinner) in front of its label: one centred row, the icon and the text on the same line. */
+.ch-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ch-btn-icon svg,
+.ch-btn-icon .ch-spinner {
+  flex: none;
+}
+
+.ch-btn-icon .ch-spinner {
+  width: 18px;
+  height: 18px;
+}
+
 .ch-system[data-lost="deleted"] {
   border-style: solid;
   border-color: var(--ch-line);

@@ -530,8 +530,9 @@ export function Conversation() {
           <span className="ch-hint ch-select-count" role="status">
             {a.selectedCount(chosen.length)}
           </span>
-          <button type="button" className="ch-danger" disabled={chosen.length === 0 || deleting} onClick={() => setConfirming(true)}>
-            <Trash2 size={18} aria-hidden="true" /> {a.deleteSelected}
+          <button type="button" className="ch-danger ch-btn-icon" disabled={chosen.length === 0 || deleting} onClick={() => setConfirming(true)}>
+            <Trash2 size={18} aria-hidden="true" />
+            {a.deleteSelected}
           </button>
         </footer>
       ) : (
@@ -652,8 +653,9 @@ export function Conversation() {
         <Modal title={a.deleteTitle} onClose={() => !deleting && setConfirming(false)} closeLabel={a.close}>
           <p>{a.deleteBody(chosen.length, favoritesAmong(activeConv, chosen))}</p>
           <p className="ch-hint">{a.deleteWarn}</p>
-          <button type="button" className="ch-danger" disabled={deleting} aria-busy={deleting} onClick={confirmDelete}>
-            {deleting ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : <Trash2 size={18} aria-hidden="true" />} {a.deleteConfirm}
+          <button type="button" className="ch-danger ch-btn-icon" disabled={deleting} aria-busy={deleting} onClick={confirmDelete}>
+            {deleting ? <span className="ch-spinner" aria-hidden="true" /> : <Trash2 size={18} aria-hidden="true" />}
+            {a.deleteConfirm}
           </button>
           <button type="button" className="ch-secondary" disabled={deleting} onClick={() => setConfirming(false)}>
             {a.cancel}

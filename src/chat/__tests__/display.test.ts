@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { avatarUri } from "../avatar";
-import { dayKey, formatDay, isExpired } from "../format";
+import { dayKey, formatBytes, formatDay, isExpired } from "../format";
 
 describe("avatarUri", () => {
   it("is deterministic and different per user", () => {
@@ -47,5 +47,16 @@ describe("isExpired", () => {
     expect(isExpired(now - 29 * 86_400_000, now, 30)).toBe(false);
     expect(isExpired(now - 31 * 86_400_000, now, 30)).toBe(true);
     expect(isExpired(now - 2 * 86_400_000, now, 1)).toBe(true);
+  });
+});
+
+describe("formatBytes", () => {
+  it("steps through B, KB, MB, GB", () => {
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(1023)).toBe("1023 B");
+    expect(formatBytes(1536)).toBe("1.5 KB");
+    expect(formatBytes(5 * 1024 * 1024)).toBe("5.0 MB");
+    expect(formatBytes(3 * 1024 ** 3)).toBe("3.0 GB");
+    expect(formatBytes(-1)).toBe("0 B");
   });
 });

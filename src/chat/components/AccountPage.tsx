@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { isEmbeddedOrOpened } from "../../cipher/isolation";
 import { estimateBits } from "../../cipher/crypto/strength";
-import { ApiError, Cancelled, cancelWorkNow as cancelWork, login, register, type Progress } from "../client";
-import { errorText } from "../i18nApp";
+import { Cancelled, cancelWorkNow as cancelWork, login, register, type Progress } from "../client";
+import { errorOf } from "../i18nApp";
 import { IDLE_CHOICES, patch, useChat } from "../store";
 import { useHealth, useLang } from "../useChat";
 import { checkHandle, checkPassword, normalizePassword, sanitizeInvite, strengthOf, type PasswordProblem } from "../validation";
@@ -75,7 +75,7 @@ export function AccountPage() {
       setPassword("");
       setRepeat("");
     } catch (e) {
-      if (!(e instanceof Cancelled)) setNotice(errorText(a, e instanceof ApiError ? e.code : "internal"));
+      if (!(e instanceof Cancelled)) setNotice(errorOf(a, e));
     } finally {
       setProgress(null);
     }

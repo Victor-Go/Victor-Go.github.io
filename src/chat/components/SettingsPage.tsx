@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AtSign, Bell, Clock, Globe, KeyRound, Trash2, Volume2, Wifi } from "lucide-react";
 import { ApiError, changeHandle, changePassword, deleteAccount, enableNotifications, notificationsSupported, saveLanguage, setSoundEnabled, type Progress } from "../client";
 import { getConfig } from "../config";
-import { errorText } from "../i18nApp";
+import { errorOf } from "../i18nApp";
 import { onEnter } from "../keys";
 import { checkHealth, type HealthState } from "../net/health";
 import { PATH, SETTINGS_DETAILS, go, useLocation } from "../route";
@@ -79,7 +79,7 @@ function HandlePage() {
       setMessage({ ok: true, text: a.handleChanged });
       setHandle("");
     } catch (e) {
-      setMessage({ ok: false, text: errorText(a, e instanceof ApiError ? e.code : "internal") });
+      setMessage({ ok: false, text: errorOf(a, e) });
     } finally {
       setProgress(null);
     }
@@ -130,7 +130,7 @@ function PasswordPage() {
       setNext("");
       setRepeat("");
     } catch (e) {
-      setMessage({ ok: false, text: e instanceof ApiError && e.code === "unauthorized" ? a.wrongPassword : errorText(a, e instanceof ApiError ? e.code : "internal") });
+      setMessage({ ok: false, text: e instanceof ApiError && e.code === "unauthorized" ? a.wrongPassword : errorOf(a, e) });
     } finally {
       setBusy(false);
       setProgress(null);
@@ -205,7 +205,7 @@ function DeletePage() {
     setProgress({ step: "derive" });
     void deleteAccount(password, setProgress).catch((e) => {
       setProgress(null);
-      setError(e instanceof ApiError && e.code === "unauthorized" ? a.wrongPassword : errorText(a, e instanceof ApiError ? e.code : "internal"));
+      setError(e instanceof ApiError && e.code === "unauthorized" ? a.wrongPassword : errorOf(a, e));
     });
   };
   return (

@@ -35,6 +35,6 @@ describe("adding a contact that conflicts", () => {
   it("keeps the general text for a conflict that gives no reason", async () => {
     requestContact.mockRejectedValue(new ApiError(409, "conflict"));
     await ask();
-    await waitFor(() => expect(screen.getByText("操作冲突(可能已经存在或已满)。")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("操作冲突,请刷新后重试。")).toBeTruthy());
   });
 });

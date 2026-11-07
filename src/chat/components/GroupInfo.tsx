@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { acceptOwnership, ApiError, deleteGroup, inviteToGroup, kickMember, leaveGroup, rekeyGroup, transferGroup } from "../client";
-import { errorText } from "../i18nApp";
+import { acceptOwnership, deleteGroup, inviteToGroup, kickMember, leaveGroup, rekeyGroup, transferGroup } from "../client";
+import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
 import { useChat, type Group } from "../store";
 import { useLang } from "../useChat";
@@ -29,8 +29,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
         onClose();
       }
     } catch (e) {
-      const extra = e instanceof ApiError ? e.extra : {};
-      setError(extra.reason === "owner_must_transfer" ? a.ownerMustTransfer : errorText(a, e instanceof ApiError ? e.code : "internal"));
+      setError(errorOf(a, e));
     } finally {
       setBusy(false);
     }

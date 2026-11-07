@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
-import { ApiError, addFavorite, deleteMessages, favoritesAmong, loadOlder, removeFavorite, sendText } from "../client";
-import { errorText } from "../i18nApp";
+import { addFavorite, deleteMessages, favoritesAmong, loadOlder, removeFavorite, sendText } from "../client";
+import { errorOf } from "../i18nApp";
 import { MESSAGE_MAX_CHARS } from "../crypto/message";
 import { deliveryOf } from "../delivery";
 import { dayKey, formatClock, formatDay, isExpired } from "../format";
@@ -252,7 +252,7 @@ export function Conversation() {
     setDeleting(true);
     void deleteMessages(activeConv, chosen.map((m) => m.seq))
       .then((r) => {
-        setFavError(r.error ? errorText(a, r.error.code) : null);
+        setFavError(r.error ? errorOf(a, r.error) : null);
         stopSelecting();
       })
       .finally(() => setDeleting(false));
@@ -500,7 +500,7 @@ export function Conversation() {
                           setFavError(null);
                           setFavBusy((b) => new Set(b).add(id));
                           void (fav ? removeFavorite(id) : addFavorite(activeConv, m, nameOf(m)))
-                            .catch((e) => setFavError(errorText(a, e instanceof ApiError ? e.code : "internal")))
+                            .catch((e) => setFavError(errorOf(a, e)))
                             .finally(() =>
                               setFavBusy((b) => {
                                 const next = new Set(b);

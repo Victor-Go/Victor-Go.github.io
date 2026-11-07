@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ApiError, removeContact } from "../client";
-import { errorText } from "../i18nApp";
+import { ApiError } from "../net/api";
+import { refreshContacts, removeContact } from "../client";
+import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
 import type { Contact } from "../store";
 import { useLang } from "../useChat";
@@ -21,8 +22,10 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
       go(PATH.home);
       onClose();
     } catch (e) {
-      setError(errorText(a, e instanceof ApiError ? e.code : "internal"));
+      setError(errorOf(a, e));
       setBusy(false);
+      // Already gone on the server (the other person removed it first): bring the list up to date.
+      if (e instanceof ApiError && e.extra.reason === "no_contact") void refreshContacts().catch(() => {});
     }
   };
 

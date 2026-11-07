@@ -3,7 +3,7 @@ import { Activity, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer,
 import { ADMIN_LOCK_MS, lockAdmin, markAdminAction, unlockedNow, useAdminLock } from "../adminLock";
 import { ApiError, adminDeleteUser, rawApi, unlockAdmin, wipeEverything, type Progress } from "../client";
 import { formatBytes, formatClock, formatDay } from "../format";
-import { errorText } from "../i18nApp";
+import { errorOf } from "../i18nApp";
 import { onEnter } from "../keys";
 import { PATH, go as navigate, useLocation } from "../route";
 import { useChat } from "../store";
@@ -138,7 +138,7 @@ function useAdmin() {
         return r;
       } catch (e) {
         if (e instanceof ApiError && e.code === "stepup_required") lockAdmin();
-        else setError(errorText(a, e instanceof ApiError ? e.code : "internal"));
+        else setError(errorOf(a, e));
         return null;
       } finally {
         setPending((n) => n - 1);
@@ -186,7 +186,7 @@ function LockScreen() {
       setPassword("");
       unlockedNow();
     } catch (e) {
-      setError(e instanceof ApiError && e.code === "unauthorized" ? a.manage.unlockWrong : errorText(a, e instanceof ApiError ? e.code : "internal"));
+      setError(e instanceof ApiError && e.code === "unauthorized" ? a.manage.unlockWrong : errorOf(a, e));
     } finally {
       setBusy(false);
       setProgress(null);
@@ -568,7 +568,7 @@ function WipeAllView({ go }: { go: (v: View) => void }) {
     // On success every session is gone, this one included, and the page returns to the sign-in by itself.
     void wipeEverything(password, setProgress).catch((e) => {
       setProgress(null);
-      setError(e instanceof ApiError && e.code === "unauthorized" ? a.manage.unlockWrong : errorText(a, e instanceof ApiError ? e.code : "internal"));
+      setError(e instanceof ApiError && e.code === "unauthorized" ? a.manage.unlockWrong : errorOf(a, e));
     });
   };
   return (

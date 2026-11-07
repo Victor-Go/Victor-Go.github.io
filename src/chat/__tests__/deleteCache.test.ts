@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Api } from "../net/api";
-import { CACHE_MAX, configure, deleteMessages, favoritesAmong, isLooking, loadHistory, loadOlder, lock, markRead, openConversation, resumeView } from "../client";
+import { CACHE_MAX, configure, deleteMessages, favoritesAmong, isLooking, loadHistory, onFrame, loadOlder, lock, markRead, openConversation, resumeView } from "../client";
 import { DELETE_MAX, DELETE_MAX_VOICE, canDelete, planDeleteBatches } from "../selection";
 import { initialState, useChat, type Msg } from "../store";
 
@@ -33,7 +33,7 @@ function fakeApi(get: Handler, post: Handler = () => ({})): { api: Api; get: Ret
 
 beforeEach(() => {
   lock(null);
-  useChat.setState({ ...initialState, phase: "ready", me: { userId: ME, handle: "me", role: "user", publicKey: "" }, activeConv: CONV });
+  useChat.setState({ ...initialState, sound: false, phase: "ready", me: { userId: ME, handle: "me", role: "user", publicKey: "" }, activeConv: CONV });
 });
 
 describe("what can be selected and how a selection is split", () => {
@@ -192,6 +192,10 @@ describe("signing out", () => {
   });
 });
 
+/** A new message from the other person arrives over the socket. */
+const onMessage = (conv: string, seq: number) =>
+  onFrame({ t: "message", conv, seq, senderId: "peer", clientMsgId: `m${seq}`, epoch: 0, gen: 0, ct: "", serverTime: Date.now(), role: "user" });
+
 describe("read receipts only while someone is looking", () => {
   const sent = (post: ReturnType<typeof vi.fn>) => post.mock.calls.filter(([p]) => p === "/conversations/read");
   const state = (hidden: boolean, focus: boolean) => {
@@ -220,15 +224,32 @@ describe("read receipts only while someone is looking", () => {
     expect(isLooking(CONV)).toBe(looking);
   });
 
-  it("a message that arrives while the window is blurred stays unread, and is read once focus returns", async () => {
-    useChat.setState({ section: "contacts", activeConv: CONV, messages: { [CONV]: [live(4, { mine: false, senderId: "peer" })] }, unread: { [CONV]: 1 } });
+  it("a visible chat in a window without focus: no badge for what arrives, no receipt until focus returns", async () => {
+    useChat.setState({ section: "contacts", activeConv: CONV, messages: { [CONV]: [live(4, { mine: false, senderId: "peer" })] }, unread: {} });
     const api = fakeApi(() => ({}));
-    state(false, false);
-    resumeView();
-    expect(useChat.getState().unread[CONV]).toBe(1);
+    state(false, false); // visible, not focused
+    await onMessage(CONV, 5);
+    expect(useChat.getState().unread[CONV] ?? 0).toBe(0);
     expect(sent(api.post)).toHaveLength(0);
     state(false, true);
     resumeView();
-    expect(useChat.getState().unread[CONV]).toBe(0);
+    expect(sent(api.post)).toHaveLength(1);
+    expect(sent(api.post)[0][1]).toEqual({ conv: CONV, upTo: 5 });
+  });
+
+  it("a hidden page, or another chat, or another part of the app, still counts as unread", async () => {
+    const api = fakeApi(() => ({}));
+    useChat.setState({ section: "contacts", activeConv: CONV, messages: { [CONV]: [] }, unread: {} });
+    state(true, false);
+    await onMessage(CONV, 1);
+    expect(useChat.getState().unread[CONV]).toBe(1);
+    state(false, true);
+    useChat.setState({ section: "me" });
+    await onMessage(CONV, 2);
+    expect(useChat.getState().unread[CONV]).toBe(2);
+    useChat.setState({ section: "contacts", activeConv: "other" });
+    await onMessage(CONV, 3);
+    expect(useChat.getState().unread[CONV]).toBe(3);
+    expect(sent(api.post)).toHaveLength(0);
   });
 });

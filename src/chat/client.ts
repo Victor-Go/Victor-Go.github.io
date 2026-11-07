@@ -533,13 +533,21 @@ async function toMsg(w: WireMessage, mine: boolean): Promise<Msg> {
 }
 
 /**
- * Whether a person is looking at this chat right now: the contacts part is showing, this chat is open in it, the page is visible, the window
- * has focus and the privacy cover is not up. Only then does a message count as read (no unread badge, no ring, and a read receipt may go out).
+ * Whether this chat is on screen: the contacts part is showing, this chat is open in it and the page is visible. A window beside another one
+ * still shows it, so the unread badge does not count messages that arrive meanwhile.
  */
-export function isLooking(conv: string | null): boolean {
-  if (!conv || document.hidden || !document.hasFocus() || document.documentElement.hasAttribute("data-covered")) return false;
+export function isShowing(conv: string | null): boolean {
+  if (!conv || document.hidden) return false;
   const st = useChat.getState();
   return st.section === "contacts" && st.activeConv === conv;
+}
+
+/**
+ * Whether a person is reading this chat right now: it is on screen, the window has focus and the privacy cover is not up. Only then may a read
+ * receipt go out; a chat that is merely visible (window without focus) sends none until focus returns.
+ */
+export function isLooking(conv: string | null): boolean {
+  return isShowing(conv) && document.hasFocus() && !document.documentElement.hasAttribute("data-covered");
 }
 
 /** Returns true when the message was not in the list yet. */
@@ -551,8 +559,8 @@ function addMessage(conv: string, msg: Msg): boolean {
   next.sort((a, b) => (a.seq || Infinity) - (b.seq || Infinity) || a.time - b.time);
   patch({ messages: { ...st.messages, [conv]: next } });
   noteActive(conv, msg.time);
-  // Looked at means isLooking(). Anything else leaves it unread (and rings).
-  if (i < 0 && !msg.mine && !isLooking(conv)) {
+  // On screen means no badge (isShowing); a read receipt additionally needs focus (markRead). Anything else leaves it unread (and rings).
+  if (i < 0 && !msg.mine && !isShowing(conv)) {
     patch({ unread: { ...useChat.getState().unread, [conv]: (st.unread[conv] ?? 0) + 1 } });
     // "@name " in a group message to me turns that group's badge red.
     const me = st.me;
@@ -580,7 +588,7 @@ function noteActive(conv: string, time: number): void {
 async function loadUnread(): Promise<void> {
   const r = await api().get<{ conversations: { conv: string; unread?: number }[] }>("/conversations");
   const st = useChat.getState();
-  const looking = isLooking(st.activeConv) ? st.activeConv : null;
+  const looking = isShowing(st.activeConv) ? st.activeConv : null;
   const unread = { ...st.unread };
   const mentions = { ...st.mentions };
   for (const c of r.conversations) {
@@ -757,8 +765,8 @@ export async function openConversation(conv: string | null): Promise<void> {
   const st = useChat.getState();
   const left = st.activeConv;
   patch({ activeConv: conv });
-  // Opening a chat in a window nobody is looking at (another tab, no focus) does not read it: the badge stays until they come back (resumeView).
-  if (conv && isLooking(conv)) {
+  // Opening a chat in a page nobody sees (another tab) does not read it: the badge stays until they come back (resumeView).
+  if (conv && isShowing(conv)) {
     const cur = useChat.getState();
     patch({ unread: { ...cur.unread, [conv]: 0 }, mentions: { ...cur.mentions, [conv]: false } });
   }
@@ -838,7 +846,7 @@ function forgetWiped(): void {
 /** Back on the page, or back on the contacts part: the open chat now counts as looked at. */
 export function resumeView(): void {
   const st = useChat.getState();
-  if (!st.activeConv || !isLooking(st.activeConv)) return;
+  if (!st.activeConv || !isShowing(st.activeConv)) return;
   patch({ unread: { ...st.unread, [st.activeConv]: 0 }, mentions: { ...st.mentions, [st.activeConv]: false } });
   markRead(st.activeConv);
 }
@@ -982,7 +990,7 @@ async function transmit(conv: string, m: Msg): Promise<void> {
   void refreshUsage();
 }
 
-async function onFrame(f: Frame): Promise<void> {
+export async function onFrame(f: Frame): Promise<void> {
   const myId = useChat.getState().me?.userId;
   if (!myId) return;
   if (f.t === "message") {

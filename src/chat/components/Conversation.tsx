@@ -179,8 +179,10 @@ export function Conversation() {
   };
   const dragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    // Only the bare background (not a bubble, not the scrollbar), with the primary button.
-    if (e.target !== el || e.button !== 0 || !isWide() || e.clientX >= el.getBoundingClientRect().left + el.clientWidth) return;
+    // Only bare background: the list itself, or the empty part of a message row (a long message makes its row as wide as the list), never a
+    // bubble, an avatar or the scrollbar; with the primary button.
+    const bare = e.target === el || (e.target as HTMLElement).classList.contains("ch-msgrow");
+    if (!bare || e.button !== 0 || !isWide() || e.clientX >= el.getBoundingClientRect().left + el.clientWidth) return;
     drag.current = { ...contentPoint(e), active: false };
     pointer.current = { x: e.clientX, y: e.clientY };
     el.setPointerCapture(e.pointerId);
@@ -192,7 +194,11 @@ export function Conversation() {
     const ptr = pointer.current;
     if (!d || !el || !ptr) return;
     const base = el.getBoundingClientRect();
-    const p = { x: ptr.x - base.left + el.scrollLeft, y: ptr.y - base.top + el.scrollTop };
+    // The box stays inside the list: dragging past its edge never widens it (no horizontal scrolling).
+    const p = {
+      x: Math.min(Math.max(ptr.x - base.left + el.scrollLeft, 0), el.clientWidth),
+      y: Math.min(Math.max(ptr.y - base.top + el.scrollTop, 0), el.scrollHeight),
+    };
     if (!d.active && Math.hypot(p.x - d.x, p.y - d.y) < 6) return;
     d.active = true;
     const rect = { x: Math.min(d.x, p.x), y: Math.min(d.y, p.y), w: Math.abs(p.x - d.x), h: Math.abs(p.y - d.y) };

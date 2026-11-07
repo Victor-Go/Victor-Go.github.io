@@ -106,6 +106,8 @@ export interface ChatState {
   /** Idle logout in minutes; always starts at the default and is never saved. */
   idleMinutes: number;
   notice: string | null;
+  /** The name of a contact who has just removed this person, shown once as a toast. */
+  removedBy: string | null;
   retentionDays: number;
   groupMax: number;
   voiceMaxSec: number;
@@ -142,6 +144,7 @@ export const initialState: ChatState = {
   socket: "idle",
   idleMinutes: DEFAULT_IDLE_MINUTES,
   notice: null,
+  removedBy: null,
   retentionDays: 30,
   groupMax: 32,
   voiceMaxSec: 60,

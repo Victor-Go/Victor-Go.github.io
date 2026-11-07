@@ -10,7 +10,7 @@ import { useLangStore } from "./lang";
 import { Api } from "./net/api";
 import { armSound } from "./sound";
 import { CHAT_PATHS, PATH, isChatPath, sectionOf, showPath, startPath, useLocation } from "./route";
-import { useChat } from "./store";
+import { patch, useChat } from "./store";
 import { useLang } from "./useChat";
 
 /** Where a sign-in continues: the page the browser loaded, when it is a screen that needs nothing else (not the sign-in page, not a chat, which is picked from the list). */
@@ -29,6 +29,13 @@ export function App() {
     return base ? new Api(base) : null;
   }, []);
   const ready = phase === "ready";
+  const removedBy = useChat((s) => s.removedBy);
+  // Shown for a few seconds, or until it is tapped.
+  useEffect(() => {
+    if (!removedBy) return;
+    const timer = window.setTimeout(() => patch({ removedBy: null }), 8000);
+    return () => window.clearTimeout(timer);
+  }, [removedBy]);
 
   // Browsers allow sound only after the user has touched the page, and phones count only a finished tap. Every tap, click and
   // key press (re)unlocks the chime, so it also recovers after the browser put the audio to sleep.
@@ -84,6 +91,11 @@ export function App() {
   return (
     <>
       {ready ? <Shell /> : <AccountPage />}
+      {removedBy && (
+        <div className="ch-toast" role="alert" onClick={() => patch({ removedBy: null })}>
+          {a.removedByContact(removedBy)}
+        </div>
+      )}
       {warning && (
         <div className="ch-toast" role="alert">
           {a.idleWarning}

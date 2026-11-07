@@ -460,10 +460,30 @@ export async function declineRequest(requestId: string): Promise<void> {
 
 export async function removeContact(userId: string): Promise<void> {
   await api().post("/contacts/remove", { userId });
-  s.contactKeys.get(userId)?.key.fill(0);
-  s.contactKeys.delete(userId);
+  forgetContact(userId);
+  // The server has already marked both people's saved copies deleted; this call only makes sure of it and drops the remembered version.
   await deleteRecord(`contact:${userId}`).catch(() => {});
   await refreshContacts();
+}
+
+/**
+ * Destroys what this device holds of the chat with a contact who was removed (by this person or by the other one): the key is zeroed,
+ * what was loaded of the chat and the favourites made from it are dropped. The saved copy of the key in the vault is the server's to
+ * delete (it does so for both people when a contact is removed); a new chat starts from nothing, so it is not touched here.
+ */
+function forgetContact(userId: string): void {
+  const st = useChat.getState();
+  const convId = s.contactKeys.get(userId)?.convId || st.contacts.find((c) => c.userId === userId)?.convId || "";
+  s.contactKeys.get(userId)?.key.fill(0);
+  s.contactKeys.delete(userId);
+  s.versions.delete(`contact:${userId}`);
+  if (!convId) return;
+  dropCached(convId);
+  s.sentRead.delete(convId);
+  s.tombs.delete(convId);
+  const messages = { ...useChat.getState().messages };
+  delete messages[convId]; // even a message still being sent
+  patch({ messages, favorites: useChat.getState().favorites.filter((f) => f.conv !== convId) });
 }
 
 // ---------- messages ----------
@@ -1014,7 +1034,14 @@ async function onFrame(f: Frame): Promise<void> {
     if (f.code === "monthly_limit") void refreshUsage();
   } else if (f.t === "notice") {
     const kind = String(f.kind);
-    if (kind === "contact_request" || kind === "contact_accepted" || kind === "contact_deleted") await refreshContacts().catch(() => {});
+    if (kind === "contact_deleted") {
+      // Before the list is refreshed: afterwards the name is no longer known.
+      const gone = String(f.userId ?? "");
+      const handle = useChat.getState().contacts.find((c) => c.userId === gone)?.handle ?? null;
+      forgetContact(gone);
+      if (handle) patch({ removedBy: handle });
+      await refreshContacts().catch(() => {});
+    } else if (kind === "contact_request" || kind === "contact_accepted") await refreshContacts().catch(() => {});
     else if (kind === "group_event" || kind === "group_deleted") await refreshGroups().catch(() => {});
     else if (kind === "epochs") await refreshEpochs().catch(() => {});
     else if (kind === "wiped") {

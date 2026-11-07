@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Star } from "lucide-react";
+import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Smile, Star } from "lucide-react";
 import { PATH, go } from "../route";
 import { ApiError, addFavorite, loadOlder, removeFavorite, sendText } from "../client";
 import { errorText } from "../i18nApp";
@@ -14,6 +14,8 @@ import { splitLinks } from "../links";
 import { Avatar, Modal } from "./ui";
 import { VoiceBubble } from "./VoiceBubble";
 import { VoiceComposer } from "./VoiceComposer";
+
+const EMOJIS = ["👌", "👍", "🤝", "❤️", "😄", "😁", "😆", "😅", "🤣", "😂", "😉", "😊", "😇", "🥲", "😛", "😝", "🫢", "🫣", "🤫", "🤐", "🥺", "🥹", "😭", "😱", "😖", "😣", "😞", "😓", "😫"];
 
 /** A message's text with @mentions of group members highlighted (as spans, never as markup). */
 function MessageText({ text, handles, me, onLink }: { text: string; handles: string[]; me: string; onLink: (href: string) => void }) {
@@ -76,6 +78,23 @@ export function Conversation() {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextCaret = useRef<number | null>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
+  // The emoji panel closes on a tap elsewhere, on Escape, and when the chat changes.
+  useEffect(() => setEmojiOpen(false), [activeConv]);
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const away = (e: PointerEvent) => {
+      if (!emojiRef.current?.contains(e.target as Node)) setEmojiOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setEmojiOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [emojiOpen]);
   const contact = contacts.find((c) => c.convId === activeConv);
   const group = groups.find((g) => g.id === activeConv);
   const list = (activeConv ? messages[activeConv] : undefined) ?? [];
@@ -162,6 +181,19 @@ export function Conversation() {
     setCaret(at + insert.length);
     setPick(0);
     inputRef.current?.focus();
+  };
+
+  // Inserts at the caret (replacing a selection). The textarea keeps or lacks focus as it was, so the phone keyboard neither opens nor closes.
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const start = Math.min(el.selectionStart, draft.length);
+    const end = Math.min(el.selectionEnd, draft.length);
+    const text = draft.slice(0, start) + emoji + draft.slice(end);
+    if (Array.from(text).length > MESSAGE_MAX_CHARS) return;
+    setDraft(text);
+    nextCaret.current = start + emoji.length;
+    setCaret(start + emoji.length);
   };
 
   const submit = () => {
@@ -353,6 +385,43 @@ export function Conversation() {
         {!recording && (
         <div className="ch-composer-side">
           {length > MESSAGE_MAX_CHARS * 0.8 && <span className={length > MESSAGE_MAX_CHARS ? "ch-bad ch-hint" : "ch-hint"}>{a.charCount(length, MESSAGE_MAX_CHARS)}</span>}
+          <div className="ch-emoji-wrap" ref={emojiRef}>
+            {emojiOpen && (
+              <div className="ch-emoji-panel" role="group" aria-label={a.emoji}>
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    className="ch-emoji-item"
+                    // pointerdown + preventDefault: the textarea keeps its focus, so the keyboard does not flicker
+                    onPointerDown={(ev) => {
+                      ev.preventDefault();
+                      insertEmoji(e);
+                    }}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        insertEmoji(e);
+                      }
+                    }}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              className="ch-icon"
+              aria-label={a.emoji}
+              aria-expanded={emojiOpen}
+              disabled={!canSend}
+              onPointerDown={(ev) => ev.preventDefault()}
+              onClick={() => setEmojiOpen((o) => !o)}
+            >
+              <Smile size={24} />
+            </button>
+          </div>
           <button type="button" className="ch-send" aria-label={a.send} disabled={!draft.trim() || length > MESSAGE_MAX_CHARS || !canSend} onClick={submit}>
             <Send size={20} />
           </button>

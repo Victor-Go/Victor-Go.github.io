@@ -98,8 +98,10 @@ function fakeLayout(): () => void {
   const sh = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
   const st = Object.getOwnPropertyDescriptor(proto, "scrollTop");
   Object.defineProperty(proto, "scrollHeight", { configurable: true, get() { return this.children.length * 100; } });
+  Object.defineProperty(proto, "clientWidth", { configurable: true, get() { return 1000; } });
   Object.defineProperty(proto, "scrollTop", { configurable: true, get() { return tops.get(this) ?? 0; }, set(v: number) { tops.set(this, v); } });
   return () => {
+    delete (proto as unknown as Record<string, unknown>).clientWidth;
     if (sh) Object.defineProperty(proto, "scrollHeight", sh);
     else delete (proto as unknown as Record<string, unknown>).scrollHeight;
     if (st) Object.defineProperty(proto, "scrollTop", st);
@@ -115,6 +117,7 @@ describe("paging back", () => {
     const sh = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
     const st = Object.getOwnPropertyDescriptor(proto, "scrollTop");
     Object.defineProperty(proto, "scrollHeight", { configurable: true, get() { return this.children.length * 100; } });
+  Object.defineProperty(proto, "clientWidth", { configurable: true, get() { return 1000; } });
     Object.defineProperty(proto, "scrollTop", { configurable: true, get() { return tops.get(this) ?? 0; }, set(v: number) { tops.set(this, v); } });
     try {
       const mk = (seq: number) => msg(seq, { time: Date.now() });
@@ -157,6 +160,32 @@ describe("paging back", () => {
       const list = container.querySelector(".ch-messages") as HTMLElement;
       expect(list.scrollTop).toBe(list.scrollHeight);
     } finally {
+      restore();
+    }
+  });
+
+  it("dragging from the empty part of a row, or the background, draws a box that never leaves the list", () => {
+    const restore = fakeLayout();
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    try {
+      const { container } = render(<Conversation />);
+      const list = container.querySelector(".ch-messages") as HTMLElement;
+      const row = screen.getByText("hello 2").closest(".ch-msgrow") as HTMLElement;
+      list.setPointerCapture = () => {};
+      // The bubble itself does not start a box.
+      fireEvent.pointerDown(screen.getByText("hello 2"), { clientX: 10, clientY: 10, button: 0 });
+      fireEvent.pointerMove(list, { clientX: 400, clientY: 300 });
+      expect(container.querySelector(".ch-marquee")).toBeNull();
+      // The row's own empty area does, and a drag far past the right edge is cut at the list's width.
+      fireEvent.pointerDown(row, { clientX: 10, clientY: 10, button: 0 });
+      fireEvent.pointerMove(list, { clientX: 5000, clientY: 300 });
+      const box = container.querySelector(".ch-marquee") as HTMLElement;
+      expect(box).not.toBeNull();
+      expect(parseFloat(box.style.left) + parseFloat(box.style.width)).toBeLessThanOrEqual(1000);
+      fireEvent.pointerUp(list);
+      expect(container.querySelector(".ch-marquee")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
       restore();
     }
   });

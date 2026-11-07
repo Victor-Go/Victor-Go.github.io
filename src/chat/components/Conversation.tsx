@@ -257,7 +257,11 @@ export function Conversation() {
   const lastKey = visible.length > 0 ? String(visible[visible.length - 1].seq || visible[visible.length - 1].id) : "";
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (!el) return;
+    if (!el) {
+      // No list on screen (no chat open): the next one drawn is a fresh start, never a continuation of what was drawn before.
+      drawn.current = null;
+      return;
+    }
     const was = drawn.current;
     if (was && was.conv === activeConv && was.first !== "" && was.first !== firstKey && was.last === lastKey) {
       // Older messages were put above: the reader stays on the message they were reading, whatever scrolling or loading happened meanwhile.

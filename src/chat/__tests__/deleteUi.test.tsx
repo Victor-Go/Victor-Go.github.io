@@ -91,6 +91,22 @@ describe("deleting from the conversation", () => {
   });
 });
 
+/** jsdom has no layout: every child of the list is 100px high, and the scroll position is a plain number. */
+function fakeLayout(): () => void {
+  const tops = new WeakMap<Element, number>();
+  const proto = HTMLElement.prototype;
+  const sh = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
+  const st = Object.getOwnPropertyDescriptor(proto, "scrollTop");
+  Object.defineProperty(proto, "scrollHeight", { configurable: true, get() { return this.children.length * 100; } });
+  Object.defineProperty(proto, "scrollTop", { configurable: true, get() { return tops.get(this) ?? 0; }, set(v: number) { tops.set(this, v); } });
+  return () => {
+    if (sh) Object.defineProperty(proto, "scrollHeight", sh);
+    else delete (proto as unknown as Record<string, unknown>).scrollHeight;
+    if (st) Object.defineProperty(proto, "scrollTop", st);
+    else delete (proto as unknown as Record<string, unknown>).scrollTop;
+  };
+}
+
 describe("paging back", () => {
   it("keeps the reader where they were when older messages are drawn above", async () => {
     // jsdom has no layout: every child of the list is 100px high, and the scroll position is a plain number.
@@ -125,6 +141,23 @@ describe("paging back", () => {
       else delete (proto as unknown as Record<string, unknown>).scrollHeight;
       if (st) Object.defineProperty(proto, "scrollTop", st);
       else delete (proto as unknown as Record<string, unknown>).scrollTop;
+    }
+  });
+
+  it("opening a chat again after leaving it starts at the newest message, not at the top", () => {
+    const restore = fakeLayout();
+    try {
+      const mk = (seq: number) => msg(seq, { time: Date.now() });
+      useChat.setState({ messages: { [CONV]: Array.from({ length: 90 }, (_, i) => mk(i + 1)) } });
+      const { container } = render(<Conversation />);
+      expect((container.querySelector(".ch-messages") as HTMLElement).scrollTop).toBeGreaterThan(0);
+      act(() => useChat.setState({ activeConv: null }));
+      // Left: the cache is cut to the newest 50, so the first message differs from the one drawn before.
+      act(() => useChat.setState({ activeConv: CONV, messages: { [CONV]: Array.from({ length: 50 }, (_, i) => mk(i + 41)) } }));
+      const list = container.querySelector(".ch-messages") as HTMLElement;
+      expect(list.scrollTop).toBe(list.scrollHeight);
+    } finally {
+      restore();
     }
   });
 });

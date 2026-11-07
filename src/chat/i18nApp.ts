@@ -68,6 +68,11 @@ const zh = {
   addContactSubmit: "发送申请",
   refreshSignsOut: "刷新或关闭页面会自动退出登录。",
   addContactDone: "申请已发送,等待对方同意。",
+  addContactConflict: {
+    already_contacts: "你们已经是联系人了。",
+    request_sent: "你已经向对方发送过申请,正在等待对方同意。",
+    request_received: "对方已经向你发送了申请,请在申请列表里同意。",
+  } as Record<string, string>,
   working: "处理中……",
   loading: "加载中……",
   close: "关闭",
@@ -355,6 +360,11 @@ const en: AppMessages = {
   addContactSubmit: "Send request",
   refreshSignsOut: "Reloading or closing the page signs you out automatically.",
   addContactDone: "Request sent. Waiting for them to accept.",
+  addContactConflict: {
+    already_contacts: "You are already contacts.",
+    request_sent: "You have already sent them a request. Waiting for them to accept.",
+    request_received: "They have already sent you a request. Accept it in your requests.",
+  } as Record<string, string>,
   working: "Working…",
   loading: "Loading…",
   close: "Close",

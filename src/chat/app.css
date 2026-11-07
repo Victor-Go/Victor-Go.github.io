@@ -723,6 +723,39 @@ html[data-covered] #root {
   z-index: 20;
 }
 
+/* Anchored to the composer (the wrap is not positioned) and drawn above it, so opening it never resizes the page or the keyboard area. */
+.ch-emoji-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 100%;
+  margin-bottom: 4px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  width: min(332px, calc(100% - 24px));
+  padding: 6px;
+  background: var(--ch-card);
+  border: 1px solid var(--ch-line);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  z-index: 20;
+}
+
+.ch-emoji-item {
+  aspect-ratio: 1;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ch-emoji-item:hover,
+.ch-emoji-item:focus-visible {
+  background: var(--ch-bg);
+}
+
 .ch-suggest-item {
   display: flex;
   align-items: center;

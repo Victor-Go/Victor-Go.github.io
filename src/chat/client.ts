@@ -512,6 +512,16 @@ async function toMsg(w: WireMessage, mine: boolean): Promise<Msg> {
   return { id: w.clientMsgId, seq: w.seq, senderId: w.senderId, role: w.role, time: w.serverTime, mine, payload, epoch, gen: w.gen, lost, status: "sent" };
 }
 
+/**
+ * Whether a person is looking at this chat right now: the contacts part is showing, this chat is open in it, the page is visible, the window
+ * has focus and the privacy cover is not up. Only then does a message count as read (no unread badge, no ring, and a read receipt may go out).
+ */
+export function isLooking(conv: string | null): boolean {
+  if (!conv || document.hidden || !document.hasFocus() || document.documentElement.hasAttribute("data-covered")) return false;
+  const st = useChat.getState();
+  return st.section === "contacts" && st.activeConv === conv;
+}
+
 /** Returns true when the message was not in the list yet. */
 function addMessage(conv: string, msg: Msg): boolean {
   const st = useChat.getState();
@@ -521,8 +531,8 @@ function addMessage(conv: string, msg: Msg): boolean {
   next.sort((a, b) => (a.seq || Infinity) - (b.seq || Infinity) || a.time - b.time);
   patch({ messages: { ...st.messages, [conv]: next } });
   noteActive(conv, msg.time);
-  // Looked at means: the contacts part is showing, this chat is open in it, and the page is visible. Anything else leaves it unread (and rings).
-  if (i < 0 && !msg.mine && !(st.section === "contacts" && st.activeConv === conv && !document.hidden)) {
+  // Looked at means isLooking(). Anything else leaves it unread (and rings).
+  if (i < 0 && !msg.mine && !isLooking(conv)) {
     patch({ unread: { ...useChat.getState().unread, [conv]: (st.unread[conv] ?? 0) + 1 } });
     // "@name " in a group message to me turns that group's badge red.
     const me = st.me;
@@ -550,7 +560,7 @@ function noteActive(conv: string, time: number): void {
 async function loadUnread(): Promise<void> {
   const r = await api().get<{ conversations: { conv: string; unread?: number }[] }>("/conversations");
   const st = useChat.getState();
-  const looking = st.section === "contacts" && !document.hidden ? st.activeConv : null;
+  const looking = isLooking(st.activeConv) ? st.activeConv : null;
   const unread = { ...st.unread };
   const mentions = { ...st.mentions };
   for (const c of r.conversations) {
@@ -726,11 +736,12 @@ async function resync(reconnected: boolean): Promise<void> {
 export async function openConversation(conv: string | null): Promise<void> {
   const st = useChat.getState();
   const left = st.activeConv;
-  patch({
-    activeConv: conv,
-    unread: conv ? { ...st.unread, [conv]: 0 } : st.unread,
-    mentions: conv ? { ...st.mentions, [conv]: false } : st.mentions,
-  });
+  patch({ activeConv: conv });
+  // Opening a chat in a window nobody is looking at (another tab, no focus) does not read it: the badge stays until they come back (resumeView).
+  if (conv && isLooking(conv)) {
+    const cur = useChat.getState();
+    patch({ unread: { ...cur.unread, [conv]: 0 }, mentions: { ...cur.mentions, [conv]: false } });
+  }
   // Leaving a chat drops everything older than its newest messages.
   if (left && left !== conv) trimConversation(left);
   if (conv) await loadHistory(conv).catch(() => {});
@@ -807,7 +818,7 @@ function forgetWiped(): void {
 /** Back on the page, or back on the contacts part: the open chat now counts as looked at. */
 export function resumeView(): void {
   const st = useChat.getState();
-  if (st.section !== "contacts" || !st.activeConv || document.hidden) return;
+  if (!st.activeConv || !isLooking(st.activeConv)) return;
   patch({ unread: { ...st.unread, [st.activeConv]: 0 }, mentions: { ...st.mentions, [st.activeConv]: false } });
   markRead(st.activeConv);
 }
@@ -817,9 +828,8 @@ export function resumeView(): void {
  * to the other person; in a group it only keeps my own position (so the unread count is right after the next sign-in) and shows it to nobody.
  */
 export function markRead(conv: string | null): void {
-  if (!conv || document.hidden || !s.api?.token) return;
+  if (!conv || !s.api?.token || !isLooking(conv)) return;
   const st = useChat.getState();
-  if (st.section !== "contacts" || st.activeConv !== conv) return;
   const upTo = (st.messages[conv] ?? []).reduce((n, m) => (m.mine ? n : Math.max(n, m.seq)), 0);
   if (upTo <= (s.sentRead.get(conv) ?? 0)) return;
   s.sentRead.set(conv, upTo);

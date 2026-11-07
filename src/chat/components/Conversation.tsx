@@ -9,6 +9,7 @@ import { dayKey, formatClock, formatDay, isExpired } from "../format";
 import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions";
 import { useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
+import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
 import { DELETE_MAX, canDelete } from "../selection";
@@ -386,8 +387,8 @@ export function Conversation() {
           </div>
           <div className="ch-hint">{group ? a.memberCount(group.members.length) : a.encryptedNote}</div>
         </div>
-        {group && (
-          <button type="button" className="ch-icon" aria-label={a.groupInfo} onClick={() => setInfo(true)}>
+        {(group || (contact && !contact.deleted)) && (
+          <button type="button" className="ch-icon" aria-label={group ? a.groupInfo : a.contactInfo} onClick={() => setInfo(true)}>
             <Info size={20} />
           </button>
         )}
@@ -660,6 +661,7 @@ export function Conversation() {
         </Modal>
       )}
       {info && group && <GroupInfo group={group} onClose={() => setInfo(false)} />}
+      {info && contact && !contact.deleted && <ContactInfo contact={contact} onClose={() => setInfo(false)} />}
       {link && (
         <Modal title={a.linkTitle} onClose={() => setLink(null)} closeLabel={a.close}>
           <p className="ch-hint">{a.linkWarn}</p>

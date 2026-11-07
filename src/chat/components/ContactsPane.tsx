@@ -28,7 +28,8 @@ function AddContactDialog({ onClose }: { onClose: () => void }) {
       setMessage({ ok: true, text: a.addContactDone });
       setHandle("");
     } catch (e) {
-      setMessage({ ok: false, text: errorText(a, e instanceof ApiError ? e.code : "internal") });
+      const reason = e instanceof ApiError && e.code === "conflict" ? String(e.extra.reason ?? "") : "";
+      setMessage({ ok: false, text: a.addContactConflict[reason] ?? errorText(a, e instanceof ApiError ? e.code : "internal") });
     } finally {
       setProgress(null);
     }

@@ -106,7 +106,8 @@ const cipherEpochsFile = (): Plugin => {
   }
 }
 
-// The chat pages may talk only to the server given at build time (VITE_CHAT_API / VITE_CHAT_WS);
+// The chat pages may talk only to the server given at build time (VITE_CHAT_API / VITE_CHAT_WS) and to the
+// storage origin that holds voice recordings (VITE_CHAT_VOICE_ORIGIN, the server's Terraform output `voice_origin`);
 // without them connect-src stays 'none'. Nothing about the server is hard-coded in the sources.
 const chatConnectSrc = (): Plugin => {
   let value = "'none'"
@@ -115,7 +116,7 @@ const chatConnectSrc = (): Plugin => {
     apply: 'build',
     configResolved(config) {
       const env = loadEnv(config.mode, config.envDir || config.root, 'VITE_CHAT_')
-      value = connectSrc(env.VITE_CHAT_API, env.VITE_CHAT_WS)
+      value = connectSrc(env.VITE_CHAT_API, env.VITE_CHAT_WS, env.VITE_CHAT_VOICE_ORIGIN)
     },
     transformIndexHtml: {
       order: 'post',

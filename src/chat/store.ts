@@ -20,12 +20,21 @@ export interface Contact {
   deleted?: boolean;
 }
 
+/** Whether this person may add or be added as a contact now, as the server says (`GET /me`); other people's switches are never known. */
+export interface AccountFlags {
+  contactsBlocked: boolean;
+  globalContactsBlocked: boolean;
+  canAddContacts: boolean;
+}
+
 export interface RequestItem {
   id: string;
   direction: "in" | "out";
   status: string;
   user: { userId: string; handle: string; role?: string };
   createdAt: number;
+  /** Made with a contact card: the receiver can accept it whatever the switches say. */
+  viaCard?: boolean;
 }
 
 export interface Msg {
@@ -47,6 +56,9 @@ export interface Msg {
   status: "sending" | "sent" | "failed";
   /** The sender deleted it: no text, no recording, only who and when. Identified by seq (its client id is gone). */
   deleted?: boolean;
+  /** Only official messages (the read-only conversation with the system): what kind it is. They are plain, never encrypted, and have no payload. */
+  kind?: string;
+  data?: Record<string, unknown>;
 }
 
 export interface GroupMember {
@@ -88,6 +100,8 @@ export interface ChatState {
   contacts: Contact[];
   requests: RequestItem[];
   groups: Group[];
+  /** Conversation id of the person's official (read-only, system) conversation; null until the first official message exists. */
+  official: string | null;
   favorites: Favorite[];
   messages: Record<string, Msg[]>;
   unread: Record<string, number>;
@@ -106,11 +120,12 @@ export interface ChatState {
   /** Idle logout in minutes; always starts at the default and is never saved. */
   idleMinutes: number;
   notice: string | null;
-  /** The name of a contact who has just removed this person, shown once as a toast. */
-  removedBy: string | null;
   retentionDays: number;
   groupMax: number;
   voiceMaxSec: number;
+  /** Server clock minus this device's clock (ms), from the last answer that carried the server's time; used to judge when a card expires. */
+  clockSkew: number;
+  account: AccountFlags;
   /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
   voiceOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
@@ -123,6 +138,20 @@ export interface ChatState {
   lastActive: Record<string, number>;
 }
 
+/** A group has at most this many members (protocol 2); nothing in the UI offers more, whatever a server says. */
+export const GROUP_MAX = 32;
+/**
+ * The unread number of the tab title and the navigation badge: the sum over the conversations the list shows (contacts, groups, the official one).
+ * The server also counts conversations the list no longer has (a removed contact, a group left); those must not keep a count nobody can clear.
+ */
+export function totalUnread(s: Pick<ChatState, "unread" | "contacts" | "groups" | "official">): number {
+  const shown = new Set<string>([...s.contacts.map((c) => c.convId), ...s.groups.map((g) => g.id)]);
+  if (s.official) shown.add(s.official);
+  let n = 0;
+  for (const [conv, v] of Object.entries(s.unread)) if (shown.has(conv)) n += v;
+  return n;
+}
+
 export const DEFAULT_IDLE_MINUTES = 10;
 export const IDLE_CHOICES = [5, 10, 30, 60];
 
@@ -132,6 +161,7 @@ export const initialState: ChatState = {
   contacts: [],
   requests: [],
   groups: [],
+  official: null,
   favorites: [],
   messages: {},
   unread: {},
@@ -144,10 +174,11 @@ export const initialState: ChatState = {
   socket: "idle",
   idleMinutes: DEFAULT_IDLE_MINUTES,
   notice: null,
-  removedBy: null,
   retentionDays: 30,
-  groupMax: 32,
+  groupMax: GROUP_MAX,
   voiceMaxSec: 60,
+  clockSkew: 0,
+  account: { contactsBlocked: false, globalContactsBlocked: false, canAddContacts: true },
   voiceOff: false,
   usage: null,
   section: "contacts",

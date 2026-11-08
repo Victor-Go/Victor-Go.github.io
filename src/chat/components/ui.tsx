@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { avatarUri } from "../avatar";
+import { OFFICIAL_ID, avatarUri } from "../avatar";
 import type { Progress } from "../client";
 import type { Messages } from "../i18n";
 
 /** Every avatar wears a ring in the theme blue, or gold for an administrator. */
 export function Avatar({ userId, size = 40, admin = false }: { userId: string; size?: number; admin?: boolean }) {
+  // The official channel is not a user: it always wears the fixed verified badge, with no ring.
+  if (userId === OFFICIAL_ID) {
+    return <img className="ch-avatar-official" src={avatarUri(OFFICIAL_ID)} width={size} height={size} alt="" draggable={false} />;
+  }
   return (
     <img
       className={"ch-avatar" + (admin ? " ch-gold" : "") + (size >= 60 ? " ch-avatar-big" : "")}

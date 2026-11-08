@@ -19,9 +19,12 @@ export function parseEndpoint(raw: string | undefined, kind: "http" | "ws"): str
   return url.href.replace(/\/+$/, "");
 }
 
-/** The `connect-src` value for the chat pages: only the configured server origins, or 'none'. */
-export function connectSrc(api: string | undefined, ws: string | undefined): string {
-  const origins = [parseEndpoint(api, "http"), parseEndpoint(ws, "ws")]
+/**
+ * The `connect-src` value for the chat pages: only the configured server origins, or 'none'. `voice` is the object storage origin that
+ * recordings are uploaded to and fetched from (`VITE_CHAT_VOICE_ORIGIN`, printed by the server's Terraform as `voice_origin`).
+ */
+export function connectSrc(api: string | undefined, ws: string | undefined, voice?: string | undefined): string {
+  const origins = [parseEndpoint(api, "http"), parseEndpoint(ws, "ws"), parseEndpoint(voice, "http")]
     .filter((u): u is string => u !== null)
     .map((u) => new URL(u).origin);
   return origins.length ? [...new Set(origins)].join(" ") : "'none'";

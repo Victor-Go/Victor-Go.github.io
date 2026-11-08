@@ -1129,3 +1129,37 @@ section > .ch-primary {
   flex: 1;
   text-align: center;
 }
+
+/* Official messages: the same full-width card, but neutral (they are information, not a warning). */
+.ch-system[data-official] {
+  border-style: solid;
+  border-color: var(--ch-line);
+  color: #1c1c1e;
+  background: #fff;
+}
+.ch-system[data-official] span {
+  color: #6c6c70;
+  opacity: 1;
+}
+.ch-avatar-official {
+  flex: none;
+  display: block;
+}
+.ch-msgrow.ch-official {
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+}
+.ch-msgrow.ch-official .ch-system {
+  margin: 2px auto;
+}
+.ch-card-who {
+  font-weight: 600;
+  opacity: 1;
+}
+.ch-selecting .ch-official .ch-system {
+  pointer-events: none;
+}
+.ch-selecting .ch-official .ch-system[data-official] button {
+  pointer-events: none;
+}

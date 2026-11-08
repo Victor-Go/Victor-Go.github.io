@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fromB64 } from "../crypto/b64";
 import { toEpochs } from "../crypto/keys";
 import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, voiceBinding, type Binding } from "../crypto/message";
 import { VoiceBubble } from "../components/VoiceBubble";
-import { VOICE_MAX_CT_CHARS, VOICE_SAMPLE_RATE, encodeMp3, fitsServer, floatToInt16, formatDuration } from "../voice";
+import { VOICE_MAX_BYTES, VOICE_SAMPLE_RATE, encodeMp3, fitsServer, floatToInt16, formatDuration } from "../voice";
 import { playVoice, playingKey, stopVoice } from "../voicePlayer";
 import { initialState, useChat, type Msg } from "../store";
 import { ApiError, lock } from "../client";
@@ -37,8 +38,11 @@ describe("sample conversion and MP3 size", () => {
     const mp3 = await encodeMp3(tone(60));
     expect(mp3.length).toBeLessThan(200_000);
     const { ct } = await encryptBytes(key, epochs, mp3, voiceBinding(binding));
-    expect(fitsServer(ct)).toBe(true);
-    expect(fitsServer("x".repeat(VOICE_MAX_CT_CHARS + 1))).toBe(false);
+    // The server counts the raw ciphertext bytes (1 to 262144), not the base64 text.
+    expect(fitsServer(fromB64(ct).length)).toBe(true);
+    expect(fitsServer(VOICE_MAX_BYTES)).toBe(true);
+    expect(fitsServer(VOICE_MAX_BYTES + 1)).toBe(false);
+    expect(fitsServer(0)).toBe(false);
   }, 30_000);
 
   it("formats durations", () => {

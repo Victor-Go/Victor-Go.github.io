@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, Users } from "lucide-react";
+import { Activity, Contact, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, Users } from "lucide-react";
 import { ADMIN_LOCK_MS, lockAdmin, markAdminAction, unlockedNow, useAdminLock } from "../adminLock";
 import { ApiError, adminDeleteUser, rawApi, unlockAdmin, wipeEverything, type Progress } from "../client";
 import { formatBytes, formatClock, formatDay } from "../format";
 import { errorOf } from "../i18nApp";
 import { onEnter } from "../keys";
 import { PATH, go as navigate, useLocation } from "../route";
-import { useChat } from "../store";
+import { GROUP_MAX, useChat } from "../store";
 import { useLang } from "../useChat";
 import { ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
 import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
+import { SendCardModal } from "./SendCardModal";
 import { Avatar, Loading, Steps } from "./ui";
 
 const PAGE_SIZE = 20;
@@ -32,12 +33,17 @@ interface AdminUser {
   /** Messages sent this (UTC) month, and the monthly limit (null for the administrator); absent from an older server. */
   messageCount?: number;
   messageLimit?: number | null;
+  /** This account may not add or be added as a contact (the administrator is exempt). */
+  contactsBlocked?: boolean;
 }
 interface Invite {
   id: string;
   note: string;
   createdAt: number;
-  expiresAt: number | null;
+  /** Every invite expires (protocol 2). */
+  expiresAt: number;
+  /** The account that registers with it starts with contacts blocked. */
+  contactsBlocked?: boolean;
   /** Present until the invite is used. */
   code?: string;
   uses: { userId: string; handle: string; at: number }[];
@@ -49,6 +55,19 @@ interface Config {
   groupMax: number;
   retentionDays: number;
   favoriteMax: number;
+  /** Nobody (but the administrator) may add or be added as a contact. */
+  globalContactsBlocked: boolean;
+}
+
+/** An active contact card, as the administrator lists it. */
+interface AdminCard {
+  id: string;
+  recipientId: string;
+  recipientHandle: string;
+  subjectId: string;
+  subjectHandle: string;
+  createdAt: number;
+  expiresAt: number;
 }
 interface Status {
   version: string;
@@ -67,13 +86,14 @@ interface Job {
   error: string;
 }
 
-type View = { k: "root" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "config" } | { k: "status" } | { k: "audit" };
+type View = { k: "root" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "audit" };
 
 /** Each screen has its own address (so the back gesture works); the selected user rides along in memory, never in the address. */
 function addressOf(v: View): { path: string; payload?: unknown } {
   switch (v.k) {
     case "users":
     case "invites":
+    case "cards":
     case "config":
     case "epochs":
     case "jobs":
@@ -96,6 +116,7 @@ function viewAt(path: string, payload: unknown): View {
   switch (name) {
     case "users":
     case "invites":
+    case "cards":
     case "config":
     case "epochs":
     case "jobs":
@@ -256,7 +277,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
             icon={<Avatar userId={u.userId} size={30} admin={u.role === "admin"} />}
             title={
               <>
-                @{u.handle} {u.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>} {u.suspended && <span className="ios-destructive">⏸</span>}
+                @{u.handle} {u.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>}
               </>
             }
             subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.voiceCount ? ` · ${a.manage.voiceSummary(u.voiceCount, formatBytes(u.voiceBytes ?? 0))}` : ""}`}
@@ -275,6 +296,11 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
   const when = useWhen();
   const { error, run, busy } = useAdmin();
   const done = (fn: () => Promise<unknown>) => void run(fn).then((r) => r !== null && go({ k: "users" }));
+  const [blocked, setBlocked] = useState(user.contactsBlocked === true);
+  const [cardOpen, setCardOpen] = useState(false);
+  const setContactsBlocked = (next: boolean) => {
+    void run(() => rawApi().post(`/admin/users/${user.userId}/contacts-blocked`, { blocked: next })).then((r) => r !== null && setBlocked(next));
+  };
   return (
     <Page title={`@${user.handle}`} onBack={() => go({ k: "users" })} backLabel={a.manage.users}>
       <Loading busy={busy} first={false} label={a.loading} />
@@ -298,6 +324,12 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
       {user.role !== "admin" && (
         <>
           <Group>
+            <Row disabled={busy} title={a.manage.sendCard} chevron onClick={() => setCardOpen(true)} />
+          </Group>
+          <Group footer={a.manage.contactsBlockedHint}>
+            <SwitchRow title={a.manage.contactsBlocked} checked={blocked} onChange={setContactsBlocked} />
+          </Group>
+          <Group>
             <Row disabled={busy} title={a.manage.resetFailures} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/reset-failures`))} />
             <Row disabled={busy} title={a.manage.forceLogout} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/logout`))} />
             <Row disabled={busy} title={user.suspended ? a.manage.unsuspend : a.manage.suspend} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/suspend`, { suspended: !user.suspended }))} />
@@ -315,6 +347,7 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
           </Group>
         </>
       )}
+      {cardOpen && <SendCardModal recipient={user} onClose={() => setCardOpen(false)} onLocked={lockAdmin} />}
     </Page>
   );
 }
@@ -326,15 +359,17 @@ function InvitesView({ go }: { go: (v: View) => void }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [note, setNote] = useState("");
   const [days, setDays] = useState(7);
+  const [blocked, setBlocked] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const load = useCallback(() => run(() => rawApi().get<{ invites: Invite[] }>("/admin/invites")).then((r) => r && setInvites(r.invites.slice().sort((x, y) => y.createdAt - x.createdAt))), [run]);
   useEffect(() => {
     void load();
   }, [load]);
   const create = async () => {
-    const r = await run(() => rawApi().post("/admin/invites", { note, expiresAt: days > 0 ? Date.now() + days * 86_400_000 : null }));
+    const r = await run(() => rawApi().post("/admin/invites", { note, expiresInDays: days, contactsBlocked: blocked }));
     if (r) {
       setNote("");
+      setBlocked(false);
       void load();
     }
   };
@@ -359,14 +394,15 @@ function InvitesView({ go }: { go: (v: View) => void }) {
           <input
             className="ios-field"
             type="number"
-            min={0}
-            max={365}
+            min={1}
+            max={30}
             value={days}
             aria-label={a.manage.expiresInDays}
-            onChange={(e) => setDays(Math.max(0, Number(e.target.value) || 0))}
+            onChange={(e) => setDays(Math.min(30, Math.max(1, Math.floor(Number(e.target.value)) || 1)))}
             onKeyDown={onEnter(() => void create())}
           />
         </Row>
+        <SwitchRow title={a.manage.inviteContactsBlocked} checked={blocked} onChange={setBlocked} />
         <Row title={a.manage.createInvite} center onClick={() => create()} />
       </Group>
       {invites.length > 0 && (
@@ -382,8 +418,9 @@ function InvitesView({ go }: { go: (v: View) => void }) {
                 </div>
               )}
               <div className="ios-sub">
-                {a.manage.created}: {when(i.createdAt)} · {a.manage.expires}: {i.expiresAt ? when(i.expiresAt) : a.manage.noExpiry}
+                {a.manage.created}: {when(i.createdAt)} · {a.manage.expires}: {when(i.expiresAt)}
               </div>
+              {i.contactsBlocked && <div className="ios-sub">{a.manage.inviteContactsBlockedTag}</div>}
               {i.code && (
                 <div className="ios-actions">
                   <button type="button" className="ios-link" onClick={() => copy(i.code!)}>
@@ -398,6 +435,96 @@ function InvitesView({ go }: { go: (v: View) => void }) {
           ))}
         </Group>
       )}
+    </Page>
+  );
+}
+
+/** The user with exactly this handle, found through the admin search (the card endpoints take ids). */
+async function findUserId(handle: string, reason: "recipient" | "subject"): Promise<string> {
+  const h = handle.replace(/^@/, "").trim();
+  const r = await rawApi().get<{ users: AdminUser[] }>(`/admin/users?q=${encodeURIComponent(h)}&offset=0&limit=${PAGE_SIZE}`);
+  const hit = r.users.find((u) => u.handle.toLowerCase() === h.toLowerCase());
+  if (!hit) throw new ApiError(404, "not_found", { reason });
+  return hit.userId;
+}
+
+function CardsView({ go }: { go: (v: View) => void }) {
+  const { a } = useLang();
+  const when = useWhen();
+  const { error, run, busy, loaded } = useAdmin();
+  const [cards, setCards] = useState<AdminCard[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [recipient, setRecipient] = useState("");
+  const [subject, setSubject] = useState("");
+  const [days, setDays] = useState(3);
+  const load = useCallback(
+    () =>
+      run(() => rawApi().get<{ total: number; cards: AdminCard[] }>(`/admin/cards?offset=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`)).then((r) => {
+        if (!r) return;
+        setCards(r.cards);
+        setTotal(r.total);
+      }),
+    [run, page],
+  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const clean = (v: string) => v.replace(/[^A-Za-z0-9_-]/g, "");
+  const ready = recipient !== "" && subject !== "" && !busy;
+  const issue = async () => {
+    if (!ready) return;
+    const r = await run(async () =>
+      rawApi().post("/admin/cards", { recipientId: await findUserId(recipient, "recipient"), subjectId: await findUserId(subject, "subject"), expiresInDays: days }),
+    );
+    if (r) {
+      setRecipient("");
+      setSubject("");
+      void load();
+    }
+  };
+  return (
+    <Page title={a.manage.cards} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      <Group header={a.manage.newCard} footer={a.manage.cardsNote}>
+        <Row title={a.manage.cardRecipient}>
+          <input className="ios-field" {...NO_AUTOFILL} value={recipient} maxLength={33} aria-label={a.manage.cardRecipient} onChange={(e) => setRecipient(clean(e.target.value))} />
+        </Row>
+        <Row title={a.manage.cardSubject}>
+          <input className="ios-field" {...NO_AUTOFILL} value={subject} maxLength={33} aria-label={a.manage.cardSubject} onChange={(e) => setSubject(clean(e.target.value))} onKeyDown={onEnter(() => void issue())} />
+        </Row>
+        <Row title={a.manage.expiresInDays}>
+          <input
+            className="ios-field"
+            type="number"
+            min={1}
+            max={30}
+            value={days}
+            aria-label={a.manage.expiresInDays}
+            onChange={(e) => setDays(Math.min(30, Math.max(1, Math.floor(Number(e.target.value)) || 1)))}
+            onKeyDown={onEnter(() => void issue())}
+          />
+        </Row>
+        <Row title={a.manage.issueCard} center disabled={!ready} onClick={() => void issue()} />
+      </Group>
+      <Group header={a.manage.activeCards}>
+        {cards.length === 0 && <Row title={a.manage.empty} />}
+        {cards.map((c) => (
+          <div key={c.id} className="ios-form ios-invite">
+            <div className="ios-invite-note">{a.manage.cardLine(c.subjectHandle, c.recipientHandle)}</div>
+            <div className="ios-sub">
+              {a.manage.created}: {when(c.createdAt)} · {a.manage.expires}: {when(c.expiresAt)}
+            </div>
+            <div className="ios-actions">
+              <button type="button" className="ios-link ios-destructive" disabled={busy} onClick={() => void run(() => rawApi().post(`/admin/cards/${c.id}/revoke`)).then(load)}>
+                {a.manage.revoke}
+              </button>
+            </div>
+          </div>
+        ))}
+      </Group>
+      <Pager page={page} total={total} onChange={setPage} />
     </Page>
   );
 }
@@ -430,12 +557,15 @@ function ConfigView({ go }: { go: (v: View) => void }) {
           <Group footer={a.manage.inviteRequiredHint}>
             <SwitchRow title={a.manage.inviteRequired} checked={cfg.inviteRequired} onChange={(v) => save({ ...cfg, inviteRequired: v })} />
           </Group>
+          <Group footer={a.manage.globalContactsBlockedHint}>
+            <SwitchRow title={a.manage.globalContactsBlocked} checked={cfg.globalContactsBlocked === true} onChange={(v) => save({ ...cfg, globalContactsBlocked: v })} />
+          </Group>
           <Group>
             <SwitchRow title={a.manage.voiceEnabled} checked={cfg.voiceEnabled} onChange={(v) => save({ ...cfg, voiceEnabled: v })} />
           </Group>
           <Group footer={saved ? <span className="ios-ok">{a.manage.saved}</span> : undefined}>
             <Row title={a.manage.groupMax}>
-              <input className="ios-field" type="number" min={2} max={128} value={cfg.groupMax} aria-label={a.manage.groupMax} onChange={(e) => void save({ ...cfg, groupMax: Math.min(128, Math.max(2, Number(e.target.value) || 2)) })} />
+              <input className="ios-field" type="number" min={2} max={GROUP_MAX} value={Math.min(GROUP_MAX, cfg.groupMax)} aria-label={a.manage.groupMax} onChange={(e) => void save({ ...cfg, groupMax: Math.min(GROUP_MAX, Math.max(2, Number(e.target.value) || 2)) })} />
             </Row>
             <Row title={a.manage.retentionDays}>
               <input className="ios-field" type="number" min={1} max={30} value={cfg.retentionDays} aria-label={a.manage.retentionDays} onChange={(e) => void save({ ...cfg, retentionDays: Math.min(30, Math.max(1, Number(e.target.value) || 1)) })} />
@@ -736,6 +866,8 @@ export function ManagementPage() {
       return <UserView user={view.user} go={setView} />;
     case "invites":
       return <InvitesView go={setView} />;
+    case "cards":
+      return <CardsView go={setView} />;
     case "config":
       return <ConfigView go={setView} />;
     case "wipe":
@@ -756,6 +888,7 @@ export function ManagementPage() {
           <Group>
             <Row icon={<Icon color="#007aff"><Users size={18} /></Icon>} title={a.manage.users} chevron onClick={() => setView({ k: "users" })} />
             <Row icon={<Icon color="#ff9500"><Ticket size={18} /></Icon>} title={a.manage.invites} chevron onClick={() => setView({ k: "invites" })} />
+            <Row icon={<Icon color="#30b0c7"><Contact size={18} /></Icon>} title={a.manage.cards} chevron onClick={() => setView({ k: "cards" })} />
             <Row icon={<Icon color="#8e8e93"><SlidersHorizontal size={18} /></Icon>} title={a.manage.config} chevron onClick={() => setView({ k: "config" })} />
           </Group>
           <Group>

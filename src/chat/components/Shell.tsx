@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { MessageCircle, Shield, User } from "lucide-react";
 import { openConversation, resumeView } from "../client";
 import { PATH, go, isChatPath, sectionOf, sectionPath, useLocation } from "../route";
-import { patch, useChat } from "../store";
+import { patch, totalUnread, useChat } from "../store";
 import { useLang } from "../useChat";
 import { ContactsPane } from "./ContactsPane";
 import { Conversation } from "./Conversation";
@@ -19,8 +19,8 @@ export function Shell() {
   const loc = useLocation();
   const section: Section = sectionOf(loc.path);
   const wanted = isChatPath(loc.path) && typeof loc.payload === "string" ? loc.payload : null;
-  const activeConv = useChat((s) => (wanted && (s.contacts.some((c) => c.convId === wanted) || s.groups.some((g) => g.id === wanted)) ? wanted : null));
-  const unread = useChat((s) => Object.values(s.unread).reduce((n, v) => n + v, 0) + s.requests.filter((r) => r.direction === "in").length);
+  const activeConv = useChat((s) => (wanted && (s.contacts.some((c) => c.convId === wanted) || s.groups.some((g) => g.id === wanted) || s.official === wanted) ? wanted : null));
+  const unread = useChat((s) => totalUnread(s) + s.requests.filter((r) => r.direction === "in").length);
   const anyMention = useChat((s) => Object.values(s.mentions).some(Boolean));
   // The address decides which chat is open. A chat address that has no chat behind it (reloaded entry, or the chat is gone) goes back to the list.
   useEffect(() => {

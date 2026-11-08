@@ -1,14 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
 import { checkHealth, parseHealth, PROTOCOL_VERSION, SLOW_RTT_MS } from "../net/health";
 
-const good = (minClient = 1) => ({
+const good = (minClient = PROTOCOL_VERSION) => ({
   server: { version: "0.1.0", commit: "abc1234", builtAt: 1, region: "ap-east-1" },
-  protocol: { current: 1, minClient },
+  protocol: { current: PROTOCOL_VERSION, minClient },
   features: { inviteRequired: true, groupMax: 32, retentionDays: 30, messageMaxChars: 1024, voiceMaxSec: 60 },
   serverTime: 1700000000000,
 });
 
 const reply = (body: unknown, ok = true) => vi.fn(async () => ({ ok, json: async () => body }) as Response);
+
+describe("protocol", () => {
+  it("is protocol 2, which the server reports as current and minimum", () => {
+    expect(PROTOCOL_VERSION).toBe(2);
+  });
+});
 
 describe("parseHealth", () => {
   it("accepts the contract shape", () => {

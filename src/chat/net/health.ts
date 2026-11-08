@@ -1,5 +1,5 @@
 /** Contract: chat-server docs/protocol.md section 4. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const HEALTH_TIMEOUT_MS = 5000;
 /** Round trips at or above this are shown as "slow". */
 export const SLOW_RTT_MS = 1500;

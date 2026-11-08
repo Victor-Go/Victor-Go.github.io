@@ -8,11 +8,13 @@ import { MESSAGE_MAX_CHARS, decryptBytes, decryptMessage, encryptBytes, encryptM
 import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
+import { downloadBytes, uploadBytes, type UploadTarget } from "./net/blob";
 import { ChatSocket, type Frame } from "./net/socket";
-import { patch, reset, useChat, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem } from "./store";
+import { GROUP_MAX, patch, reset, useChat, type AccountFlags, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem } from "./store";
 import { unlockedNow } from "./adminLock";
 import { setLang, useLangStore } from "./lang";
 import { mentionsHandle } from "./mentions";
+import { parseCard, parseRemoved } from "./official";
 import { playChime } from "./sound";
 import { stripControls } from "./text";
 import { canonicalHandle } from "./validation";
@@ -43,6 +45,10 @@ interface SessionPayload {
   publicKey: string;
   wrappedMK: string;
   idleTimeoutMaxMs: number;
+  /** Protocol 2: whether this account may add or be added as a contact now (the same fields as `GET /me`). */
+  contactsBlocked?: boolean;
+  globalContactsBlocked?: boolean;
+  canAddContacts?: boolean;
 }
 
 interface WireMessage {
@@ -57,6 +63,9 @@ interface WireMessage {
   role: string;
   /** Set by the server on a message its sender deleted; ct and clientMsgId are then empty. */
   deleted?: boolean;
+  /** Official messages only: they are plain (ct is empty) and carry a kind and its data. */
+  kind?: string;
+  data?: Record<string, unknown>;
 }
 
 type LockWhy = "expired" | "kicked" | "replaced";
@@ -84,6 +93,8 @@ const s = {
   /** Favourite records (vault ids) whose message was deleted and whose removal the server has not confirmed yet. */
   favRetry: new Set<string>(),
   sentRead: new Map<string, number>(),
+  /** When a read position was last sent for each conversation (ms): an unread count the server computed before that is stale. */
+  readAt: new Map<string, number>(),
   autoBusy: new Set<string>(),
   /** Messages already sent again once after the server said their epoch is gone. */
   retried: new Set<string>(),
@@ -117,6 +128,7 @@ const me = () => {
   return m;
 };
 const newId = (): string => toB64(randomBytes(12));
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 // ---------- proof of work ----------
 async function pow(action: string, subject: string, onProgress?: OnProgress): Promise<{ id: string; nonces: number[] }> {
@@ -183,8 +195,15 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
   patch({ phase: "busy", me: { userId: session.userId, handle: session.handle, role: session.role, publicKey: session.publicKey }, notice: null });
   onProgress({ step: "vault" });
   try {
-    const health = await a.get<{ features: { retentionDays: number; groupMax: number; voiceMaxSec: number } }>("/health");
-    patch({ retentionDays: health.features.retentionDays, groupMax: health.features.groupMax, voiceMaxSec: health.features.voiceMaxSec });
+    const health = await a.get<{ features: { retentionDays: number; groupMax: number; voiceMaxSec: number }; serverTime?: number }>("/health");
+    patch({
+      retentionDays: health.features.retentionDays,
+      groupMax: Math.min(GROUP_MAX, health.features.groupMax),
+      voiceMaxSec: health.features.voiceMaxSec,
+      ...(typeof health.serverTime === "number" ? { clockSkew: health.serverTime - Date.now() } : {}),
+    });
+    if (typeof session.canAddContacts === "boolean") applyAccount(session);
+    else await refreshMe();
     await refreshEpochs();
     if (seed) await putRecord("identity", { seed: toB64(seed) });
     await loadVault();
@@ -241,6 +260,7 @@ export function lock(notice: string | null = null): void {
   s.loadGen.clear();
   s.favRetry.clear();
   s.sentRead.clear();
+  s.readAt.clear();
   s.autoBusy.clear();
   s.retried.clear();
   stopVoice();
@@ -265,6 +285,23 @@ export function touch(): void {
   if (!s.api?.token || t - s.lastTouch < 60_000) return;
   s.lastTouch = t;
   void s.api.post("/session/touch").catch(() => {});
+}
+
+// ---------- own account ----------
+function applyAccount(f: Partial<AccountFlags>): void {
+  patch({
+    account: {
+      contactsBlocked: f.contactsBlocked === true,
+      globalContactsBlocked: f.globalContactsBlocked === true,
+      // A server that does not say keeps the door open; the server refuses anyway and the reason is shown.
+      canAddContacts: f.canAddContacts !== false,
+    },
+  });
+}
+
+/** `GET /me`: the account's own switches. Called at sign-in when the answer lacks them, on a `notice` of kind "account", and after a refusal that names a switch. */
+export async function refreshMe(): Promise<void> {
+  applyAccount(await api().get<Partial<AccountFlags>>("/me"));
 }
 
 // ---------- epochs and vault ----------
@@ -370,6 +407,8 @@ interface WireRequest {
   createdAt: number;
   /** Set by the server for the starting contact with the first active admin; the new user's client accepts it at once. */
   auto?: boolean;
+  /** Made with a contact card: it can be accepted whatever the contact switches say. */
+  viaCard?: boolean;
   from: { userId: string; handle: string; publicKey: string; role?: string };
   to: { userId: string; handle: string; publicKey: string; role?: string };
   kx: string | null;
@@ -409,6 +448,7 @@ export async function refreshContacts(): Promise<void> {
       status: r.status,
       user: r.to.userId === myId ? r.from : r.to,
       createdAt: r.createdAt,
+      viaCard: r.viaCard === true,
     }));
   const before = useChat.getState().contacts.map((c) => c.convId);
   patch({ contacts, requests });
@@ -432,10 +472,62 @@ async function saveContactKey(userId: string, handle: string, convId: string, ke
   await putRecord(`contact:${userId}`, { key: toB64(key), convId, handle });
 }
 
+/** The refusals that mean the page's idea of "may I add contacts" is out of date: it is read again. */
+const SWITCH_REASONS = new Set(["contacts_disabled", "self_blocked", "peer_blocked"]);
+const staleSwitches = (e: unknown): void => {
+  if (e instanceof ApiError && e.status === 403 && typeof e.extra.reason === "string" && SWITCH_REASONS.has(e.extra.reason)) void refreshMe().catch(() => {});
+};
+
 export async function requestContact(handle: string, onProgress: OnProgress): Promise<void> {
   const solution = await pow("contact", canonicalHandle(handle), onProgress);
   onProgress({ step: "server" });
-  await api().post("/contacts/request", { toHandle: handle, pow: solution });
+  try {
+    await api().post("/contacts/request", { toHandle: handle, pow: solution });
+  } catch (e) {
+    staleSwitches(e);
+    throw e;
+  }
+  await refreshContacts();
+}
+
+/**
+ * Taps an active contact card: the subject's current handle (they may have renamed), the usual work, then the request with the card's id.
+ * It works whatever the contact switches say. On success the card shows as used at once; the server's `updated` frame confirms it.
+ */
+/** `POST /users/lookup`: the usual work, then the account with exactly this name. A name that does not exist is `404 not_found` with `reason: "handle"`. */
+export async function lookupUser(handle: string, onProgress?: OnProgress): Promise<{ userId: string; handle?: string; role?: string }> {
+  const solution = await pow("lookup", canonicalHandle(handle), onProgress);
+  return api().post("/users/lookup", { handle, pow: solution });
+}
+
+/** A card the server says is dead (revoked, or the two are contacts already, or the subject is gone) shows as revoked at once, with the reason. */
+const CARD_DEAD = new Set(["revoked_by_admin", "already_contacts", "account_deleted"]);
+function cardRefused(m: Msg, e: unknown): void {
+  const conv = useChat.getState().official;
+  if (!conv || !(e instanceof ApiError)) return;
+  const reason = typeof e.extra.reason === "string" ? e.extra.reason : "";
+  if ((e.status === 409 && reason === "already_contacts") || (e.status === 403 && CARD_DEAD.has(reason))) {
+    updateOfficial(conv, m.seq, "card", { ...m.data, state: "revoked", reason });
+    if (reason === "already_contacts") void refreshContacts().catch(() => {});
+  } else if (e.status === 409 && reason === "used") updateOfficial(conv, m.seq, "card", { ...m.data, state: "used" });
+}
+
+export async function requestViaCard(m: Msg, onProgress: OnProgress): Promise<void> {
+  const card = m.kind === "card" ? parseCard(m.data) : null;
+  if (!card || m.seq <= 0) throw new ApiError(0, "bad_request");
+  const who = await api().get<{ handle?: string; deleted?: boolean }>(`/users/${encodeURIComponent(card.subjectId)}`);
+  // A subject whose account is gone has no handle to ask for; the card is as good as dead.
+  if (who.deleted || typeof who.handle !== "string" || !who.handle) throw new ApiError(404, "not_found", { reason: "handle" });
+  const solution = await pow("contact", canonicalHandle(who.handle), onProgress);
+  onProgress({ step: "server" });
+  try {
+    await api().post("/contacts/request", { toHandle: who.handle, pow: solution, cardId: card.cardId });
+  } catch (e) {
+    cardRefused(m, e);
+    throw e;
+  }
+  const conv = useChat.getState().official;
+  if (conv) updateOfficial(conv, m.seq, "card", { ...m.data, state: "used" });
   await refreshContacts();
 }
 
@@ -448,7 +540,13 @@ export async function acceptRequest(requestId: string): Promise<void> {
   const key = s.contactKeys.get(r.from.userId)?.key ?? randomBytes(32);
   await saveContactKey(r.from.userId, r.from.handle, s.contactKeys.get(r.from.userId)?.convId ?? "", key);
   const kx = await wrapKey(r.from.publicKey, key, KX_EPOCHS);
-  const { convId } = await api().post<{ convId: string }>("/contacts/accept", { requestId, kx });
+  let convId: string;
+  try {
+    convId = (await api().post<{ convId: string }>("/contacts/accept", { requestId, kx })).convId;
+  } catch (e) {
+    staleSwitches(e);
+    throw e;
+  }
   await saveContactKey(r.from.userId, r.from.handle, convId, key);
   await refreshContacts();
 }
@@ -512,6 +610,10 @@ const marker = (m: Pick<Msg, "seq" | "senderId" | "role" | "time" | "mine">): Ms
 
 async function toMsg(w: WireMessage, mine: boolean): Promise<Msg> {
   if (w.deleted || s.tombs.get(w.conv)?.has(w.seq)) return marker({ seq: w.seq, senderId: w.senderId, role: w.role, time: w.serverTime, mine });
+  // An official message is plain and has no key, no epoch and no client id: it is never opened, only shown.
+  if (typeof w.kind === "string") {
+    return { id: `official:${w.seq}`, seq: w.seq, senderId: w.senderId, role: w.role, time: w.serverTime, mine: false, payload: null, kind: w.kind, data: isRecord(w.data) ? w.data : {}, status: "sent" };
+  }
   let payload: Payload | null = null;
   let lost: Msg["lost"];
   const epoch = epochOfCiphertext(w.ct) ?? undefined;
@@ -586,7 +688,10 @@ function noteActive(conv: string, time: number): void {
  * most 100, shown as "99+"). One request covers every conversation. The server's number replaces the local one, so a deletion lowers the badge.
  */
 async function loadUnread(): Promise<void> {
-  const r = await api().get<{ conversations: { conv: string; unread?: number }[] }>("/conversations");
+  const started = Date.now();
+  const r = await api().get<{ conversations: { conv: string; kind?: string; unread?: number }[] }>("/conversations");
+  const official = r.conversations.find((c) => c.kind === "official")?.conv;
+  if (official && useChat.getState().official !== official) patch({ official });
   const st = useChat.getState();
   const looking = isShowing(st.activeConv) ? st.activeConv : null;
   const unread = { ...st.unread };
@@ -594,6 +699,8 @@ async function loadUnread(): Promise<void> {
   for (const c of r.conversations) {
     // A server that does not count (older version) leaves the badge as it is rather than a guess.
     if (typeof c.unread !== "number") continue;
+    // A read position sent after this request began is not in its answer: the number is stale, the local one (already lowered) stands.
+    if ((s.readAt.get(c.conv) ?? 0) >= started && c.unread > (unread[c.conv] ?? 0)) continue;
     unread[c.conv] = c.conv === looking ? 0 : c.unread;
     if (unread[c.conv] === 0) mentions[c.conv] = false;
   }
@@ -723,6 +830,8 @@ export async function loadHistory(conv: string): Promise<void> {
   const incoming = await Promise.all(r.messages.map((w) => toMsg({ ...w, conv }, w.senderId === myId)));
   if (!token || s.api?.token !== token || s.loadGen.get(conv) !== gen) return;
   replaceRange(conv, incoming, (m) => m.seq === 0 || m.seq > r.lastSeq);
+  // A declined request that was missed (offline, another device): the official conversation says so, and the list of requests is read again.
+  if (incoming.some((m) => m.kind === "contact_declined")) void refreshContacts().catch(() => {});
   const st = useChat.getState();
   patch({
     olderMore: { ...st.olderMore, [conv]: r.hasMore },
@@ -751,6 +860,8 @@ export async function loadOlder(conv: string): Promise<void> {
 async function resync(reconnected: boolean): Promise<void> {
   const active = useChat.getState().activeConv;
   if (reconnected) {
+    // A read mark sent over the old connection may never have arrived: the open chat sends its position again.
+    s.sentRead.clear();
     for (const conv of Object.keys(useChat.getState().messages)) if (conv !== active) dropCached(conv);
     void flushFavorites();
   }
@@ -758,7 +869,11 @@ async function resync(reconnected: boolean): Promise<void> {
     await loadHistory(active).catch(() => {});
     markRead(active);
   }
-  if (reconnected) await loadUnread().catch(() => {});
+  if (reconnected) {
+    await loadUnread().catch(() => {});
+    // A removal that happened while the socket was down arrives only as an official message that was never pushed here.
+    await refreshContacts().catch(() => {});
+  }
 }
 
 export async function openConversation(conv: string | null): Promise<void> {
@@ -774,6 +889,22 @@ export async function openConversation(conv: string | null): Promise<void> {
   if (left && left !== conv) trimConversation(left);
   if (conv) await loadHistory(conv).catch(() => {});
   markRead(conv);
+}
+
+/** The `updated` push: an official message changed (a card was used or revoked). The cached copy is replaced; one that is not cached loads fresh when the chat opens. */
+function updateOfficial(conv: string, seq: number, kind: string, data: Record<string, unknown>): void {
+  const st = useChat.getState();
+  const cur = st.messages[conv];
+  if (!cur?.some((m) => m.seq === seq && !m.deleted)) return;
+  patch({ messages: { ...st.messages, [conv]: cur.map((m) => (m.seq === seq && !m.deleted ? { ...m, kind, data } : m)) } });
+}
+
+/** An official message says a contact is gone (removed me, or deleted their account): what this device holds of that chat is destroyed, and the list is read again. */
+async function onContactRemoved(data: Record<string, unknown> | undefined): Promise<void> {
+  const removed = parseRemoved(data);
+  if (!removed) return;
+  forgetContact(removed.userId);
+  await refreshContacts().catch(() => {});
 }
 
 // ---------- deleting messages ----------
@@ -859,14 +990,21 @@ export function markRead(conv: string | null): void {
   if (!conv || !s.api?.token || !isLooking(conv)) return;
   const st = useChat.getState();
   const upTo = (st.messages[conv] ?? []).reduce((n, m) => (m.mine ? n : Math.max(n, m.seq)), 0);
+  // What is on screen and read counts as read here at once, whatever the server answers later; the tab title and the list use this same number.
+  if ((st.unread[conv] ?? 0) > 0 || st.mentions[conv]) patch({ unread: { ...st.unread, [conv]: 0 }, mentions: { ...st.mentions, [conv]: false } });
   if (upTo <= (s.sentRead.get(conv) ?? 0)) return;
   s.sentRead.set(conv, upTo);
-  if (!s.ws?.send({ t: "read", conv, upTo })) void s.api.post("/conversations/read", { conv, upTo }).catch(() => {});
+  s.readAt.set(conv, Date.now());
+  // The official conversation always goes over HTTPS, where a refusal is seen and the mark is tried again next time; a socket frame gives no answer.
+  if (conv !== st.official && s.ws?.send({ t: "read", conv, upTo })) return;
+  void s.api.post("/conversations/read", { conv, upTo }).catch(() => {
+    if (s.sentRead.get(conv) === upTo) s.sentRead.delete(conv);
+  });
 }
 
 export async function sendText(conv: string, text: string): Promise<void> {
   const clean = text.trim();
-  if (!clean || Array.from(clean).length > MESSAGE_MAX_CHARS) return;
+  if (!clean || Array.from(clean).length > MESSAGE_MAX_CHARS || conv === useChat.getState().official) return;
   const myId = me().userId;
   const gen = currentGen(conv);
   const key = keyFor(conv, gen);
@@ -899,6 +1037,7 @@ export async function sendText(conv: string, text: string): Promise<void> {
  * returned id and the duration goes out like text. A 403 from the upload means the administrator switched voice off.
  */
 export async function sendVoice(conv: string, mp3: Uint8Array, ms: number): Promise<void> {
+  if (conv === useChat.getState().official) throw new ApiError(403, "forbidden", { reason: "official_readonly" });
   const myId = me().userId;
   const gen = currentGen(conv);
   if (!keyFor(conv, gen)) throw new ApiError(0, "forbidden");
@@ -911,8 +1050,11 @@ export async function sendVoice(conv: string, mp3: Uint8Array, ms: number): Prom
     const key = keyFor(conv, gen);
     if (!key) throw new ApiError(0, "forbidden");
     const sealed = await encryptBytes(key, epochs(), mp3, voiceBinding({ conv, senderId: myId, clientMsgId: id, gen }));
-    if (!fitsServer(sealed.ct)) throw new ApiError(413, "too_large");
-    const up = await api().post<{ voiceId: string }>("/voice", { conv, ct: sealed.ct });
+    // The storage takes the raw ciphertext bytes, not their base64 text; the server is told how many to expect and signs exactly that.
+    const raw = fromB64(sealed.ct);
+    if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
+    const up = await api().post<{ voiceId: string; upload: UploadTarget }>("/voice", { conv, size: raw.length });
+    await uploadBytes(up.upload, raw);
     const m: Msg = { ...optimistic, payload: { k: "voice", voice: { id: up.voiceId, ms }, sentAt } };
     addMessage(conv, m);
     await transmit(conv, m);
@@ -931,7 +1073,7 @@ export async function sendVoice(conv: string, mp3: Uint8Array, ms: number): Prom
       }
     }
     if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
-    if (e instanceof ApiError && e.status === 403 && e.code === "forbidden") patch({ voiceOff: true });
+    if (e instanceof ApiError && e.status === 403 && e.code === "forbidden" && e.extra.reason !== "official_readonly") patch({ voiceOff: true });
     addMessage(conv, { ...(useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine) ?? optimistic), status: "failed" });
   }
 }
@@ -953,7 +1095,9 @@ export async function playVoiceMessage(conv: string, m: Msg): Promise<void> {
     }
     let ct: string;
     try {
-      ct = (await api().get<{ ct: string }>(`/voice/${encodeURIComponent(voiceId)}`)).ct;
+      // A short-lived address for the raw ciphertext; 404 from either step (retention, wipe, an upload that never finished) is the same: gone.
+      const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/voice/${encodeURIComponent(voiceId)}`);
+      ct = toB64(await downloadBytes(download.url));
     } catch (e) {
       // Older than the retention period, or removed with a wipe: the recording is gone for good.
       if (e instanceof ApiError && (e.status === 404 || e.status === 410)) {
@@ -997,15 +1141,32 @@ export async function onFrame(f: Frame): Promise<void> {
     const w = f as unknown as WireMessage;
     // Deleted before this push was handled (the delete push can overtake it): nothing to show, nothing to ring for.
     if (w.deleted || s.tombs.get(w.conv)?.has(w.seq)) return;
-    if (!s.epochs?.labels.has(w.epoch)) await refreshEpochs().catch(() => {});
-    if (!keyFor(w.conv, w.gen) && s.groupKeys.has(w.conv)) await refreshGroups().catch(() => {});
+    const official = typeof w.kind === "string";
+    if (official && useChat.getState().official !== w.conv) patch({ official: w.conv });
+    if (!official && !s.epochs?.labels.has(w.epoch)) await refreshEpochs().catch(() => {});
+    if (!official && !keyFor(w.conv, w.gen) && s.groupKeys.has(w.conv)) await refreshGroups().catch(() => {});
     // A jump in the sequence means something was missed (the socket was down): load what is between.
     const known = s.lastSeq.get(w.conv);
+    // Counted before the gap is filled: a gap load may bring this very message in, and it still has to be acted on once.
+    const unseen = !(useChat.getState().messages[w.conv] ?? []).some((m) => m.seq === w.seq);
     if (known !== undefined && w.seq > known + 1) await loadHistory(w.conv).catch(() => {});
     const isNew = addMessage(w.conv, await toMsg(w, w.senderId === myId));
     // Only a chat that has been loaded keeps a position; for the others the first open loads the newest page itself.
     if (s.lastSeq.has(w.conv)) s.lastSeq.set(w.conv, Math.max(s.lastSeq.get(w.conv) ?? 0, w.seq));
     if (isNew && w.senderId !== myId && useChat.getState().sound) playChime();
+    if (unseen && w.kind === "contact_removed") await onContactRemoved(w.data);
+    // The request I made was declined: it is no longer waiting.
+    if (unseen && w.kind === "contact_declined") await refreshContacts().catch(() => {});
+  } else if (f.t === "updated") {
+    if (typeof f.kind === "string" && isRecord(f.data) && Number.isInteger(f.seq)) {
+      const conv = String(f.conv);
+      updateOfficial(conv, Number(f.seq), f.kind, f.data);
+      // An open, visible official conversation stays read through a change too.
+      if (isShowing(conv)) {
+        s.sentRead.delete(conv);
+        markRead(conv);
+      }
+    }
   } else if (f.t === "deleted") {
     // Best effort on the server's side: this frame may never come, which is why the cache is read again on every open and reconnect.
     const conv = String(f.conv);
@@ -1042,14 +1203,9 @@ export async function onFrame(f: Frame): Promise<void> {
     if (f.code === "monthly_limit") void refreshUsage();
   } else if (f.t === "notice") {
     const kind = String(f.kind);
-    if (kind === "contact_deleted") {
-      // Before the list is refreshed: afterwards the name is no longer known.
-      const gone = String(f.userId ?? "");
-      const handle = useChat.getState().contacts.find((c) => c.userId === gone)?.handle ?? null;
-      forgetContact(gone);
-      if (handle) patch({ removedBy: handle });
-      await refreshContacts().catch(() => {});
-    } else if (kind === "contact_request" || kind === "contact_accepted") await refreshContacts().catch(() => {});
+    // (A removed contact is no longer a notice: it arrives as a `contact_removed` official message.)
+    if (kind === "contact_request" || kind === "contact_accepted") await refreshContacts().catch(() => {});
+    else if (kind === "account") await refreshMe().catch(() => {});
     else if (kind === "group_event" || kind === "group_deleted") await refreshGroups().catch(() => {});
     else if (kind === "epochs") await refreshEpochs().catch(() => {});
     else if (kind === "wiped") {

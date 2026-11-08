@@ -5,6 +5,8 @@ import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
 import type { Contact } from "../store";
 import { useLang } from "../useChat";
+import { useChat } from "../store";
+import { SendCardModal } from "./SendCardModal";
 import { Avatar, Modal } from "./ui";
 
 /** The other person of a 1:1 chat: who they are, and the way to remove them (which removes the chat for both of you). */
@@ -12,6 +14,8 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
   const { a } = useLang();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
+  const isAdmin = useChat((s) => s.me?.role === "admin");
 
   const remove = async () => {
     if (busy || !window.confirm(a.confirmRemoveContact)) return;
@@ -41,10 +45,16 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
         </div>
       </div>
       <div className="ch-actions-col">
+        {isAdmin && contact.role !== "admin" && (
+          <button type="button" className="ch-secondary" disabled={busy} onClick={() => setCardOpen(true)}>
+            {a.manage.sendCard}
+          </button>
+        )}
         <button type="button" className="ch-danger" disabled={busy} onClick={() => void remove()}>
           {a.removeContact}
         </button>
       </div>
+      {cardOpen && <SendCardModal recipient={contact} onClose={() => setCardOpen(false)} />}
     </Modal>
   );
 }

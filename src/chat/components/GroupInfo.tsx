@@ -2,7 +2,7 @@ import { useState } from "react";
 import { acceptOwnership, deleteGroup, inviteToGroup, kickMember, leaveGroup, rekeyGroup, transferGroup } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { useChat, type Group } from "../store";
+import { GROUP_MAX, useChat, type Group } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
 import { HandleField } from "./HandleField";
@@ -36,7 +36,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
   };
 
   const sendInvite = () => {
-    if (busy || !invite || checkHandle(invite) || group.members.length >= group.max) return;
+    if (busy || !invite || checkHandle(invite) || group.members.length >= Math.min(GROUP_MAX, group.max)) return;
     const name = invite;
     void run(async () => {
       await inviteToGroup(group.id, name);
@@ -84,13 +84,13 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
               {ok}
             </div>
           )}
-          <button type="button" className="ch-primary" disabled={busy || !invite || !!checkHandle(invite) || group.members.length >= group.max} onClick={() => void sendInvite()}>
+          <button type="button" className="ch-primary" disabled={busy || !invite || !!checkHandle(invite) || group.members.length >= Math.min(GROUP_MAX, group.max)} onClick={() => void sendInvite()}>
             {a.invite}
           </button>
         </section>
       )}
       <section>
-        <h3 className="ch-section">{a.members(group.members.length, group.max)}</h3>
+        <h3 className="ch-section">{a.members(group.members.length, Math.min(GROUP_MAX, group.max))}</h3>
         <ul className="ch-list-plain">
           {group.members.map((mem) => (
             <li key={mem.userId} className="ch-row">

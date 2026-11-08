@@ -14,6 +14,7 @@ import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
 import { DELETE_MAX, canDelete } from "../selection";
 import { Avatar, Modal } from "./ui";
+import { OfficialMessage } from "./OfficialMessage";
 import { VoiceBubble } from "./VoiceBubble";
 import { VoiceComposer } from "./VoiceComposer";
 
@@ -59,7 +60,7 @@ const isWide = (): boolean => typeof window.matchMedia === "function" && window.
 
 export function Conversation() {
   const { lang, a } = useLang();
-  const { activeConv, contacts, groups, messages, me, retentionDays, favorites, reads, olderMore } = useChat();
+  const { activeConv, contacts, groups, messages, me, retentionDays, favorites, reads, olderMore, official } = useChat();
   // Drafts live in memory only, one per conversation, so switching chats keeps what was typed.
   const draft = useChat((s) => (s.activeConv ? (s.drafts[s.activeConv] ?? "") : ""));
   const setDraft = (text: string) => {
@@ -102,6 +103,8 @@ export function Conversation() {
   }, [emojiOpen]);
   const contact = contacts.find((c) => c.convId === activeConv);
   const group = groups.find((g) => g.id === activeConv);
+  // The official conversation: the system's messages to me, plain and read-only. No composer, no key, nothing is ever opened.
+  const isOfficial = activeConv !== null && activeConv === official;
   const list = (activeConv ? messages[activeConv] : undefined) ?? [];
   const now = Date.now();
   const visible = list.filter((msg) => !isExpired(msg.time, now, retentionDays));
@@ -311,15 +314,15 @@ export function Conversation() {
     }
   });
 
-  if (!activeConv || (!contact && !group) || !me) {
+  if (!activeConv || (!contact && !group && !isOfficial) || !me) {
     return (
       <div className="ch-empty">
         <p>{a.pickChat}</p>
       </div>
     );
   }
-  const title = contact ? `@${contact.handle}` : group!.name;
-  const canSend = contact ? contact.key !== null && !contact.deleted : (group?.keys.get(group.gen) ?? null) !== null;
+  const title = isOfficial ? a.officialTitle : contact ? `@${contact.handle}` : group!.name;
+  const canSend = isOfficial ? false : contact ? contact.key !== null && !contact.deleted : (group?.keys.get(group!.gen) ?? null) !== null;
   const nameOf = (m: Msg): string => (m.mine ? me.handle : group ? (group.members.find((x) => x.userId === m.senderId)?.handle ?? "?") : (contact?.handle ?? "?"));
   const length = Array.from(draft).length;
   const memberHandles = group ? group.members.map((x) => x.handle) : [];
@@ -380,14 +383,14 @@ export function Conversation() {
         <button type="button" className="ch-icon ch-only-mobile" aria-label={a.back} onClick={() => go(PATH.home)}>
           <ArrowLeft size={22} />
         </button>
-        <Avatar userId={contact?.userId ?? group!.id} size={36} admin={contact?.role === "admin"} />
+        <Avatar userId={isOfficial ? "official" : (contact?.userId ?? group!.id)} size={36} admin={contact?.role === "admin"} />
         <div className="ch-row-text">
           <div className="ch-row-title">
             {title} {contact?.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>}
           </div>
-          <div className="ch-hint">{group ? a.memberCount(group.members.length) : a.encryptedNote}</div>
+          <div className="ch-hint">{isOfficial ? a.officialNote : group ? a.memberCount(group.members.length) : a.encryptedNote}</div>
         </div>
-        {(group || (contact && !contact.deleted)) && (
+        {!isOfficial && (group || (contact && !contact.deleted)) && (
           <button type="button" className="ch-icon" aria-label={group ? a.groupInfo : a.contactInfo} onClick={() => setInfo(true)}>
             <Info size={20} />
           </button>
@@ -412,7 +415,7 @@ export function Conversation() {
         )}
         {favError && <div className="ch-notice">{favError}</div>}
         {contact?.deleted && <div className="ch-notice">{a.contactDeleted}</div>}
-        {!canSend && !contact?.deleted && <div className="ch-notice">{contact ? a.keyMissingHint : a.keyMissing}</div>}
+        {!canSend && !isOfficial && !contact?.deleted && <div className="ch-notice">{contact ? a.keyMissingHint : a.keyMissing}</div>}
         {visible.map((m, i) => {
           const prev = visible[i - 1];
           const newDay = !prev || dayKey(prev.time) !== dayKey(m.time);
@@ -427,6 +430,31 @@ export function Conversation() {
                   <span>
                     @{nameOf(m)} · {formatClock(m.time, lang)}
                   </span>
+                </div>
+              ) : m.kind !== undefined ? (
+                // An official message is never decrypted. It can be selected and deleted like any other, and a card can be tapped.
+                <div
+                  className={"ch-msgrow ch-official" + (selecting && deletable.has(m.seq) ? " ch-pickable" : "") + (picked.has(m.seq) && deletable.has(m.seq) ? " ch-picked" : "")}
+                  data-seq={m.seq > 0 ? m.seq : undefined}
+                  onPointerDown={(e) => beginPress(e, m.seq)}
+                  onPointerMove={movePress}
+                  onPointerUp={cancelPress}
+                  onPointerCancel={cancelPress}
+                  onPointerLeave={cancelPress}
+                  onContextMenu={(e) => {
+                    if (!isWide() && deletable.has(m.seq)) e.preventDefault();
+                  }}
+                  onClick={() => {
+                    if (swallowClick.current) swallowClick.current = false;
+                    else if (selecting) toggle(m.seq);
+                  }}
+                >
+                  {selecting && deletable.has(m.seq) && (
+                    <button type="button" role="checkbox" aria-checked={picked.has(m.seq)} aria-label={`${formatClock(m.time, lang)}`} className="ch-check">
+                      {picked.has(m.seq) && <Check size={16} aria-hidden="true" />}
+                    </button>
+                  )}
+                  <OfficialMessage m={m} selecting={selecting} />
                 </div>
               ) : !m.payload ? (
                 // A destroyed or unverifiable message is a full-width system card with an icon, which no message text can imitate (text only ever appears in a bubble).
@@ -534,6 +562,10 @@ export function Conversation() {
             <Trash2 size={18} aria-hidden="true" />
             {a.deleteSelected}
           </button>
+        </footer>
+      ) : isOfficial ? (
+        <footer className="ch-composer ch-readonly">
+          <span className="ch-hint">{a.officialReadonly}</span>
         </footer>
       ) : (
       <footer className="ch-composer">

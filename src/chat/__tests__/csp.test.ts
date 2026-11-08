@@ -40,6 +40,16 @@ describe("connectSrc", () => {
     expect(connectSrc("https://a.example.com/x", "wss://b.example.com/prod")).toBe("https://a.example.com wss://b.example.com");
     expect(connectSrc("https://a.example.com", undefined)).toBe("https://a.example.com");
   });
+
+  it("adds the voice storage origin, once, and ignores one that is not usable", () => {
+    expect(connectSrc("https://a.example.com", "wss://b.example.com/prod", "https://voice-bucket.s3.ap-east-1.amazonaws.com/")).toBe(
+      "https://a.example.com wss://b.example.com https://voice-bucket.s3.ap-east-1.amazonaws.com",
+    );
+    expect(connectSrc("https://a.example.com", undefined, "https://a.example.com")).toBe("https://a.example.com");
+    expect(connectSrc("https://a.example.com", undefined, "http://voice.example.com")).toBe("https://a.example.com");
+    expect(connectSrc(undefined, undefined, "https://voice.example.com")).toBe("https://voice.example.com");
+    expect(connectSrc(undefined, undefined, "")).toBe("'none'");
+  });
 });
 
 describe("script-src of the chat pages", () => {

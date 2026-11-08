@@ -4,8 +4,12 @@ import type { Msg } from "./store";
 export const DELETE_MAX = 50;
 export const DELETE_MAX_VOICE = 20;
 
-/** Only my own messages that the server has accepted can be deleted (never one still sending or failed, never one already gone). */
-export const canDelete = (m: Pick<Msg, "mine" | "seq" | "deleted" | "status">): boolean => m.mine && m.seq > 0 && !m.deleted && m.status === "sent";
+/**
+ * Only my own messages that the server has accepted can be deleted (never one still sending or failed, never one already gone).
+ * Any message of my official conversation can be deleted: it is all addressed to me.
+ */
+export const canDelete = (m: Pick<Msg, "mine" | "seq" | "deleted" | "status"> & { kind?: string }): boolean =>
+  (m.mine || m.kind !== undefined) && m.seq > 0 && !m.deleted && m.status === "sent";
 
 export interface DeleteBatch {
   seqs: number[];

@@ -103,27 +103,37 @@ function NewGroupDialog({ onClose }: { onClose: () => void }) {
 
 export function ContactsPane() {
   const { a } = useLang();
-  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, me, lastActive } = useChat();
+  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, me, lastActive, official, account } = useChat();
   // Most recently used first; conversations with nothing known yet keep the server's order after them (the sort is stable).
   const contacts = useMemo(() => [...contactList].sort((x, y) => (lastActive[y.convId] ?? 0) - (lastActive[x.convId] ?? 0)), [contactList, lastActive]);
   const groups = useMemo(() => [...groupList].sort((x, y) => (lastActive[y.id] ?? 0) - (lastActive[x.id] ?? 0)), [groupList, lastActive]);
   const [dialog, setDialog] = useState<"add" | "group" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
   const isAdmin = me?.role === "admin";
   // One answer at a time: both buttons stay disabled until the server has replied, so a request cannot be accepted or declined twice.
   const answer = (id: string, fn: (id: string) => Promise<void>) => {
     if (busy !== null) return;
     setBusy(id);
+    setAnswerError(null);
     void fn(id)
-      .catch(() => {})
+      .catch((e) => setAnswerError(errorOf(a, e)))
       .finally(() => setBusy(null));
   };
-  const row = (id: string, userId: string, title: string, sub?: string, admin = false, group = false) => (
+  const row = (id: string, userId: string, title: string, sub?: string, admin = false, group = false, badge = admin) => (
     <li key={id}>
       <button type="button" className={"ch-row ch-row-btn" + (activeConv === id ? " ch-active" : "")} onClick={() => go(group ? PATH.group : PATH.conversation, id)}>
         <Avatar userId={userId} admin={admin} />
         <div className="ch-row-text">
-          <div className="ch-row-title">{title}</div>
+          <div className="ch-row-title">
+            {title}
+            {badge && (
+              <>
+                {" "}
+                <span className="ch-admin">{a.adminBadge}</span>
+              </>
+            )}
+          </div>
           {sub && <div className="ch-hint">{sub}</div>}
         </div>
         {(unread[id] ?? 0) > 0 && (
@@ -139,9 +149,11 @@ export function ContactsPane() {
       <header className="ch-list-head">
         <h1>{a.tabContacts}</h1>
         <span>
-          <button type="button" className="ch-icon" aria-label={a.addContact} onClick={() => setDialog("add")}>
-            <UserPlus size={20} />
-          </button>
+          {account.canAddContacts && (
+            <button type="button" className="ch-icon" aria-label={a.addContact} onClick={() => setDialog("add")}>
+              <UserPlus size={20} />
+            </button>
+          )}
           {isAdmin && (
             <button type="button" className="ch-icon" aria-label={a.newGroup} onClick={() => setDialog("group")}>
               <Users size={20} />
@@ -151,22 +163,31 @@ export function ContactsPane() {
       </header>
       <NotifyPrompt />
       <div className="ch-scroll">
+        {official && (
+          // Pinned: the system's own read-only conversation stays above everything else.
+          <ul className="ch-list-plain ch-pinned">{row(official, "official", a.officialTitle, undefined, true, false, false)}</ul>
+        )}
+        {!account.canAddContacts && <p className="ch-hint ch-pad" role="status">{account.globalContactsBlocked ? a.contactsOffGlobal : a.contactsOffSelf}</p>}
         {requests.length > 0 && (
           <section>
             <h3 className="ch-section">{a.requests}</h3>
+            {answerError && <div className="ch-notice" role="alert">{answerError}</div>}
             <ul className="ch-list-plain">
               {requests.map((r) => (
                 <li key={r.id} className="ch-row">
                   <Avatar userId={r.user.userId} admin={r.user.role === "admin"} />
                   <div className="ch-row-text">
                     <div className="ch-row-title">@{r.user.handle}</div>
-                    <div className="ch-hint">{r.direction === "in" ? a.incoming : a.outgoing}</div>
+                    <div className="ch-hint">{r.direction === "in" ? (r.viaCard ? a.incomingViaCard : a.incoming) : a.outgoing}</div>
                   </div>
                   {r.direction === "in" && (
                     <span className="ch-actions">
-                      <button type="button" className="ch-primary ch-small" disabled={busy !== null} aria-busy={busy === r.id} onClick={() => answer(r.id, acceptRequest)}>
-                        {busy === r.id ? a.working : a.accept}
-                      </button>
+                      {/* A request made with a contact card can be accepted whatever the switches say; any other only while adding contacts is allowed. */}
+                      {(account.canAddContacts || r.viaCard) && (
+                        <button type="button" className="ch-primary ch-small" disabled={busy !== null} aria-busy={busy === r.id} onClick={() => answer(r.id, acceptRequest)}>
+                          {busy === r.id ? a.working : a.accept}
+                        </button>
+                      )}
                       <button type="button" className="ch-secondary ch-small" disabled={busy !== null} onClick={() => answer(r.id, declineRequest)}>
                         {a.decline}
                       </button>

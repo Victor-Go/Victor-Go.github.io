@@ -14,7 +14,7 @@ export const PATH = {
 
 /** Every address that has a page of its own on the host (a reload there must not be a 404). Kept in step with vite.config.ts. */
 export const SETTINGS_DETAILS = ["language", "idle", "notifications", "handle", "password", "connection", "delete"] as const;
-export const MANAGEMENT_PAGES = ["users", "users/user", "invites", "config", "config/wipe-all", "epochs", "epochs/wipe-messages", "epochs/wipe-favourites", "jobs", "status", "audit"] as const;
+export const MANAGEMENT_PAGES = ["users", "users/user", "invites", "config", "config/wipe-all", "epochs", "epochs/wipe-messages", "epochs/wipe-favourites", "cards", "jobs", "status", "audit"] as const;
 export const CHAT_PATHS: string[] = [
   PATH.account,
   PATH.home,

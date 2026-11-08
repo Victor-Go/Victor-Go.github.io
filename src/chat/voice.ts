@@ -1,8 +1,8 @@
-/** Contract: chat-server docs/protocol.md section 10. */
+/** Contract: chat-server docs/protocol.md section 10 and the "Voice moves to S3" entry of docs/CHANGELOG.md (protocol 2). */
 export const VOICE_SAMPLE_RATE = 16000;
 export const VOICE_KBPS = 24;
-/** The server takes a ciphertext (base64url text) of at most 256 KiB. */
-export const VOICE_MAX_CT_CHARS = 256 * 1024;
+/** The server takes a ciphertext of 1 to 262144 bytes (the raw bytes, not their base64 text). */
+export const VOICE_MAX_BYTES = 256 * 1024;
 /** Anything shorter than this is a mis-tap, not a message. */
 export const VOICE_MIN_MS = 500;
 
@@ -42,8 +42,8 @@ export async function encodeMp3(samples: Float32Array): Promise<Uint8Array> {
   return out;
 }
 
-/** Whether a ciphertext of this size is within what the server accepts. */
-export const fitsServer = (ct: string): boolean => ct.length <= VOICE_MAX_CT_CHARS;
+/** Whether a ciphertext of this many bytes is within what the server accepts. */
+export const fitsServer = (bytes: number): boolean => bytes >= 1 && bytes <= VOICE_MAX_BYTES;
 
 /** M:ss for a duration in milliseconds, rounded to whole seconds. */
 export function formatDuration(ms: number): string {

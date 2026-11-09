@@ -23,7 +23,7 @@ interface Props {
 export function VoiceComposer({ conv, disabled, onBusy, onError, compact = false, controlRef }: Props) {
   const { a } = useLang();
   const maxSec = useChat((s) => s.voiceMaxSec);
-  const voiceOff = useChat((s) => s.voiceOff);
+  const filesOff = useChat((s) => s.filesOff);
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
   const rec = useRef<Recording | null>(null);
@@ -44,6 +44,25 @@ export function VoiceComposer({ conv, disabled, onBusy, onError, compact = false
     },
     [],
   );
+
+  // Hiding the page (another tab or app, the screen locking) while recording throws the recording away: the microphone is never left on in the background.
+  useEffect(() => {
+    if (phase !== "starting" && phase !== "recording") return;
+    const abort = () => {
+      if (phase === "starting") {
+        abandoned.current = true;
+        setPhase("idle");
+      } else void finish(false);
+    };
+    const onVisibility = () => document.visibilityState === "hidden" && abort();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", abort);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", abort);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   const finish = async (send: boolean) => {
     const r = rec.current;
@@ -109,7 +128,7 @@ export function VoiceComposer({ conv, disabled, onBusy, onError, compact = false
     };
   });
 
-  if (voiceOff || !voiceSupported()) return null;
+  if (filesOff || !voiceSupported()) return null;
 
   if (phase !== "idle") {
     return (

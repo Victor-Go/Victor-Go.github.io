@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Settings as SettingsIcon, Star } from "lucide-react";
 import { logout, removeFavorite } from "../client";
-import { formatClock, formatDay } from "../format";
+import { formatBytes, formatClock, formatDay } from "../format";
 import { PATH, go, useLocation } from "../route";
 import { useChat } from "../store";
 import { useLang } from "../useChat";
@@ -66,6 +66,7 @@ export function MePage() {
   const me = useChat((s) => s.me)!;
   const count = useChat((s) => s.favorites.length);
   const usage = useChat((s) => s.usage);
+  const filesOff = useChat((s) => s.filesOff);
   const { path } = useLocation();
   if (path === PATH.favourites) return <FavoritesPage />;
   if (path.startsWith(PATH.settings)) return <SettingsFlow />;
@@ -83,6 +84,9 @@ export function MePage() {
       {usage && (
         <Group footer={usage.limit === null ? undefined : a.usageReset(new Date(usage.resetAt).toLocaleDateString())}>
           <Row title={a.usageTitle} value={a.usageValue(usage.used, usage.limit)} />
+          {!filesOff && usage.fileBytes !== undefined && (
+            <Row title={a.usageFilesTitle} value={a.usageFilesValue(formatBytes(usage.fileBytes), usage.fileLimit == null ? null : Math.round(usage.fileLimit / 1_000_000))} />
+          )}
         </Group>
       )}
       <Group>

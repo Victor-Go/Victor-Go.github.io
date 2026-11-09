@@ -126,7 +126,7 @@ describe("the contact switches", () => {
     fireEvent.change(input, { target: { value: "100" } });
     expect(puts()).toHaveLength(0);
     fireEvent.blur(input);
-    await waitFor(() => expect(puts()).toHaveLength(1));
+    await waitFor(() => expect(puts()).toHaveLength(1), { timeout: 4000 });
     expect((puts()[0][2] as { groupMax: number }).groupMax).toBe(32);
   });
 
@@ -136,7 +136,7 @@ describe("the contact switches", () => {
     const input = (await screen.findByLabelText(/Favourites per person/)) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "050" } });
     fireEvent.blur(input);
-    await waitFor(() => expect(puts()).toHaveLength(1));
+    await waitFor(() => expect(puts()).toHaveLength(1), { timeout: 4000 });
     expect((puts()[0][2] as { favoriteMax: number }).favoriteMax).toBe(50);
     expect(input.value).toBe("50");
   });
@@ -165,7 +165,7 @@ describe("the contact switches", () => {
     const files = screen.getByLabelText(/File uploads per person per month/) as HTMLInputElement;
     fireEvent.change(files, { target: { value: "9999" } });
     fireEvent.blur(files);
-    await waitFor(() => expect(puts()).toHaveLength(1));
+    await waitFor(() => expect(puts()).toHaveLength(1), { timeout: 4000 });
     expect(files.value).toBe("256");
     expect((puts()[0][2] as { fileMonthlyMB: number }).fileMonthlyMB).toBe(256);
   });

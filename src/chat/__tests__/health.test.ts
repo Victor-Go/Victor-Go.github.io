@@ -4,7 +4,7 @@ import { checkHealth, parseHealth, PROTOCOL_VERSION, SLOW_RTT_MS } from "../net/
 const good = (minClient = PROTOCOL_VERSION) => ({
   server: { version: "0.1.0", commit: "abc1234", builtAt: 1, region: "ap-east-1" },
   protocol: { current: PROTOCOL_VERSION, minClient },
-  features: { inviteRequired: true, groupMax: 32, retentionDays: 30, messageMaxChars: 1024, voiceMaxSec: 60 },
+  features: { inviteRequired: true, retentionDays: 30 },
   serverTime: 1700000000000,
 });
 

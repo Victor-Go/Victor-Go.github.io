@@ -7,12 +7,10 @@ export const SLOW_RTT_MS = 1500;
 export interface Health {
   server: { version: string; commit: string; builtAt: number; region: string };
   protocol: { current: number; minClient: number };
+  /** Only what the sign-up and sign-in page shows before anybody has signed in; the rest of the settings come after sign-in (`config`). */
   features: {
     inviteRequired: boolean;
-    groupMax: number;
     retentionDays: number;
-    messageMaxChars: number;
-    voiceMaxSec: number;
   };
   serverTime: number;
 }
@@ -38,22 +36,18 @@ export function parseHealth(json: unknown): Health | null {
   const builtAt = num(server.builtAt);
   const current = num(protocol.current);
   const minClient = num(protocol.minClient);
-  const groupMax = num(features.groupMax);
   const retentionDays = num(features.retentionDays);
-  const messageMaxChars = num(features.messageMaxChars);
-  const voiceMaxSec = num(features.voiceMaxSec);
   const serverTime = num(json.serverTime);
   if (
     version === null || commit === null || region === null || builtAt === null || current === null || minClient === null ||
-    typeof features.inviteRequired !== "boolean" || groupMax === null || retentionDays === null ||
-    messageMaxChars === null || voiceMaxSec === null || serverTime === null
+    typeof features.inviteRequired !== "boolean" || retentionDays === null || serverTime === null
   ) {
     return null;
   }
   return {
     server: { version, commit, builtAt, region },
     protocol: { current, minClient },
-    features: { inviteRequired: features.inviteRequired, groupMax, retentionDays, messageMaxChars, voiceMaxSec },
+    features: { inviteRequired: features.inviteRequired, retentionDays },
     serverTime,
   };
 }

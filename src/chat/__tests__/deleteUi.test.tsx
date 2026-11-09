@@ -81,7 +81,7 @@ describe("deleting from the conversation", () => {
     fireEvent.pointerDown(screen.getByText("hello 2").closest(".ch-msgrow") as HTMLElement, { clientX: 5, clientY: 5 });
     act(() => void vi.advanceTimersByTime(1100));
     fireEvent.click(screen.getByRole("button", { name: /删除/ }));
-    expect(screen.getByText(/将删除 1 条消息.其中 1 条是你收藏过的/)).toBeTruthy();
+    expect(screen.getByText(/将删除 1 条消息.已收藏的内容不受影响/)).toBeTruthy();
     expect(screen.getByText(/所有人都将看不到/)).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getAllByRole("button", { name: /删除/ }).at(-1)!);

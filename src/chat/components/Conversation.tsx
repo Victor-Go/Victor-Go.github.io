@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
-import { ApiError, addFavorite, deleteMessages, favoritesAmong, loadOlder, removeFavorite, sendImage, sendText } from "../client";
+import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendImage, sendText } from "../client";
 import { ImageError } from "../image";
 import { voiceSupported } from "../voice";
 import { errorOf } from "../i18nApp";
@@ -833,7 +833,7 @@ export function Conversation() {
       )}
       {confirming && (
         <Modal title={a.deleteTitle} onClose={() => !deleting && setConfirming(false)} closeLabel={a.close}>
-          <p>{a.deleteBody(chosen.length, favoritesAmong(activeConv, chosen))}</p>
+          <p>{a.deleteBody(chosen.length)}</p>
           <p className="ch-hint">{a.deleteWarn}</p>
           <button type="button" className="ch-danger ch-btn-icon" disabled={deleting} aria-busy={deleting} onClick={confirmDelete}>
             {deleting ? <span className="ch-spinner" aria-hidden="true" /> : <Trash2 size={18} aria-hidden="true" />}

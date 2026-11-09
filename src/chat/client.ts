@@ -91,8 +91,6 @@ const s = {
   tombs: new Map<string, Set<number>>(),
   /** Bumped when a conversation's cache is replaced or dropped; a slower request that started before it is thrown away. */
   loadGen: new Map<string, number>(),
-  /** Favourite records (vault ids) whose message was deleted and whose removal the server has not confirmed yet. */
-  favRetry: new Set<string>(),
   sentRead: new Map<string, number>(),
   /** When a read position was last sent for each conversation (ms): an unread count the server computed before that is stale. */
   readAt: new Map<string, number>(),
@@ -262,7 +260,6 @@ export function lock(notice: string | null = null): void {
   s.lastSeq.clear();
   s.tombs.clear();
   s.loadGen.clear();
-  s.favRetry.clear();
   s.sentRead.clear();
   s.readAt.clear();
   s.autoBusy.clear();
@@ -743,47 +740,16 @@ const wipeVoice = (m: Msg): void => {
   if (m.payload?.k === "voice" && m.payload.voice.id) wipeVoiceId(m.payload.voice.id);
   if (m.payload?.k === "image") wipeImage(m);
 };
-const favoriteIdOf = (conv: string, m: Msg): string => `${conv}.${m.id}`.slice(0, 70);
-
-/**
- * Removes the favourites whose message was deleted, at once on screen and then on the server in one request (the server takes up to 50 ids).
- * A failure is kept and tried again with the next deletion or reconnect; nothing is kept in the browser.
- */
-async function dropFavorites(ids: ReadonlySet<string>): Promise<void> {
-  const st = useChat.getState();
-  const gone = st.favorites.filter((f) => ids.has(f.id));
-  if (gone.length > 0) patch({ favorites: st.favorites.filter((f) => !ids.has(f.id)) });
-  for (const f of gone) s.favRetry.add(`fav:${f.gen}:${f.id}`);
-  await flushFavorites();
-}
-
-async function flushFavorites(): Promise<void> {
-  const all = [...s.favRetry];
-  for (let i = 0; i < all.length; i += 50) {
-    const chunk = all.slice(i, i + 50);
-    try {
-      await api().post("/favorites/delete", { ids: chunk });
-    } catch {
-      return;
-    }
-    for (const id of chunk) {
-      s.favRetry.delete(id);
-      s.versions.delete(id);
-    }
-  }
-  if (all.length > 0) void refreshUsage();
-}
 
 /**
  * Puts `incoming` in place of the cached messages that `keep` does not keep. Nothing is appended: a message that was cached and is gone from the
- * answer (deleted, expired) is gone from the cache too. A message that is deleted now but was readable in the cache loses its recording and favourite.
+ * answer (deleted, expired) is gone from the cache too. A message that is deleted now but was readable in the cache loses its recording (a favourite stays).
  * Does not touch unread counts, chimes or notifications: those belong to messages that arrive, not to messages that are read again.
  */
 function replaceRange(conv: string, incoming: Msg[], keep: (m: Msg) => boolean): void {
   const st = useChat.getState();
   const cur = st.messages[conv] ?? [];
   const tomb = s.tombs.get(conv);
-  const favs = new Set<string>();
   const fresh = incoming.map((m) => (!m.deleted && m.seq > 0 && tomb?.has(m.seq) ? marker(m) : m));
   const bySeq = new Map(fresh.filter((m) => m.seq > 0).map((m) => [m.seq, m]));
   const seen = new Set(fresh.map((m) => `${m.senderId}.${m.id}`));
@@ -794,14 +760,12 @@ function replaceRange(conv: string, incoming: Msg[], keep: (m: Msg) => boolean):
       kept.push(m);
       continue;
     }
-    if (!m.deleted && (now?.deleted || tomb?.has(m.seq))) favs.add(favoriteIdOf(conv, m));
     if (!now || now.deleted) wipeVoice(m);
   }
   const next = [...kept, ...fresh].sort((a, b) => (a.seq || Infinity) - (b.seq || Infinity) || a.time - b.time);
   patch({ messages: { ...st.messages, [conv]: next } });
   const newest = fresh.reduce((n, m) => Math.max(n, m.time), 0);
   if (newest > 0) noteActive(conv, newest);
-  if (favs.size > 0) void dropFavorites(favs);
 }
 
 /** Cuts a chat down to its newest messages; what was cut is still on the server, so "load earlier" is offered again. */
@@ -880,7 +844,6 @@ async function resync(reconnected: boolean): Promise<void> {
     // A read mark sent over the old connection may never have arrived: the open chat sends its position again.
     s.sentRead.clear();
     for (const conv of Object.keys(useChat.getState().messages)) if (conv !== active) dropCached(conv);
-    void flushFavorites();
   }
   if (active) {
     await loadHistory(active).catch(() => {});
@@ -926,8 +889,8 @@ async function onContactRemoved(data: Record<string, unknown> | undefined): Prom
 
 // ---------- deleting messages ----------
 /**
- * Applies a deletion to the cache: the messages become bare markers, and everything made from their text goes with them (a recording kept in
- * memory, a favourite). Safe to repeat. Works from sequence numbers, so it also serves the push, which names nothing else.
+ * Applies a deletion to the cache: the messages become bare markers, and a recording kept in memory goes with them. Favourites are the
+ * reader's own copies and stay, whoever deleted the message. Safe to repeat. Works from sequence numbers, so it also serves the push, which names nothing else.
  */
 function forgetDeleted(conv: string, seqs: readonly number[]): void {
   let tomb = s.tombs.get(conv);
@@ -936,16 +899,14 @@ function forgetDeleted(conv: string, seqs: readonly number[]): void {
   const st = useChat.getState();
   const cur = st.messages[conv];
   if (!cur) return;
-  const favs = new Set<string>();
+  let changed = false;
   const next = cur.map((m) => {
     if (m.deleted || m.seq <= 0 || !tomb.has(m.seq)) return m;
     wipeVoice(m);
-    favs.add(favoriteIdOf(conv, m));
+    changed = true;
     return marker(m);
   });
-  if (favs.size === 0) return;
-  patch({ messages: { ...st.messages, [conv]: next } });
-  void dropFavorites(favs);
+  if (changed) patch({ messages: { ...st.messages, [conv]: next } });
 }
 
 export interface DeleteOutcome {
@@ -971,12 +932,6 @@ export async function deleteMessages(conv: string, seqs: readonly number[]): Pro
     }
   }
   return { deleted, error: null };
-}
-
-/** How many of these messages I have saved as favourites (they go with the messages). */
-export function favoritesAmong(conv: string, msgs: readonly Msg[]): number {
-  const ids = new Set(msgs.map((m) => favoriteIdOf(conv, m)));
-  return useChat.getState().favorites.filter((f) => ids.has(f.id)).length;
 }
 
 /**

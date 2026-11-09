@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Api } from "../net/api";
-import { CACHE_MAX, configure, deleteMessages, favoritesAmong, isLooking, loadHistory, onFrame, loadOlder, lock, markRead, openConversation, resumeView } from "../client";
+import { CACHE_MAX, configure, deleteMessages, isLooking, loadHistory, onFrame, loadOlder, lock, markRead, openConversation, resumeView } from "../client";
 import { DELETE_MAX, DELETE_MAX_VOICE, canDelete, planDeleteBatches } from "../selection";
 import { initialState, useChat, type Msg } from "../store";
 
@@ -169,18 +169,18 @@ describe("deleting", () => {
     expect(out.error).not.toBeNull();
   });
 
-  it("removes the favourites made from the deleted messages with one request", async () => {
+  it("leaves favourites alone, whether I delete the message or the other person does", async () => {
     const fav = (id: string, gen = 1) => ({ id, conv: CONV, from: "me", text: "t", time: 1, savedAt: 1, gen });
-    useChat.setState({ messages: { [CONV]: [live(1), live(2), live(3)] }, favorites: [fav(`${CONV}.m1`), fav(`${CONV}.m2`), fav(`${CONV}.m9`)] });
-    expect(favoritesAmong(CONV, [live(1), live(2), live(3)])).toBe(2);
+    useChat.setState({ messages: { [CONV]: [live(1), live(2, { mine: false, senderId: "peer" })] }, favorites: [fav(`${CONV}.m1`), fav(`${CONV}.m2`)] });
     const api = fakeApi(
-      () => ({}),
-      (p) => (p === "/messages/delete" ? { deleted: [1, 2], voiceDeleted: [] } : p === "/usage" ? {} : { deleted: [], seq: 1 }),
+      () => ({ messages: [wireDeleted(2, "peer")], lastSeq: 2, hasMore: false }),
+      (p) => (p === "/messages/delete" ? { deleted: [1], voiceDeleted: [] } : {}),
     );
-    await deleteMessages(CONV, [1, 2]);
-    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith("/favorites/delete", { ids: [`fav:1:${CONV}.m1`, `fav:1:${CONV}.m2`] }));
-    expect(useChat.getState().favorites.map((f) => f.id)).toEqual([`${CONV}.m9`]);
-    expect(api.post.mock.calls.filter(([p]) => p === "/favorites/delete")).toHaveLength(1);
+    await deleteMessages(CONV, [1]);
+    await loadHistory(CONV);
+    expect(useChat.getState().messages[CONV].filter((m) => m.deleted).map((m) => m.seq)).toEqual([2]);
+    expect(useChat.getState().favorites.map((f) => f.id)).toEqual([`${CONV}.m1`, `${CONV}.m2`]);
+    expect(api.post.mock.calls.filter(([p]) => String(p).startsWith("/favorites"))).toHaveLength(0);
   });
 });
 

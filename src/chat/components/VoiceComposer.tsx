@@ -81,7 +81,7 @@ export function VoiceComposer({ conv, disabled, onBusy, onError, compact = false
       if (!out) onError(a.voiceTooShort);
       else void sendVoice(conv, out.mp3, out.ms);
     } catch {
-      onError(a.voiceFailed);
+      onError(a.voiceEncodeFailed); // the microphone worked: what was recorded could not be turned into a message
     } finally {
       finishing.current = false;
       setPhase("idle");
@@ -116,7 +116,11 @@ export function VoiceComposer({ conv, disabled, onBusy, onError, compact = false
     } catch (e) {
       if (abandoned.current) return;
       setPhase("idle");
-      onError(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError") ? a.voiceDenied : a.voiceFailed);
+      const name = e instanceof DOMException ? e.name : "";
+      if (name === "NotAllowedError" || name === "SecurityError") onError(a.voiceDenied);
+      else if (name === "NotFoundError") onError(a.voiceNoMic);
+      else if (name === "NotReadableError") onError(a.voiceBusy);
+      else onError(a.voiceFailed);
     }
   };
   // Runs after every render so the handle never holds an old `phase`.

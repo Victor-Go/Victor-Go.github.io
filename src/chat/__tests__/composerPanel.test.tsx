@@ -127,6 +127,36 @@ describe("a composer too narrow for the text box (under about 15 characters)", (
     expect(screen.getByRole("group", { name: "正在录音" })).toBeTruthy(); // the same bar goes on
   });
 
+  it.each([
+    ["NotFoundError", /没有找到可用的麦克风/],
+    ["NotReadableError", /正被其他程序占用/],
+    ["AbortError", /无法录音或播放语音/],
+  ])("says which problem it was when the microphone cannot be opened: %s", async (name, text) => {
+    startRecording.mockRejectedValueOnce(new DOMException("x", name));
+    render(<Conversation />);
+    widths!(300);
+    fireEvent.click(screen.getByLabelText("更多"));
+    fireEvent.click(screen.getByLabelText("录制语音"));
+    await waitFor(() => expect(screen.getByText(text)).toBeTruthy());
+  });
+
+  it("says the recording could not be processed when it was made but cannot become a message", async () => {
+    startRecording.mockResolvedValueOnce({
+      cancel() {},
+      finish: async () => {
+        throw new Error("encoder");
+      },
+    });
+    render(<Conversation />);
+    widths!(300);
+    fireEvent.click(screen.getByLabelText("更多"));
+    fireEvent.click(screen.getByLabelText("录制语音"));
+    const send = (await screen.findByLabelText("发送语音")) as HTMLButtonElement;
+    await waitFor(() => expect(send.disabled).toBe(false), { timeout: 3000 });
+    fireEvent.click(send);
+    await waitFor(() => expect(screen.getByText(/无法处理成语音消息/)).toBeTruthy());
+  });
+
   it("goes back to the text box with a message when the microphone is refused", async () => {
     startRecording.mockRejectedValueOnce(new DOMException("no", "NotAllowedError"));
     render(<Conversation />);

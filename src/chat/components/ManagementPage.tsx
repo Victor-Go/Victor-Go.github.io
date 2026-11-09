@@ -569,7 +569,7 @@ function configRows(cfg: Config, m: ReturnType<typeof useLang>["a"]["manage"]): 
     [m.groupMax, String(cfg.groupMax)],
     [m.retentionDays, String(cfg.retentionDays)],
     [m.favoriteMax, String(cfg.favoriteMax)],
-    [m.fileMonthlyMB, String(cfg.fileMonthlyMB ?? 100)],
+    [m.fileMonthlyMB, String(cfg.fileMonthlyMB >= 1 ? cfg.fileMonthlyMB : 100)],
   ];
 }
 
@@ -628,7 +628,7 @@ function ConfigView({ go }: { go: (v: View) => void }) {
               <NumberField value={cfg.favoriteMax} min={0} max={500} label={a.manage.favoriteMax} onCommit={(n) => void save({ ...cfg, favoriteMax: n })} />
             </Row>
             <Row title={a.manage.fileMonthlyMB}>
-              <NumberField value={cfg.fileMonthlyMB ?? 100} min={1} max={256} label={a.manage.fileMonthlyMB} onCommit={(n) => void save({ ...cfg, fileMonthlyMB: n })} />
+              <NumberField value={cfg.fileMonthlyMB >= 1 ? cfg.fileMonthlyMB : 100} min={1} max={256} label={a.manage.fileMonthlyMB} onCommit={(n) => void save({ ...cfg, fileMonthlyMB: n })} />
             </Row>
           </Group>
           <Group>

@@ -24,7 +24,7 @@ export function VoiceBubble({ conv, m }: { conv: string; m: Msg }) {
     try {
       await playVoiceMessage(conv, m);
     } catch (e) {
-      setError(e instanceof ApiError ? errorOf(a, e) : a.voiceFailed);
+      setError(e instanceof ApiError ? errorOf(a, e) : a.voicePlayFailed);
     } finally {
       setBusy(false);
     }

@@ -282,6 +282,51 @@ export function Conversation() {
     }
     drawn.current = { conv: activeConv, first: firstKey, last: lastKey, height: el.scrollHeight };
   }, [visible.length, activeConv, firstKey, lastKey]);
+
+  // The pinned date: when the day the top of the screen belongs to has its own separator scrolled off above, and that day is not today, its date
+  // stays at the top of the list. The next day's separator pushes it out as it arrives, so two dates never overlap.
+  const [pinLabel, setPinLabel] = useState<string | null>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
+  const updatePin = () => {
+    const el = listRef.current;
+    if (!el) {
+      setPinLabel(null);
+      return;
+    }
+    const top = el.getBoundingClientRect().top;
+    let cur: HTMLElement | null = null;
+    let next: HTMLElement | null = null;
+    for (const d of el.querySelectorAll<HTMLElement>("[data-day-t]")) {
+      if (d.getBoundingClientRect().top < top) cur = d;
+      else {
+        next = d;
+        break;
+      }
+    }
+    let label: string | null = null;
+    let shift = 0;
+    if (cur && cur.getBoundingClientRect().bottom <= top) {
+      const t = Number(cur.dataset.dayT);
+      const nowMs = Date.now();
+      if (dayKey(t) !== dayKey(nowMs)) {
+        label = formatDay(t, nowMs, lang, { today: a.today, yesterday: a.yesterday });
+        // The pill sits 6px from the top and is about 22px tall; once the next separator is closer than that plus a gap, it starts moving up.
+        if (next) shift = Math.min(0, next.getBoundingClientRect().top - top - 40);
+      }
+    }
+    setPinLabel(label);
+    if (pinRef.current) pinRef.current.style.transform = `translateY(${shift}px)`;
+  };
+  const pinUpdateRef = useRef(updatePin);
+  pinUpdateRef.current = updatePin;
+  useLayoutEffect(() => {
+    pinUpdateRef.current();
+  }, [visible.length, activeConv, firstKey, lastKey, lang, olderMore]);
+  useEffect(() => {
+    const onResize = () => pinUpdateRef.current();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   // Scrolling to the top loads the next 20 older messages. A chat too short to scroll loads on its own until it fills the screen or runs out.
   const more = activeConv ? !!olderMore[activeConv] : false;
   const paging = useRef(false);
@@ -400,12 +445,18 @@ export function Conversation() {
       <div
         className={"ch-messages" + (selecting ? " ch-selecting" : "") + (box ? " ch-dragging" : "")}
         ref={listRef}
-        onScroll={(e) => e.currentTarget.scrollTop < 60 && pageOlder()}
+        onScroll={(e) => {
+          pinUpdateRef.current();
+          if (e.currentTarget.scrollTop < 60) pageOlder();
+        }}
         onPointerDown={dragStart}
         onPointerMove={dragMove}
         onPointerUp={dragEnd}
         onPointerCancel={dragEnd}
       >
+        <div className="ch-pin" ref={pinRef} aria-hidden="true">
+          {pinLabel && <div className="ch-day ch-pin-pill">{pinLabel}</div>}
+        </div>
         {box && <div className="ch-marquee" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} aria-hidden="true" />}
         <div className="ch-retention">{a.retentionTop(retentionDays)}</div>
         {more && (
@@ -422,7 +473,7 @@ export function Conversation() {
           const fav = favorites.some((f) => f.id === favId(m));
           return (
             <Fragment key={`${m.senderId}.${m.id}`}>
-              {newDay && <div className="ch-day">{formatDay(m.time, now, lang, { today: a.today, yesterday: a.yesterday })}</div>}
+              {newDay && <div className="ch-day" data-day-t={m.time}>{formatDay(m.time, now, lang, { today: a.today, yesterday: a.yesterday })}</div>}
               {m.deleted ? (
                 <div className="ch-system" role="note" data-lost="deleted">
                   <Trash2 size={16} aria-hidden="true" />

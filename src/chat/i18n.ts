@@ -58,7 +58,6 @@ const zh = {
   multiplierNote: (n: number) => `由于近期登录失败次数较多,本次验证难度为默认的 ${n} 倍,需要更长时间。`,
   cancel: "取消",
   notReady: "账户功能正在开发中,服务器尚未接入,暂时无法完成。",
-  serverDown: "无法连接服务器,请稍后重试。",
   status: {
     label: "服务器连通度",
     checking: "正在检测……",
@@ -129,7 +128,6 @@ const en: Messages = {
   multiplierNote: (n: number) => `Because of recent failed sign-ins, this verification is ${n}× harder than usual and takes longer.`,
   cancel: "Cancel",
   notReady: "Accounts are still under development and the server is not connected yet, so this cannot be completed.",
-  serverDown: "Cannot reach the server. Please try again later.",
   status: {
     label: "Server connection",
     checking: "Checking…",

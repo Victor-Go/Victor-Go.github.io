@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Mic, Send, X } from "lucide-react";
 import { useChat } from "../store";
 import { useLang } from "../useChat";
@@ -13,10 +13,14 @@ interface Props {
   /** True while recording or encoding, so the composer can hide the text box. */
   onBusy: (busy: boolean) => void;
   onError: (text: string | null) => void;
+  /** True when the microphone button lives elsewhere (the "+" panel): only the recording bar is drawn here. */
+  compact?: boolean;
+  /** Filled with a handle that starts a recording, for the button elsewhere. Call it from the tap's own handler: the microphone prompt needs the gesture. */
+  controlRef?: MutableRefObject<{ start: () => void } | null>;
 }
 
 /** The microphone button and, while recording, the timer with cancel and send. The microphone is asked for only when the button is pressed. */
-export function VoiceComposer({ conv, disabled, onBusy, onError }: Props) {
+export function VoiceComposer({ conv, disabled, onBusy, onError, compact = false, controlRef }: Props) {
   const { a } = useLang();
   const maxSec = useChat((s) => s.voiceMaxSec);
   const voiceOff = useChat((s) => s.voiceOff);
@@ -25,11 +29,16 @@ export function VoiceComposer({ conv, disabled, onBusy, onError }: Props) {
   const rec = useRef<Recording | null>(null);
   const startedAt = useRef(0);
   const finishing = useRef(false);
+  /** Set when the recording bar is cancelled, or the chat left, while the microphone is still being opened: whatever opens is let go at once. */
+  const abandoned = useRef(false);
 
-  useEffect(() => onBusy(phase === "recording" || phase === "encoding"), [phase, onBusy]);
+  // The bar takes the text box's place from the moment of the tap (the microphone can take a moment to open or to be allowed), so the row
+  // changes once, not twice.
+  useEffect(() => onBusy(phase !== "idle"), [phase, onBusy]);
   // Leaving the chat (or the page) while recording throws the recording away and releases the microphone.
   useEffect(
     () => () => {
+      abandoned.current = true;
       rec.current?.cancel();
       rec.current = null;
     },
@@ -72,41 +81,66 @@ export function VoiceComposer({ conv, disabled, onBusy, onError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, maxSec]);
 
-  if (voiceOff || !voiceSupported()) return null;
-
   const start = async () => {
+    if (phase !== "idle" || disabled) return;
     onError(null);
+    abandoned.current = false;
+    setElapsed(0);
     setPhase("starting");
     try {
       const r = await startRecording(maxSec);
+      if (abandoned.current) return r.cancel();
       rec.current = r;
       startedAt.current = Date.now();
       setElapsed(0);
       setPhase("recording");
     } catch (e) {
+      if (abandoned.current) return;
       setPhase("idle");
       onError(e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError") ? a.voiceDenied : a.voiceFailed);
     }
   };
+  // Runs after every render so the handle never holds an old `phase`.
+  useEffect(() => {
+    if (!controlRef) return;
+    controlRef.current = { start: () => void start() };
+    return () => {
+      controlRef.current = null;
+    };
+  });
 
-  if (phase === "recording" || phase === "encoding") {
+  if (voiceOff || !voiceSupported()) return null;
+
+  if (phase !== "idle") {
     return (
       <div className="ch-rec" role="group" aria-label={a.voiceRecording}>
-        <button type="button" className="ch-icon" aria-label={a.voiceCancel} disabled={phase === "encoding"} onClick={() => void finish(false)}>
+        <button
+          type="button"
+          className="ch-icon"
+          aria-label={a.voiceCancel}
+          disabled={phase === "encoding"}
+          onClick={() => {
+            if (phase === "starting") {
+              abandoned.current = true; // the microphone that is being opened is let go when it arrives
+              setPhase("idle");
+            } else void finish(false);
+          }}
+        >
           <X size={20} />
         </button>
         <span className="ch-rec-dot" aria-hidden="true" />
         <span className="ch-rec-time" role="timer" aria-label={a.voiceRecording}>
           {formatDuration(elapsed)} / {formatDuration(maxSec * 1000)}
         </span>
-        <button type="button" className="ch-send" aria-label={a.voiceSend} disabled={phase === "encoding" || elapsed < VOICE_MIN_MS} onClick={() => void finish(true)}>
+        <button type="button" className="ch-send" aria-label={a.voiceSend} disabled={phase !== "recording" || elapsed < VOICE_MIN_MS} onClick={() => void finish(true)}>
           <Send size={20} />
         </button>
       </div>
     );
   }
+  if (compact) return null;
   return (
-    <button type="button" className="ch-icon ch-mic" aria-label={a.voiceRecord} disabled={disabled || phase === "starting"} onClick={() => void start()}>
+    <button type="button" className="ch-icon ch-mic" aria-label={a.voiceRecord} disabled={disabled} onClick={() => void start()}>
       <Mic size={22} />
     </button>
   );

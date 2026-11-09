@@ -517,6 +517,11 @@ textarea:disabled {
   padding: 6px 10px;
 }
 
+/* A picture sits at the same distance from the bubble's edge on every side (text needs more at the sides than above). */
+.ch-msg.ch-has-image {
+  padding: 6px;
+}
+
 .ch-msg.ch-mine {
   background: var(--ch-accent);
   color: var(--ch-accent-fg);
@@ -762,6 +767,39 @@ html[data-covered] #root {
   z-index: 20;
 }
 
+/* The "+" menu: three big buttons in the same floating panel as the emoji grid. */
+.ch-emoji-panel.ch-plus-menu {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: min(264px, calc(100% - 24px));
+}
+
+.ch-plus-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 72px;
+  padding: 8px 4px;
+  background: none;
+  border: 0;
+  border-radius: 10px;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ch-plus-item:hover:not(:disabled),
+.ch-plus-item:focus-visible {
+  background: var(--ch-bg);
+}
+
+.ch-plus-item:disabled {
+  cursor: progress;
+}
+
 .ch-emoji-item {
   aspect-ratio: 1;
   background: none;
@@ -984,6 +1022,76 @@ section > .ch-primary {
   .ch-rec-dot {
     animation: none;
   }
+}
+
+/* ---------- pictures ---------- */
+/* The size is set inline from the pixels the sender announced, so the bubble does not jump when the picture arrives. */
+.ch-image {
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.18);
+  color: inherit;
+  cursor: pointer;
+}
+
+.ch-image > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The full-screen viewer: the chat shows through, blurred. The picture's size and place are set inline (zoom.ts). */
+.ch-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+  background: rgba(6, 10, 18, 0.6);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.ch-viewer-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  will-change: transform;
+  cursor: zoom-in;
+}
+
+.ch-viewer.ch-zoomed .ch-viewer-img {
+  cursor: grab;
+}
+
+.ch-viewer.ch-zoomed:active .ch-viewer-img {
+  cursor: grabbing;
+}
+
+.ch-viewer-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
 }
 
 .ch-voice {

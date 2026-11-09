@@ -1,8 +1,8 @@
 /** Contract: chat-server docs/protocol.md section 10 and the "Voice moves to S3" entry of docs/CHANGELOG.md (protocol 2). */
 export const VOICE_SAMPLE_RATE = 16000;
 export const VOICE_KBPS = 24;
-/** The server takes a ciphertext of 1 to 262144 bytes (the raw bytes, not their base64 text). */
-export const VOICE_MAX_BYTES = 256 * 1024;
+/** The server takes a stored ciphertext (a recording or an image) of 1 to 524288 bytes (the raw bytes, not their base64 text). */
+export const VOICE_MAX_BYTES = 512 * 1024;
 /** Anything shorter than this is a mis-tap, not a message. */
 export const VOICE_MIN_MS = 500;
 

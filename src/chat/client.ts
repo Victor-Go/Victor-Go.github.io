@@ -18,6 +18,7 @@ import { parseCard, parseRemoved } from "./official";
 import { playChime } from "./sound";
 import { stripControls } from "./text";
 import { canonicalHandle } from "./validation";
+import { compressImage } from "./image";
 import { fitsServer } from "./voice";
 import { canDelete, planDeleteBatches } from "./selection";
 import { playVoice, stopVoice, stopVoiceIf } from "./voicePlayer";
@@ -100,6 +101,9 @@ const s = {
   retried: new Set<string>(),
   /** Decrypted recordings, by voice id: memory only, zeroed by lock(). */
   voice: new Map<string, Uint8Array>(),
+  /** Decrypted pictures as blob URLs, by `imageKey` of their message: memory only, revoked by lock(). `imageLoads` are the downloads under way. */
+  images: new Map<string, string>(),
+  imageLoads: new Map<string, Promise<string | null>>(),
   lastTouch: 0,
   notifyTitle: (_handle: string) => "",
   lockNotice: (_why: LockWhy) => "",
@@ -266,6 +270,9 @@ export function lock(notice: string | null = null): void {
   stopVoice();
   for (const b of s.voice.values()) b.fill(0);
   s.voice.clear();
+  for (const url of s.images.values()) URL.revokeObjectURL(url);
+  s.images.clear();
+  s.imageLoads.clear();
   if (s.api) s.api.token = null;
   reset(notice);
 }
@@ -723,8 +730,18 @@ function wipeVoiceId(id: string): void {
   s.voice.get(id)?.fill(0);
   s.voice.delete(id);
 }
+/** A picture is told apart by who sent it and the id the sender gave the message, which the optimistic and the stored message share. */
+export const imageKey = (m: Pick<Msg, "senderId" | "id">): string => `${m.senderId}.${m.id}`;
+function wipeImage(m: Msg): void {
+  const key = imageKey(m);
+  const url = s.images.get(key);
+  if (url) URL.revokeObjectURL(url);
+  s.images.delete(key);
+  s.imageLoads.delete(key);
+}
 const wipeVoice = (m: Msg): void => {
   if (m.payload?.k === "voice" && m.payload.voice.id) wipeVoiceId(m.payload.voice.id);
+  if (m.payload?.k === "image") wipeImage(m);
 };
 const favoriteIdOf = (conv: string, m: Msg): string => `${conv}.${m.id}`.slice(0, 70);
 
@@ -1036,26 +1053,50 @@ export async function sendText(conv: string, text: string): Promise<void> {
  * Sends a recording: the MP3 is sealed like a message body (bound to the message that will carry it), uploaded, and then a message with the
  * returned id and the duration goes out like text. A 403 from the upload means the administrator switched voice off.
  */
-export async function sendVoice(conv: string, mp3: Uint8Array, ms: number): Promise<void> {
+export const sendVoice = (conv: string, mp3: Uint8Array, ms: number): Promise<void> =>
+  sendStored(conv, mp3, (storedId, sentAt) => ({ k: "voice", voice: { id: storedId, ms }, sentAt }));
+
+/**
+ * Sends a picture: it is shrunk to a JPEG that fits (image.ts), shown in the chat at once from the local copy, and then goes the way a recording
+ * does (the server's voice storage holds any sealed bytes). Throws ImageError when the file cannot be used as a picture; resolves when the upload and
+ * the send are over, whether or not they worked (a failure shows on the bubble).
+ */
+export async function sendImage(conv: string, file: Blob): Promise<void> {
+  if (conv === useChat.getState().official) throw new ApiError(403, "forbidden", { reason: "official_readonly" });
+  const img = await compressImage(file);
+  await sendStored(
+    conv,
+    img.bytes,
+    (storedId, sentAt) => ({ k: "image", image: { id: storedId, w: img.w, h: img.h }, sentAt }),
+    (msgId) => s.images.set(imageKey({ senderId: me().userId, id: msgId }), URL.createObjectURL(new Blob([img.bytes as BlobPart], { type: "image/jpeg" }))),
+  );
+}
+
+/**
+ * The common path of recordings and pictures: seal the bytes bound to the message that will carry them, upload them, then send the message.
+ * `payloadOf` builds the message body (with "" as the stored id while it is not known); `onId` runs once the message has its id, before it shows.
+ */
+async function sendStored(conv: string, bytes: Uint8Array, payloadOf: (storedId: string, sentAt: number) => Payload, onId?: (msgId: string) => void): Promise<void> {
   if (conv === useChat.getState().official) throw new ApiError(403, "forbidden", { reason: "official_readonly" });
   const myId = me().userId;
   const gen = currentGen(conv);
   if (!keyFor(conv, gen)) throw new ApiError(0, "forbidden");
   const id = newId();
   const sentAt = Date.now();
-  // The bubble shows at once; it has no id to play from until the upload is done.
-  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: { k: "voice", voice: { id: "", ms }, sentAt }, gen, status: "sending" };
+  onId?.(id);
+  // The bubble shows at once; it has no stored id to download from until the upload is done.
+  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: payloadOf("", sentAt), gen, status: "sending" };
   addMessage(conv, optimistic);
   const attempt = async (): Promise<void> => {
     const key = keyFor(conv, gen);
     if (!key) throw new ApiError(0, "forbidden");
-    const sealed = await encryptBytes(key, epochs(), mp3, voiceBinding({ conv, senderId: myId, clientMsgId: id, gen }));
+    const sealed = await encryptBytes(key, epochs(), bytes, voiceBinding({ conv, senderId: myId, clientMsgId: id, gen }));
     // The storage takes the raw ciphertext bytes, not their base64 text; the server is told how many to expect and signs exactly that.
     const raw = fromB64(sealed.ct);
     if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
     const up = await api().post<{ voiceId: string; upload: UploadTarget }>("/voice", { conv, size: raw.length });
     await uploadBytes(up.upload, raw);
-    const m: Msg = { ...optimistic, payload: { k: "voice", voice: { id: up.voiceId, ms }, sentAt } };
+    const m: Msg = { ...optimistic, payload: payloadOf(up.voiceId, sentAt) };
     addMessage(conv, m);
     await transmit(conv, m);
   };
@@ -1085,36 +1126,70 @@ export async function playVoiceMessage(conv: string, m: Msg): Promise<void> {
   const voiceId = p.voice.id;
   let bytes = s.voice.get(voiceId);
   if (!bytes) {
-    const gen = m.gen ?? currentGen(conv);
-    const key = keyFor(conv, gen);
-    const epoch = m.epoch;
-    const gone = epoch !== undefined && !s.epochs?.labels.has(epoch);
-    if (!key || gone) {
-      markLost(conv, m, gone && epoch !== undefined && epoch < s.nextEpoch ? "destroyed" : "unverified");
-      return;
-    }
-    let ct: string;
-    try {
-      // A short-lived address for the raw ciphertext; 404 from either step (retention, wipe, an upload that never finished) is the same: gone.
-      const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/voice/${encodeURIComponent(voiceId)}`);
-      ct = toB64(await downloadBytes(download.url));
-    } catch (e) {
-      // Older than the retention period, or removed with a wipe: the recording is gone for good.
-      if (e instanceof ApiError && (e.status === 404 || e.status === 410)) {
-        markLost(conv, m, "destroyed");
-        return;
-      }
-      throw e;
-    }
-    try {
-      bytes = await decryptBytes(key, epochs(), ct, voiceBinding({ conv, senderId: m.senderId, clientMsgId: m.id, gen }));
-    } catch {
-      markLost(conv, m, "unverified");
-      return;
-    }
+    const opened = await openStored(conv, m, voiceId);
+    if (!opened) return;
+    bytes = opened;
     s.voice.set(voiceId, bytes);
   }
   await playVoice(voiceId, bytes);
+}
+
+/**
+ * Downloads and opens the sealed bytes a message refers to (a recording or a picture). Returns null after marking the message lost when they
+ * are gone for good (retention, a wipe, a destroyed key) or do not open. Other failures (the network) throw ApiError for the caller to show.
+ */
+async function openStored(conv: string, m: Msg, storedId: string): Promise<Uint8Array | null> {
+  const gen = m.gen ?? currentGen(conv);
+  const key = keyFor(conv, gen);
+  const epoch = m.epoch;
+  const gone = epoch !== undefined && !s.epochs?.labels.has(epoch);
+  if (!key || gone) {
+    markLost(conv, m, gone && epoch !== undefined && epoch < s.nextEpoch ? "destroyed" : "unverified");
+    return null;
+  }
+  let ct: string;
+  try {
+    // A short-lived address for the raw ciphertext; 404 from either step (retention, wipe, an upload that never finished) is the same: gone.
+    const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/voice/${encodeURIComponent(storedId)}`);
+    ct = toB64(await downloadBytes(download.url));
+  } catch (e) {
+    // Older than the retention period, or removed with a wipe: gone for good.
+    if (e instanceof ApiError && (e.status === 404 || e.status === 410)) {
+      markLost(conv, m, "destroyed");
+      return null;
+    }
+    throw e;
+  }
+  try {
+    return await decryptBytes(key, epochs(), ct, voiceBinding({ conv, senderId: m.senderId, clientMsgId: m.id, gen }));
+  } catch {
+    markLost(conv, m, "unverified");
+    return null;
+  }
+}
+
+/**
+ * A blob URL of a picture message, downloaded and opened on the first call (the one I sent is there from the start). null when the picture is
+ * gone or does not open (the message is marked lost). Throws ApiError when the download fails for another reason. The URL lives until lock().
+ */
+export function imageUrl(conv: string, m: Msg): Promise<string | null> {
+  const p = m.payload;
+  if (p?.k !== "image") return Promise.resolve(null);
+  const key = imageKey(m);
+  const have = s.images.get(key);
+  if (have) return Promise.resolve(have);
+  if (!p.image.id) return Promise.resolve(null);
+  const under = s.imageLoads.get(key);
+  if (under) return under;
+  const load = (async () => {
+    const bytes = await openStored(conv, m, p.image.id);
+    if (!bytes) return null;
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "image/jpeg" }));
+    s.images.set(key, url);
+    return url;
+  })().finally(() => s.imageLoads.delete(key));
+  s.imageLoads.set(key, load);
+  return load;
 }
 
 function markLost(conv: string, m: Msg, lost: "destroyed" | "unverified"): void {

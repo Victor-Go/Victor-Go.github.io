@@ -21,7 +21,8 @@ export function planDeleteBatches(msgs: readonly Msg[]): DeleteBatch[] {
   const batches: DeleteBatch[] = [];
   let cur: DeleteBatch = { seqs: [], voiceIds: [] };
   for (const m of [...msgs].sort((a, b) => a.seq - b.seq)) {
-    const voice = m.payload?.k === "voice" && m.payload.voice.id ? m.payload.voice.id : null;
+    // Recordings and pictures both live in the server's voice storage and are removed with `voiceIds`.
+    const voice = m.payload?.k === "voice" && m.payload.voice.id ? m.payload.voice.id : m.payload?.k === "image" && m.payload.image.id ? m.payload.image.id : null;
     if (cur.seqs.length >= DELETE_MAX || (voice !== null && cur.voiceIds.length >= DELETE_MAX_VOICE)) {
       batches.push(cur);
       cur = { seqs: [], voiceIds: [] };

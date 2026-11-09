@@ -16,7 +16,12 @@ export const MESSAGE_MAX_CHARS = 1024;
 
 export type Payload =
   | { k: "text"; text: string; sentAt: number }
-  | { k: "voice"; voice: { id: string; ms: number }; sentAt: number };
+  | { k: "voice"; voice: { id: string; ms: number }; sentAt: number }
+  /** `id` is the stored object's id (the server's voice storage); `w` and `h` are the pixels, so the bubble keeps its shape while the image loads. */
+  | { k: "image"; image: { id: string; w: number; h: number }; sentAt: number };
+
+/** The most pixels along one side that a received image may claim; bigger numbers are not drawn as claimed. */
+export const IMAGE_SIDE_MAX = 4096;
 
 /** What is bound to a message besides its key: moving it to another chat, sender or generation breaks decryption. */
 export interface Binding {
@@ -90,6 +95,9 @@ export async function decryptMessage(chatKey: Uint8Array, epochs: Epochs, ct: st
     if (payload.k === "text" && typeof payload.text === "string") return payload;
     const v = payload.k === "voice" ? payload.voice : null;
     if (v && typeof v.id === "string" && v.id.length > 0 && v.id.length <= 128 && typeof v.ms === "number" && Number.isFinite(v.ms) && v.ms >= 0) return payload;
+    const im = payload.k === "image" ? payload.image : null;
+    const side = (n: unknown): boolean => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= IMAGE_SIDE_MAX;
+    if (im && typeof im.id === "string" && im.id.length > 0 && im.id.length <= 128 && side(im.w) && side(im.h)) return payload;
     throw new CipherError("decrypt");
   } catch {
     throw new CipherError("decrypt");

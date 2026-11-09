@@ -477,6 +477,25 @@ textarea:disabled {
   text-align: center;
 }
 
+/* The pinned date: a zero-height sticky strip, so it takes no room in the list; the pill hangs from it. */
+.ch-pin {
+  position: sticky;
+  top: 0;
+  height: 0;
+  margin-bottom: -6px;
+  z-index: 3;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ch-pin-pill {
+  position: absolute;
+  top: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
 .ch-msgrow {
   display: flex;
   align-items: flex-end;

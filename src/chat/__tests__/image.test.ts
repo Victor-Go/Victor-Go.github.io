@@ -109,15 +109,15 @@ describe("a picture message", () => {
 describe("deleting pictures", () => {
   const msg = (seq: number, payload: Msg["payload"]): Msg => ({ id: `m${seq}`, seq, senderId: "me", role: "user", time: 1, mine: true, payload, status: "sent" });
 
-  it("sends a picture's stored id in voiceIds, like a recording's, and counts it against the 20 per request", () => {
+  it("sends a picture's stored id in fileIds, like a recording's, and counts it against the 20 per request", () => {
     const batches = planDeleteBatches([
       msg(1, { k: "image", image: { id: "i1", w: 1, h: 1 }, sentAt: 1 }),
       msg(2, { k: "voice", voice: { id: "v1", ms: 1000 }, sentAt: 1 }),
       msg(3, { k: "text", text: "t", sentAt: 1 }),
       msg(4, { k: "image", image: { id: "", w: 1, h: 1 }, sentAt: 1 }), // not uploaded yet: nothing to delete in the storage
     ]);
-    expect(batches).toEqual([{ seqs: [1, 2, 3, 4], voiceIds: ["i1", "v1"] }]);
+    expect(batches).toEqual([{ seqs: [1, 2, 3, 4], fileIds: ["i1", "v1"] }]);
     const many = Array.from({ length: 21 }, (_, i) => msg(i + 1, { k: "image", image: { id: `i${i}`, w: 1, h: 1 }, sentAt: 1 }));
-    expect(planDeleteBatches(many).map((b) => b.voiceIds.length)).toEqual([20, 1]);
+    expect(planDeleteBatches(many).map((b) => b.fileIds.length)).toEqual([20, 1]);
   });
 });

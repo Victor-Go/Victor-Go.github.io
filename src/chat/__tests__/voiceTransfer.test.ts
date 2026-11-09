@@ -64,11 +64,11 @@ describe("sending a recording", () => {
   it("asks for an upload address with the size, then PUTs the raw ciphertext bytes with the headers it was given", async () => {
     stubStorage();
     const { post } = await signedIn((path) =>
-      path === "/voice" ? { voiceId: "v1", upload: { url: "https://store.example/put?sig=abc", method: "PUT", headers: { "content-length": "999999", "content-type": "application/octet-stream", "x-amz-meta-x": "1" } } } : {},
+      path === "/files" ? { fileId: "v1", upload: { url: "https://store.example/put?sig=abc", method: "PUT", headers: { "content-length": "999999", "content-type": "application/octet-stream", "x-amz-meta-x": "1" } } } : {},
     );
     await sendVoice(CONV, mp3, 1500);
 
-    const asked = post.mock.calls.find(([path]) => path === "/voice")!;
+    const asked = post.mock.calls.find(([path]) => path === "/files")!;
     const size = (asked[1] as { size: number }).size;
     expect(asked[1]).toEqual({ conv: CONV, size });
     expect(Object.keys(asked[1] as object)).not.toContain("ct"); // nothing travels through the API any more
@@ -93,7 +93,7 @@ describe("sending a recording", () => {
 
   it("marks the message failed when the storage refuses the upload, without switching voice off", async () => {
     stubStorage({ put: () => new Response(null, { status: 403 }) });
-    await signedIn(() => ({ voiceId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } }));
+    await signedIn(() => ({ fileId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } }));
     await sendVoice(CONV, mp3, 1500);
     expect(useChat.getState().messages[CONV].at(-1)?.status).toBe("failed");
     expect(useChat.getState().voiceOff).toBe(false);
@@ -116,14 +116,14 @@ describe("playing a recording", () => {
   it("asks for a download address, fetches the raw bytes with a plain GET, and opens them", async () => {
     stubStorage();
     const { get } = await signedIn(
-      (path) => (path === "/voice" ? { voiceId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } } : {}),
-      (path) => (path === "/voice/v1" ? { download: { url: "https://store.example/get?sig=xyz", expiresAt: Date.now() + 60_000 } } : {}),
+      (path) => (path === "/files" ? { fileId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } } : {}),
+      (path) => (path === "/files/v1" ? { download: { url: "https://store.example/get?sig=xyz", expiresAt: Date.now() + 60_000 } } : {}),
     );
     await sendVoice(CONV, mp3, 1500);
     const m = useChat.getState().messages[CONV].at(-1)!;
     await playVoiceMessage(CONV, m);
 
-    expect(get).toHaveBeenCalledWith("/voice/v1");
+    expect(get).toHaveBeenCalledWith("/files/v1");
     const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
     expect(url).toBe("https://store.example/get?sig=xyz");
     expect(init.method).toBe("GET");
@@ -135,8 +135,8 @@ describe("playing a recording", () => {
   it("a recording that is gone (the storage answers 404, as for an upload that never finished) is shown as destroyed", async () => {
     stubStorage({ get: () => new Response(null, { status: 404 }) });
     await signedIn(
-      () => ({ voiceId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } }),
-      (path) => (path === "/voice/v1" ? { download: { url: "https://store.example/get", expiresAt: 1 } } : {}),
+      () => ({ fileId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } }),
+      (path) => (path === "/files/v1" ? { download: { url: "https://store.example/get", expiresAt: 1 } } : {}),
     );
     await sendVoice(CONV, mp3, 1500);
     const m = useChat.getState().messages[CONV].at(-1)!;

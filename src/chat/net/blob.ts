@@ -1,6 +1,6 @@
 import { ApiError } from "./api";
 
-/** What `POST /voice` hands out for the upload (protocol 2). */
+/** What `POST /files` hands out for the upload (protocol 2). */
 export interface UploadTarget {
   url: string;
   method: string;

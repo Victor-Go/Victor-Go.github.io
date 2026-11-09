@@ -129,7 +129,7 @@ export interface ChatState {
   /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
   voiceOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
-  usage: { used: number; limit: number | null; resetAt: number; favoriteCount?: number; favoriteMax?: number } | null;
+  usage: { used: number; limit: number | null; resetAt: number; favoriteCount?: number; favoriteMax?: number; fileBytes?: number; fileLimit?: number | null } | null;
   /** The part of the app being looked at; a conversation counts as read only while this is "contacts". */
   section: "contacts" | "me" | "manage";
   /** Conversations that still have older messages on the server to page back to. */

@@ -47,8 +47,8 @@ jobs:
           # Optional: server endpoints for /chat. Unset means the chat pages report "server not configured".
           VITE_CHAT_API: ${{ vars.CHAT_API }}
           VITE_CHAT_WS: ${{ vars.CHAT_WS }}
-          # Storage origin for voice recordings: the server's Terraform output `voice_origin`. Without it voice cannot be sent or played.
-          VITE_CHAT_VOICE_ORIGIN: ${{ vars.CHAT_VOICE_ORIGIN }}
+          # Storage origin for files (voice recordings and pictures): the server's Terraform output `files_origin`. Without it they cannot be sent or shown.
+          VITE_CHAT_FILES_ORIGIN: ${{ vars.CHAT_FILES_ORIGIN }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

@@ -923,9 +923,9 @@ export async function deleteMessages(conv: string, seqs: readonly number[]): Pro
   const deleted: number[] = [];
   for (const b of planDeleteBatches(picked)) {
     try {
-      const r = await api().post<{ deleted: number[]; voiceDeleted: string[] }>("/messages/delete", { conv, seqs: b.seqs, ...(b.voiceIds.length > 0 ? { voiceIds: b.voiceIds } : {}) });
+      const r = await api().post<{ deleted: number[]; fileDeleted: string[] }>("/messages/delete", { conv, seqs: b.seqs, ...(b.fileIds.length > 0 ? { fileIds: b.fileIds } : {}) });
       forgetDeleted(conv, r.deleted);
-      for (const id of r.voiceDeleted) wipeVoiceId(id);
+      for (const id of r.fileDeleted) wipeVoiceId(id);
       deleted.push(...r.deleted);
     } catch (e) {
       return { deleted, error: e instanceof ApiError ? e : new ApiError(0, "internal") };
@@ -1049,9 +1049,9 @@ async function sendStored(conv: string, bytes: Uint8Array, payloadOf: (storedId:
     // The storage takes the raw ciphertext bytes, not their base64 text; the server is told how many to expect and signs exactly that.
     const raw = fromB64(sealed.ct);
     if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
-    const up = await api().post<{ voiceId: string; upload: UploadTarget }>("/voice", { conv, size: raw.length });
+    const up = await api().post<{ fileId: string; upload: UploadTarget }>("/files", { conv, size: raw.length });
     await uploadBytes(up.upload, raw);
-    const m: Msg = { ...optimistic, payload: payloadOf(up.voiceId, sentAt) };
+    const m: Msg = { ...optimistic, payload: payloadOf(up.fileId, sentAt) };
     addMessage(conv, m);
     await transmit(conv, m);
   };
@@ -1078,15 +1078,15 @@ async function sendStored(conv: string, bytes: Uint8Array, payloadOf: (storedId:
 export async function playVoiceMessage(conv: string, m: Msg): Promise<void> {
   const p = m.payload;
   if (p?.k !== "voice" || !p.voice.id) return;
-  const voiceId = p.voice.id;
-  let bytes = s.voice.get(voiceId);
+  const fileId = p.voice.id;
+  let bytes = s.voice.get(fileId);
   if (!bytes) {
-    const opened = await openStored(conv, m, voiceId);
+    const opened = await openStored(conv, m, fileId);
     if (!opened) return;
     bytes = opened;
-    s.voice.set(voiceId, bytes);
+    s.voice.set(fileId, bytes);
   }
-  await playVoice(voiceId, bytes);
+  await playVoice(fileId, bytes);
 }
 
 /**
@@ -1105,7 +1105,7 @@ async function openStored(conv: string, m: Msg, storedId: string): Promise<Uint8
   let ct: string;
   try {
     // A short-lived address for the raw ciphertext; 404 from either step (retention, wipe, an upload that never finished) is the same: gone.
-    const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/voice/${encodeURIComponent(storedId)}`);
+    const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/files/${encodeURIComponent(storedId)}`);
     ct = toB64(await downloadBytes(download.url));
   } catch (e) {
     // Older than the retention period, or removed with a wipe: gone for good.

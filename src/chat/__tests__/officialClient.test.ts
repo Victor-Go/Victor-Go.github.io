@@ -92,7 +92,7 @@ describe("the official conversation", () => {
   it("its messages can be deleted, and the deleted push turns them into markers", async () => {
     const { post } = fakeApi(
       () => ({}),
-      (path, body) => (path === "/messages/delete" ? { deleted: (body as { seqs: number[] }).seqs, voiceDeleted: [] } : {}),
+      (path, body) => (path === "/messages/delete" ? { deleted: (body as { seqs: number[] }).seqs, fileDeleted: [] } : {}),
     );
     await onFrame({ t: "message", ...wire(1, "card", cardData) });
     await onFrame({ t: "message", ...wire(2, "contact_removed", { userId: "u3", handle: "cy", reason: "removed" }) });

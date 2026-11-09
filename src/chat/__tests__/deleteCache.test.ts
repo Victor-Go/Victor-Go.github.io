@@ -51,9 +51,9 @@ describe("what can be selected and how a selection is split", () => {
     expect(batches.flatMap((b) => b.seqs)).toEqual(msgs.map((m) => m.seq));
     for (const b of batches) {
       expect(b.seqs.length).toBeLessThanOrEqual(DELETE_MAX);
-      expect(b.voiceIds.length).toBeLessThanOrEqual(DELETE_MAX_VOICE);
+      expect(b.fileIds.length).toBeLessThanOrEqual(DELETE_MAX_VOICE);
     }
-    expect(batches.flatMap((b) => b.voiceIds)).toHaveLength(60);
+    expect(batches.flatMap((b) => b.fileIds)).toHaveLength(60);
   });
 });
 
@@ -89,7 +89,7 @@ describe("reading the newest page replaces the cache", () => {
     const gate = new Promise((r) => (release = r));
     const api = fakeApi(
       (path) => (path.startsWith("/messages?") ? gate : {}),
-      () => ({ deleted: [5], voiceDeleted: [] }),
+      () => ({ deleted: [5], fileDeleted: [] }),
     );
     const loading = loadHistory(CONV);
     await deleteMessages(CONV, [5]);
@@ -142,11 +142,11 @@ describe("deleting", () => {
     useChat.setState({ messages: { [CONV]: [live(1), voice(2, "v2"), live(3, { mine: false, senderId: "peer" }), live(0, { id: "p", status: "sending" })] } });
     const api = fakeApi(
       () => ({}),
-      () => ({ deleted: [2], voiceDeleted: ["v2"] }),
+      () => ({ deleted: [2], fileDeleted: ["v2"] }),
     );
     const out = await deleteMessages(CONV, [1, 2, 3, 0]);
     expect(api.post).toHaveBeenCalledTimes(1);
-    expect(api.post).toHaveBeenCalledWith("/messages/delete", { conv: CONV, seqs: [1, 2], voiceIds: ["v2"] });
+    expect(api.post).toHaveBeenCalledWith("/messages/delete", { conv: CONV, seqs: [1, 2], fileIds: ["v2"] });
     expect(out).toEqual({ deleted: [2], error: null });
     const byseq = Object.fromEntries(useChat.getState().messages[CONV].map((m) => [m.seq, m]));
     expect(byseq[2]).toMatchObject({ deleted: true, payload: null });
@@ -161,7 +161,7 @@ describe("deleting", () => {
       () => ({}),
       (_p, body) => {
         if (++calls === 2) throw Object.assign(new Error("x"), {});
-        return { deleted: (body as { seqs: number[] }).seqs, voiceDeleted: [] };
+        return { deleted: (body as { seqs: number[] }).seqs, fileDeleted: [] };
       },
     );
     const out = await deleteMessages(CONV, Array.from({ length: 70 }, (_, i) => i + 1));
@@ -174,7 +174,7 @@ describe("deleting", () => {
     useChat.setState({ messages: { [CONV]: [live(1), live(2, { mine: false, senderId: "peer" })] }, favorites: [fav(`${CONV}.m1`), fav(`${CONV}.m2`)] });
     const api = fakeApi(
       () => ({ messages: [wireDeleted(2, "peer")], lastSeq: 2, hasMore: false }),
-      (p) => (p === "/messages/delete" ? { deleted: [1], voiceDeleted: [] } : {}),
+      (p) => (p === "/messages/delete" ? { deleted: [1], fileDeleted: [] } : {}),
     );
     await deleteMessages(CONV, [1]);
     await loadHistory(CONV);

@@ -8,7 +8,7 @@ import { onEnter } from "../keys";
 import { PATH, go as navigate, useLocation } from "../route";
 import { GROUP_MAX, useChat } from "../store";
 import { useLang } from "../useChat";
-import { ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
+import { Alert, ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
 import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
 import { SendCardModal } from "./SendCardModal";
@@ -27,9 +27,8 @@ interface AdminUser {
   loginCount: number;
   failedCount: number;
   suspended: boolean;
-  /** Voice uploaded this (UTC) month; absent from an older server. */
-  voiceBytes?: number;
-  voiceCount?: number;
+  /** Bytes of files (voice messages and pictures) uploaded this (UTC) month. */
+  fileBytes?: number;
   /** Messages sent this (UTC) month, and the monthly limit (null for the administrator); absent from an older server. */
   messageCount?: number;
   messageLimit?: number | null;
@@ -51,10 +50,12 @@ interface Invite {
 interface Config {
   inviteRequired: boolean;
   registrationOpen: boolean;
-  voiceEnabled: boolean;
+  fileEnabled: boolean;
   groupMax: number;
   retentionDays: number;
   favoriteMax: number;
+  /** MB of voice and images one person may upload per UTC month (1 to 256; the administrator has no limit). */
+  fileMonthlyMB: number;
   /** Nobody (but the administrator) may add or be added as a contact. */
   globalContactsBlocked: boolean;
 }
@@ -74,7 +75,7 @@ interface Status {
   users: number;
   online: number;
   groups: number;
-  counters: { messages: number; voiceBytes: number; errors: Record<string, number> };
+  counters: { messages: number; fileBytes: number; errors: Record<string, number> };
   recentErrors: { at: number; status: number; code: string; method: string; path: string }[];
 }
 
@@ -280,7 +281,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
                 @{u.handle} {u.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>}
               </>
             }
-            subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.voiceCount ? ` · ${a.manage.voiceSummary(u.voiceCount, formatBytes(u.voiceBytes ?? 0))}` : ""}`}
+            subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.fileBytes ? ` · ${a.manage.fileSummary(formatBytes(u.fileBytes))}` : ""}`}
             chevron
             onClick={() => go({ k: "user", user: u })}
           />
@@ -311,8 +312,7 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
         <Row title={a.manage.logins} value={user.loginCount} />
         <Row title={a.manage.failures} value={user.failedCount} />
         {user.messageCount !== undefined && <Row title={a.manage.messageCountMonth} value={a.usageValue(user.messageCount, user.messageLimit ?? null)} />}
-        <Row title={a.manage.voiceCountMonth} value={user.voiceCount ?? 0} />
-        <Row title={a.manage.voiceBytesMonth} value={formatBytes(user.voiceBytes ?? 0)} />
+        <Row title={a.manage.fileBytesMonth} value={formatBytes(user.fileBytes ?? 0)} />
         <Row title={a.manage.state} value={user.suspended ? a.manage.suspendedState : a.manage.activeState} />
       </Group>
       <Group header={a.manage.ips}>
@@ -529,25 +529,79 @@ function CardsView({ go }: { go: (v: View) => void }) {
   );
 }
 
+/**
+ * A whole-number setting. It is applied when the field loses focus (or on Enter), not on every keystroke; it is then shown in its
+ * canonical form (050 becomes 50) and kept inside its range. An empty or non-numeric entry puts the old value back.
+ */
+function NumberField({ value, min, max, label, onCommit }: { value: number; min: number; max: number; label: string; onCommit: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = () => {
+    const n = Number.parseInt(text.replace(/\D/g, ""), 10);
+    const next = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : value;
+    setText(String(next));
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <input
+      className="ios-field"
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={text}
+      aria-label={label}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+    />
+  );
+}
+
+function configRows(cfg: Config, m: ReturnType<typeof useLang>["a"]["manage"]): [string, string][] {
+  const sw = (on: boolean) => (on ? m.switchOn : m.switchOff);
+  return [
+    [m.registrationOpen, sw(cfg.registrationOpen)],
+    [m.inviteRequired, sw(cfg.inviteRequired)],
+    [m.globalContactsBlocked, sw(cfg.globalContactsBlocked === true)],
+    [m.fileEnabled, sw(cfg.fileEnabled)],
+    [m.groupMax, String(cfg.groupMax)],
+    [m.retentionDays, String(cfg.retentionDays)],
+    [m.favoriteMax, String(cfg.favoriteMax)],
+    [m.fileMonthlyMB, String(cfg.fileMonthlyMB ?? 100)],
+  ];
+}
+
+/** Tells which settings a save changed and what they are now (the values the server answered with). */
+function ConfigSavedDialog({ changes, onClose }: { changes: [string, string][]; onClose: () => void }) {
+  const { a } = useLang();
+  return <Alert title={a.manage.configSaved} rows={changes} buttonLabel={a.close} onClose={onClose} />;
+}
+
 function ConfigView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const { error, run, busy, loaded } = useAdmin();
   const [cfg, setCfg] = useState<Config | null>(null);
-  const [saved, setSaved] = useState(false);
+  // the settings a save changed, as the server answered: shown in a dialog until it is closed
+  const [saved, setSaved] = useState<[string, string][] | null>(null);
   useEffect(() => {
     void run(() => rawApi().get<Config>("/admin/config")).then((c) => c && setCfg(c));
   }, [run]);
   const save = async (next: Config) => {
+    const before = configRows(cfg ?? next, a.manage);
     setCfg(next);
     const r = await run(() => rawApi().put<Config>("/admin/config", next));
     if (r) {
       setCfg(r);
-      setSaved(true);
+      const changes = configRows(r, a.manage).filter(([label, value]) => before.find(([l]) => l === label)?.[1] !== value);
+      if (changes.length > 0) setSaved(changes);
     }
   };
   return (
     <Page title={a.manage.config} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
       <Loading busy={busy} first={!loaded} label={a.loading} />
+      {saved && <ConfigSavedDialog changes={saved} onClose={() => setSaved(null)} />}
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {cfg && (
         <>
@@ -561,17 +615,20 @@ function ConfigView({ go }: { go: (v: View) => void }) {
             <SwitchRow title={a.manage.globalContactsBlocked} checked={cfg.globalContactsBlocked === true} onChange={(v) => save({ ...cfg, globalContactsBlocked: v })} />
           </Group>
           <Group>
-            <SwitchRow title={a.manage.voiceEnabled} checked={cfg.voiceEnabled} onChange={(v) => save({ ...cfg, voiceEnabled: v })} />
+            <SwitchRow title={a.manage.fileEnabled} checked={cfg.fileEnabled} onChange={(v) => save({ ...cfg, fileEnabled: v })} />
           </Group>
-          <Group footer={saved ? <span className="ios-ok">{a.manage.saved}</span> : undefined}>
+          <Group>
             <Row title={a.manage.groupMax}>
-              <input className="ios-field" type="number" min={2} max={GROUP_MAX} value={Math.min(GROUP_MAX, cfg.groupMax)} aria-label={a.manage.groupMax} onChange={(e) => void save({ ...cfg, groupMax: Math.min(GROUP_MAX, Math.max(2, Number(e.target.value) || 2)) })} />
+              <NumberField value={Math.min(GROUP_MAX, cfg.groupMax)} min={2} max={GROUP_MAX} label={a.manage.groupMax} onCommit={(n) => void save({ ...cfg, groupMax: n })} />
             </Row>
             <Row title={a.manage.retentionDays}>
-              <input className="ios-field" type="number" min={1} max={30} value={cfg.retentionDays} aria-label={a.manage.retentionDays} onChange={(e) => void save({ ...cfg, retentionDays: Math.min(30, Math.max(1, Number(e.target.value) || 1)) })} />
+              <NumberField value={cfg.retentionDays} min={1} max={30} label={a.manage.retentionDays} onCommit={(n) => void save({ ...cfg, retentionDays: n })} />
             </Row>
             <Row title={a.manage.favoriteMax}>
-              <input className="ios-field" type="number" min={0} max={500} value={cfg.favoriteMax} aria-label={a.manage.favoriteMax} onChange={(e) => void save({ ...cfg, favoriteMax: Math.min(500, Math.max(0, Math.floor(Number(e.target.value)) || 0)) })} />
+              <NumberField value={cfg.favoriteMax} min={0} max={500} label={a.manage.favoriteMax} onCommit={(n) => void save({ ...cfg, favoriteMax: n })} />
+            </Row>
+            <Row title={a.manage.fileMonthlyMB}>
+              <NumberField value={cfg.fileMonthlyMB ?? 100} min={1} max={256} label={a.manage.fileMonthlyMB} onCommit={(n) => void save({ ...cfg, fileMonthlyMB: n })} />
             </Row>
           </Group>
           <Group>
@@ -774,7 +831,7 @@ function StatusView({ go }: { go: (v: View) => void }) {
             <Row title={a.manage.online} value={s.online} />
             <Row title={a.groups} value={s.groups} />
             <Row title={a.manage.messages} value={s.counters.messages} />
-            <Row title={a.manage.voiceBytes} value={formatBytes(s.counters.voiceBytes)} />
+            <Row title={a.manage.fileBytes} value={formatBytes(s.counters.fileBytes)} />
             <Row
               title={a.manage.errors}
               value={

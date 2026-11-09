@@ -42,7 +42,7 @@ async function signedIn(post: (path: string, body?: unknown) => unknown) {
 }
 
 const grant = (path: string) =>
-  path === "/voice" ? { voiceId: "img1", upload: { url: "https://store.example/put?sig=abc", method: "PUT", headers: { "content-length": "9", "content-type": "application/octet-stream" } } } : {};
+  path === "/files" ? { fileId: "img1", upload: { url: "https://store.example/put?sig=abc", method: "PUT", headers: { "content-length": "9", "content-type": "application/octet-stream" } } } : {};
 
 beforeEach(() => {
   lock(null);
@@ -68,7 +68,7 @@ describe("sending a picture", () => {
     const { post } = await signedIn(grant);
     await sendImage(CONV, new Blob(["picked"], { type: "image/heic" }));
 
-    const asked = post.mock.calls.find(([path]) => path === "/voice")!;
+    const asked = post.mock.calls.find(([path]) => path === "/files")!;
     const size = (asked[1] as { size: number }).size;
     expect(asked[1]).toEqual({ conv: CONV, size });
     expect(size).toBeGreaterThan(compressed.bytes.length); // header and tag

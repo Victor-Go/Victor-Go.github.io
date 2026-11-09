@@ -13,22 +13,22 @@ export const canDelete = (m: Pick<Msg, "mine" | "seq" | "deleted" | "status"> & 
 
 export interface DeleteBatch {
   seqs: number[];
-  voiceIds: string[];
+  fileIds: string[];
 }
 
 /** Splits a selection into requests that respect both limits. The server refuses a request over either one. */
 export function planDeleteBatches(msgs: readonly Msg[]): DeleteBatch[] {
   const batches: DeleteBatch[] = [];
-  let cur: DeleteBatch = { seqs: [], voiceIds: [] };
+  let cur: DeleteBatch = { seqs: [], fileIds: [] };
   for (const m of [...msgs].sort((a, b) => a.seq - b.seq)) {
-    // Recordings and pictures both live in the server's voice storage and are removed with `voiceIds`.
+    // Recordings and pictures both are files on the server and are removed with `fileIds`.
     const voice = m.payload?.k === "voice" && m.payload.voice.id ? m.payload.voice.id : m.payload?.k === "image" && m.payload.image.id ? m.payload.image.id : null;
-    if (cur.seqs.length >= DELETE_MAX || (voice !== null && cur.voiceIds.length >= DELETE_MAX_VOICE)) {
+    if (cur.seqs.length >= DELETE_MAX || (voice !== null && cur.fileIds.length >= DELETE_MAX_VOICE)) {
       batches.push(cur);
-      cur = { seqs: [], voiceIds: [] };
+      cur = { seqs: [], fileIds: [] };
     }
     cur.seqs.push(m.seq);
-    if (voice !== null) cur.voiceIds.push(voice);
+    if (voice !== null) cur.fileIds.push(voice);
   }
   if (cur.seqs.length > 0) batches.push(cur);
   return batches;

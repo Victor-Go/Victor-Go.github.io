@@ -100,7 +100,7 @@ describe("the contact switches", () => {
   });
 
   it("the global switch is part of the config that is saved", async () => {
-    answers = { "GET /admin/config": { inviteRequired: true, registrationOpen: true, voiceEnabled: true, groupMax: 32, retentionDays: 30, favoriteMax: 10, globalContactsBlocked: false }, "PUT /admin/config": { inviteRequired: true, registrationOpen: true, voiceEnabled: true, groupMax: 32, retentionDays: 30, favoriteMax: 10, globalContactsBlocked: true } };
+    answers = { "GET /admin/config": { inviteRequired: true, registrationOpen: true, fileEnabled: true, groupMax: 32, retentionDays: 30, favoriteMax: 10, globalContactsBlocked: false }, "PUT /admin/config": { inviteRequired: true, registrationOpen: true, fileEnabled: true, groupMax: 32, retentionDays: 30, favoriteMax: 10, globalContactsBlocked: true } };
     go(PATH.managementPage("config"));
     render(<ManagementPage />);
     fireEvent.click(await screen.findByRole("switch", { name: "Block adding contacts for everyone" }));
@@ -110,15 +110,64 @@ describe("the contact switches", () => {
     expect(put.groupMax).toBe(32);
   });
 
-  it("the group size cannot be set above 32", async () => {
-    answers = { "GET /admin/config": { inviteRequired: true, registrationOpen: true, voiceEnabled: true, groupMax: 32, retentionDays: 30, favoriteMax: 10, globalContactsBlocked: false } };
+  const puts = () => calls.filter(([m, p]) => m === "PUT" && p === "/admin/config");
+  const openConfig = async (groupMax = 10) => {
+    answers = {
+      "GET /admin/config": { inviteRequired: true, registrationOpen: true, fileEnabled: true, groupMax, retentionDays: 30, favoriteMax: 10, fileMonthlyMB: 100, globalContactsBlocked: false },
+      "PUT /admin/config": { inviteRequired: true, registrationOpen: true, fileEnabled: true, groupMax: 32, retentionDays: 30, favoriteMax: 10, fileMonthlyMB: 100, globalContactsBlocked: false },
+    };
     go(PATH.managementPage("config"));
     render(<ManagementPage />);
+  };
+
+  it("a number is applied when the field loses focus, not while typing, and is kept inside its range", async () => {
+    await openConfig();
     const input = (await screen.findByLabelText("Group size limit (max 32)")) as HTMLInputElement;
-    expect(input.max).toBe("32");
     fireEvent.change(input, { target: { value: "100" } });
-    await waitFor(() => expect(calls.some(([m, p]) => m === "PUT" && p === "/admin/config")).toBe(true));
-    expect((calls.find(([m, p]) => m === "PUT" && p === "/admin/config")![2] as { groupMax: number }).groupMax).toBe(32);
+    expect(puts()).toHaveLength(0);
+    fireEvent.blur(input);
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect((puts()[0][2] as { groupMax: number }).groupMax).toBe(32);
+  });
+
+  it("shows a number in its plain form (050 becomes 50) and sends that", async () => {
+    await openConfig();
+    answers["PUT /admin/config"] = { ...(answers["GET /admin/config"] as object), favoriteMax: 50 }; // what the server answers: the saved settings
+    const input = (await screen.findByLabelText(/Favourites per person/)) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "050" } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect((puts()[0][2] as { favoriteMax: number }).favoriteMax).toBe(50);
+    expect(input.value).toBe("50");
+  });
+
+  it("after a save a dialog tells the new settings, and closes", async () => {
+    await openConfig();
+    answers["PUT /admin/config"] = { ...(answers["GET /admin/config"] as object), favoriteMax: 50 };
+    const input = (await screen.findByLabelText(/Favourites per person/)) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "50" } });
+    fireEvent.blur(input);
+    const dialog = await screen.findByRole("alertdialog", { name: "Settings saved" });
+    expect(dialog.textContent).toContain("Favourites per person");
+    expect(dialog.textContent).toContain("50");
+    expect(dialog.textContent).not.toContain("File uploads per person per month"); // only what changed is listed
+    expect(dialog.textContent).not.toContain("Group size limit");
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  });
+
+  it("an empty entry puts the old value back and sends nothing; the monthly file limit stops at 256", async () => {
+    await openConfig();
+    const fav = (await screen.findByLabelText(/Favourites per person/)) as HTMLInputElement;
+    fireEvent.change(fav, { target: { value: "" } });
+    fireEvent.blur(fav);
+    expect(fav.value).toBe("10");
+    const files = screen.getByLabelText(/File uploads per person per month/) as HTMLInputElement;
+    fireEvent.change(files, { target: { value: "9999" } });
+    fireEvent.blur(files);
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect(files.value).toBe("256");
+    expect((puts()[0][2] as { fileMonthlyMB: number }).fileMonthlyMB).toBe(256);
   });
 });
 

@@ -3,7 +3,7 @@ export type ErrorCode =
   | "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "rate_limited" | "busy"
   | "pow_required" | "pow_invalid" | "invite_required" | "invite_invalid" | "handle_taken" | "handle_reserved"
   | "weak_request" | "too_large" | "gone" | "protocol_unsupported" | "stepup_required" | "internal"
-  | "network" | "timeout" | "monthly_limit" | "unavailable" | "favorites_full";
+  | "network" | "timeout" | "monthly_limit" | "unavailable" | "favorites_full" | "file_quota";
 
 export class ApiError extends Error {
   readonly status: number;

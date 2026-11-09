@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { usePending } from "./ui";
 
@@ -126,6 +126,47 @@ export function Empty({ icon, children }: { icon: ReactNode; children: ReactNode
     <div className="ios-empty">
       {icon}
       <p>{children}</p>
+    </div>
+  );
+}
+
+/**
+ * An iOS-style alert: a small centred box with a bold title, an optional message, a compact list of label / value lines and one
+ * button under a hairline. Escape, a tap outside and the button all close it.
+ */
+export function Alert({ title, message, rows, buttonLabel, onClose }: { title: string; message?: string; rows?: readonly (readonly [string, string])[]; buttonLabel: string; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    ref.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      previous?.focus?.();
+    };
+  }, [onClose]);
+  return (
+    <div className="ios-alert-back" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ios-alert" role="alertdialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
+        <div className="ios-alert-body">
+          <h2 className="ios-alert-title">{title}</h2>
+          {message && <p className="ios-alert-message">{message}</p>}
+          {rows && rows.length > 0 && (
+            <dl className="ios-alert-rows">
+              {rows.map(([label, value]) => (
+                <div key={label} className="ios-alert-row">
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+        <button type="button" className="ios-alert-btn" onClick={onClose}>
+          {buttonLabel}
+        </button>
+      </div>
     </div>
   );
 }

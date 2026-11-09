@@ -4,13 +4,13 @@ import { fromB64, toB64 } from "./crypto/b64";
 import { openFavoriteText, sealFavoriteText } from "./crypto/favorite";
 import { generateIdentity, publicKeyOf, toEpochs } from "./crypto/keys";
 import { KX_EPOCHS, unwrapKey, wrapKey } from "./crypto/kx";
-import { MESSAGE_MAX_CHARS, decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, voiceBinding, type Binding, type Payload } from "./crypto/message";
+import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, voiceBinding, type Binding, type Payload } from "./crypto/message";
 import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
 import { downloadBytes, uploadBytes, type UploadTarget } from "./net/blob";
 import { ChatSocket, type Frame } from "./net/socket";
-import { GROUP_MAX, patch, reset, useChat, type AccountFlags, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem } from "./store";
+import { GROUP_MAX, patch, reset, useChat, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem, type ServerConfig } from "./store";
 import { unlockedNow } from "./adminLock";
 import { setLang, useLangStore } from "./lang";
 import { mentionsHandle } from "./mentions";
@@ -46,10 +46,10 @@ interface SessionPayload {
   publicKey: string;
   wrappedMK: string;
   idleTimeoutMaxMs: number;
-  /** Protocol 2: whether this account may add or be added as a contact now (the same fields as `GET /me`). */
-  contactsBlocked?: boolean;
-  globalContactsBlocked?: boolean;
-  canAddContacts?: boolean;
+  /** The server's clock, to judge how far this device's is off. */
+  serverTime?: number;
+  /** What this account may do and its limits: the same object as in `GET /me` and in the "account" notice. */
+  config?: Partial<ServerConfig>;
 }
 
 interface WireMessage {
@@ -87,6 +87,8 @@ const s = {
   contactKeys: new Map<string, { key: Uint8Array; convId: string }>(),
   groupKeys: new Map<string, Map<number, Uint8Array>>(),
   lastSeq: new Map<string, number>(),
+  /** When the configuration was last applied (ms since the epoch), so a reconnect does not ask for it again at once. */
+  configAt: 0,
   /** Sequence numbers deleted this session, per conversation (numbers only, no content): a page fetched before the push arrived must not bring a message back. */
   tombs: new Map<string, Set<number>>(),
   /** Bumped when a conversation's cache is replaced or dropped; a slower request that started before it is thrown away. */
@@ -197,14 +199,8 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
   patch({ phase: "busy", me: { userId: session.userId, handle: session.handle, role: session.role, publicKey: session.publicKey }, notice: null });
   onProgress({ step: "vault" });
   try {
-    const health = await a.get<{ features: { retentionDays: number; groupMax: number; voiceMaxSec: number }; serverTime?: number }>("/health");
-    patch({
-      retentionDays: health.features.retentionDays,
-      groupMax: Math.min(GROUP_MAX, health.features.groupMax),
-      voiceMaxSec: health.features.voiceMaxSec,
-      ...(typeof health.serverTime === "number" ? { clockSkew: health.serverTime - Date.now() } : {}),
-    });
-    if (typeof session.canAddContacts === "boolean") applyAccount(session);
+    if (typeof session.serverTime === "number") patch({ clockSkew: session.serverTime - Date.now() });
+    if (session.config) applyConfig(session.config);
     else await refreshMe();
     await refreshEpochs();
     if (seed) await putRecord("identity", { seed: toB64(seed) });
@@ -258,6 +254,7 @@ export function lock(notice: string | null = null): void {
   s.contactKeys.clear();
   s.groupKeys.clear();
   s.lastSeq.clear();
+  s.configAt = 0;
   s.tombs.clear();
   s.loadGen.clear();
   s.sentRead.clear();
@@ -292,20 +289,34 @@ export function touch(): void {
 }
 
 // ---------- own account ----------
-function applyAccount(f: Partial<AccountFlags>): void {
+/** The configuration is read again on a reconnect only if it was not applied in the last half minute (a flapping connection must not ask every time). */
+const CONFIG_FRESH_MS = 30_000;
+
+/** Applies what the server says this account may do, and its limits (sign-in answer, `GET /me` and the "account" notice all carry the same object). */
+export function applyConfig(c: Partial<ServerConfig> | null | undefined): void {
+  if (!c) return;
+  const l = c.limits;
+  const number = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   patch({
     account: {
-      contactsBlocked: f.contactsBlocked === true,
-      globalContactsBlocked: f.globalContactsBlocked === true,
+      contactsBlocked: c.contactsBlocked === true,
+      globalContactsBlocked: c.globalContactsBlocked === true,
       // A server that does not say keeps the door open; the server refuses anyway and the reason is shown.
-      canAddContacts: f.canAddContacts !== false,
+      canAddContacts: c.canAddContacts !== false,
     },
+    // the microphone and picture buttons are not shown while the administrator has files switched off
+    filesOff: c.files?.enabled === false,
+    ...(number(l?.retentionDays) ? { retentionDays: l.retentionDays } : {}),
+    ...(number(l?.groupMax) ? { groupMax: Math.min(GROUP_MAX, l.groupMax) } : {}),
+    ...(number(l?.voiceMaxSec) ? { voiceMaxSec: l.voiceMaxSec } : {}),
+    ...(number(l?.messageMaxChars) ? { messageMaxChars: l.messageMaxChars } : {}),
   });
+  s.configAt = Date.now();
 }
 
-/** `GET /me`: the account's own switches. Called at sign-in when the answer lacks them, on a `notice` of kind "account", and after a refusal that names a switch. */
+/** `GET /me`: the account's configuration. Called at sign-in when the answer lacks it, after a reconnect, and after a refusal that names a switch. */
 export async function refreshMe(): Promise<void> {
-  applyAccount(await api().get<Partial<AccountFlags>>("/me"));
+  applyConfig((await api().get<{ config?: Partial<ServerConfig> }>("/me")).config);
 }
 
 // ---------- epochs and vault ----------
@@ -853,6 +864,8 @@ async function resync(reconnected: boolean): Promise<void> {
     await loadUnread().catch(() => {});
     // A removal that happened while the socket was down arrives only as an official message that was never pushed here.
     await refreshContacts().catch(() => {});
+    // A change made while the socket was down was never pushed here.
+    if (Date.now() - s.configAt > CONFIG_FRESH_MS) await refreshMe().catch(() => {});
   }
 }
 
@@ -976,7 +989,7 @@ export function markRead(conv: string | null): void {
 
 export async function sendText(conv: string, text: string): Promise<void> {
   const clean = text.trim();
-  if (!clean || Array.from(clean).length > MESSAGE_MAX_CHARS || conv === useChat.getState().official) return;
+  if (!clean || Array.from(clean).length > useChat.getState().messageMaxChars || conv === useChat.getState().official) return;
   const myId = me().userId;
   const gen = currentGen(conv);
   const key = keyFor(conv, gen);
@@ -1069,7 +1082,7 @@ async function sendStored(conv: string, bytes: Uint8Array, payloadOf: (storedId:
       }
     }
     if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
-    if (e instanceof ApiError && e.status === 403 && e.code === "forbidden" && e.extra.reason !== "official_readonly") patch({ voiceOff: true });
+    if (e instanceof ApiError && e.status === 403 && e.code === "forbidden" && e.extra.reason !== "official_readonly") patch({ filesOff: true });
     addMessage(conv, { ...(useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine) ?? optimistic), status: "failed" });
   }
 }
@@ -1235,7 +1248,10 @@ export async function onFrame(f: Frame): Promise<void> {
     const kind = String(f.kind);
     // (A removed contact is no longer a notice: it arrives as a `contact_removed` official message.)
     if (kind === "contact_request" || kind === "contact_accepted") await refreshContacts().catch(() => {});
-    else if (kind === "account") await refreshMe().catch(() => {});
+    else if (kind === "account") {
+      if (isRecord(f.config)) applyConfig(f.config as Partial<ServerConfig>);
+      else await refreshMe().catch(() => {});
+    }
     else if (kind === "group_event" || kind === "group_deleted") await refreshGroups().catch(() => {});
     else if (kind === "epochs") await refreshEpochs().catch(() => {});
     else if (kind === "wiped") {

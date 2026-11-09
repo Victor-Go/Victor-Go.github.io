@@ -96,7 +96,7 @@ describe("sending a recording", () => {
     await signedIn(() => ({ fileId: "v1", upload: { url: "https://store.example/put", method: "PUT", headers: {} } }));
     await sendVoice(CONV, mp3, 1500);
     expect(useChat.getState().messages[CONV].at(-1)?.status).toBe("failed");
-    expect(useChat.getState().voiceOff).toBe(false);
+    expect(useChat.getState().filesOff).toBe(false);
   });
 
   it("does switch voice off when the API itself says forbidden, but not for the read-only official conversation", async () => {
@@ -105,10 +105,10 @@ describe("sending a recording", () => {
       throw new ApiError(403, "forbidden");
     });
     await sendVoice(CONV, mp3, 1500);
-    expect(useChat.getState().voiceOff).toBe(true);
-    useChat.setState({ voiceOff: false, official: "official:me" });
+    expect(useChat.getState().filesOff).toBe(true);
+    useChat.setState({ filesOff: false, official: "official:me" });
     await expect(sendVoice("official:me", mp3, 1)).rejects.toMatchObject({ extra: { reason: "official_readonly" } });
-    expect(useChat.getState().voiceOff).toBe(false);
+    expect(useChat.getState().filesOff).toBe(false);
   });
 });
 

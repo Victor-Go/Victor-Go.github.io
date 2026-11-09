@@ -27,6 +27,19 @@ export interface AccountFlags {
   canAddContacts: boolean;
 }
 
+/**
+ * What this person may do now and the limits that apply to them, as the server sends it: in the sign-in answer, in `GET /me` and in the
+ * "account" notice (always the same object). Every part may be missing from an answer; what is missing keeps its value.
+ */
+export interface ServerConfig {
+  canAddContacts: boolean;
+  contactsBlocked: boolean;
+  globalContactsBlocked: boolean;
+  /** Voice messages and pictures: switched on by the administrator, and this person's monthly upload limit in MB (null: none). */
+  files: { enabled: boolean; monthlyMB: number | null };
+  limits: { messageMaxChars: number; voiceMaxSec: number; groupMax: number; retentionDays: number; favoriteMax: number; monthlyMessages: number | null };
+}
+
 export interface RequestItem {
   id: string;
   direction: "in" | "out";
@@ -123,11 +136,13 @@ export interface ChatState {
   retentionDays: number;
   groupMax: number;
   voiceMaxSec: number;
+  /** The most characters one message may have (the server's `limits.messageMaxChars`). */
+  messageMaxChars: number;
   /** Server clock minus this device's clock (ms), from the last answer that carried the server's time; used to judge when a card expires. */
   clockSkew: number;
   account: AccountFlags;
   /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
-  voiceOff: boolean;
+  filesOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
   usage: { used: number; limit: number | null; resetAt: number; favoriteCount?: number; favoriteMax?: number; fileBytes?: number; fileLimit?: number | null } | null;
   /** The part of the app being looked at; a conversation counts as read only while this is "contacts". */
@@ -177,9 +192,10 @@ export const initialState: ChatState = {
   retentionDays: 30,
   groupMax: GROUP_MAX,
   voiceMaxSec: 60,
+  messageMaxChars: 1024,
   clockSkew: 0,
   account: { contactsBlocked: false, globalContactsBlocked: false, canAddContacts: true },
-  voiceOff: false,
+  filesOff: false,
   usage: null,
   section: "contacts",
   olderMore: {},

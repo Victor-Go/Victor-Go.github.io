@@ -63,6 +63,9 @@ export interface Recording {
   cancel(): void;
 }
 
+/** How long stopping waits for the recorder's own stop event before the microphone is let go anyway. */
+export const RELEASE_WAIT_MS = 400;
+
 function release(stream: MediaStream): void {
   for (const t of stream.getTracks()) t.stop();
 }
@@ -87,7 +90,9 @@ async function toMono16k(blob: Blob): Promise<Float32Array> {
 
 /**
  * Asks for the microphone (only now) and starts recording. The caller decides when to finish; `maxSec` is enforced by the caller too, but
- * the encoded result is cut to it here as a backstop. The stream is released on finish, cancel and failure.
+ * the encoded result is cut to it here as a backstop. The microphone is released on finish, cancel and failure, and never later than
+ * RELEASE_WAIT_MS after a stop: a browser that does not send the recorder's stop event (some iOS versions) must not keep the microphone,
+ * and its indicator, on.
  */
 export async function startRecording(maxSec: number): Promise<Recording> {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
@@ -107,14 +112,18 @@ export async function startRecording(maxSec: number): Promise<Recording> {
     rec.onstop = () => resolve();
     rec.onerror = () => resolve();
   });
-  rec.start();
-  let done = false;
+  try {
+    rec.start();
+  } catch (e) {
+    release(stream);
+    throw e;
+  }
+  let stopping: Promise<void> | null = null;
   const stop = (): Promise<void> => {
-    if (done) return stopped;
-    done = true;
+    if (stopping) return stopping;
     if (rec.state !== "inactive") rec.stop();
-    else release(stream);
-    return stopped.then(() => release(stream));
+    stopping = Promise.race([stopped, new Promise<void>((resolve) => setTimeout(resolve, RELEASE_WAIT_MS))]).then(() => release(stream));
+    return stopping;
   };
   return {
     async finish() {

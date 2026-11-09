@@ -5,7 +5,6 @@ import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendI
 import { ImageError } from "../image";
 import { voiceSupported } from "../voice";
 import { errorOf } from "../i18nApp";
-import { MESSAGE_MAX_CHARS } from "../crypto/message";
 import { deliveryOf } from "../delivery";
 import { dayKey, formatClock, formatDay, isExpired } from "../format";
 import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions";
@@ -104,7 +103,8 @@ export function Conversation() {
   const closeViewer = useCallback(() => setViewer(null), []);
   // Too narrow for a text box of about 15 characters beside four buttons: keep only "+" and send.
   const [compact, setCompact] = useState(false);
-  const voiceOff = useChat((s) => s.voiceOff);
+  const filesOff = useChat((s) => s.filesOff);
+  const maxChars = useChat((s) => s.messageMaxChars);
   // The panel closes on a tap elsewhere, on Escape, and when the chat changes. While a picture is on its way it stays, and closes when that is over.
   useEffect(() => setPanel(null), [activeConv]);
   useEffect(() => {
@@ -439,7 +439,7 @@ export function Conversation() {
     const start = Math.min(el.selectionStart, draft.length);
     const end = Math.min(el.selectionEnd, draft.length);
     const text = draft.slice(0, start) + emoji + draft.slice(end);
-    if (Array.from(text).length > MESSAGE_MAX_CHARS) return;
+    if (Array.from(text).length > maxChars) return;
     setDraft(text);
     nextCaret.current = start + emoji.length;
     setCaret(start + emoji.length);
@@ -459,11 +459,11 @@ export function Conversation() {
       setPanel(null);
     }
   };
-  const mediaOn = !voiceOff;
+  const mediaOn = !filesOff;
   const micOn = mediaOn && voiceSupported();
 
   const submit = () => {
-    if (!draft.trim() || length > MESSAGE_MAX_CHARS || !canSend) return;
+    if (!draft.trim() || length > maxChars || !canSend) return;
     void sendText(activeConv, draft);
     setDraft("");
     setCaret(0);
@@ -756,7 +756,7 @@ export function Conversation() {
         )}
         {!recording && (
         <div className="ch-composer-side">
-          {length > MESSAGE_MAX_CHARS * 0.8 && <span className={length > MESSAGE_MAX_CHARS ? "ch-bad ch-hint" : "ch-hint"}>{a.charCount(length, MESSAGE_MAX_CHARS)}</span>}
+          {length > maxChars * 0.8 && <span className={length > maxChars ? "ch-bad ch-hint" : "ch-hint"}>{a.charCount(length, maxChars)}</span>}
           <div className="ch-emoji-wrap" ref={emojiRef}>
             {panel === "emoji" && (
               <div className="ch-emoji-panel" role="group" aria-label={a.emoji}>
@@ -824,7 +824,7 @@ export function Conversation() {
               {compact ? <Plus size={26} /> : <Smile size={24} />}
             </button>
           </div>
-          <button type="button" className="ch-send" aria-label={a.send} disabled={!draft.trim() || length > MESSAGE_MAX_CHARS || !canSend} onClick={submit}>
+          <button type="button" className="ch-send" aria-label={a.send} disabled={!draft.trim() || length > maxChars || !canSend} onClick={submit}>
             <Send size={20} />
           </button>
         </div>

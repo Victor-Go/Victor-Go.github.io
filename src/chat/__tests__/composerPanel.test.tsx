@@ -183,7 +183,7 @@ describe("a composer too narrow for the text box (under about 15 characters)", (
   });
 
   it("offers only emoji when the administrator has switched voice off (pictures and recordings share that switch)", () => {
-    useChat.setState({ voiceOff: true });
+    useChat.setState({ filesOff: true });
     render(<Conversation />);
     widths!(300);
     fireEvent.click(screen.getByLabelText("更多"));

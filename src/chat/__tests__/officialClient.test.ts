@@ -165,15 +165,26 @@ describe("a contact card", () => {
   });
 });
 
+/** The configuration object the server sends in the sign-in answer, in GET /me and in the "account" notice. */
+const config = (over: Record<string, unknown> = {}) => ({
+  canAddContacts: true,
+  contactsBlocked: false,
+  globalContactsBlocked: false,
+  files: { enabled: true, monthlyMB: 100 },
+  limits: { messageMaxChars: 1024, voiceMaxSec: 60, groupMax: 32, retentionDays: 30, favoriteMax: 10, monthlyMessages: 30000 },
+  ...over,
+});
+const meAnswer = (over: Record<string, unknown> = {}) => ({ userId: ME, handle: "me", role: "user", config: config(over) });
+
 describe("who may add contacts", () => {
   it("is read from GET /me", async () => {
-    fakeApi(() => ({ userId: ME, handle: "me", role: "user", contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false }));
+    fakeApi(() => meAnswer({ contactsBlocked: true, canAddContacts: false }));
     await refreshMe();
     expect(useChat.getState().account).toEqual({ contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false });
   });
 
   it("is read again when the server sends an account notice", async () => {
-    const { get } = fakeApi(() => ({ contactsBlocked: false, globalContactsBlocked: true, canAddContacts: false }));
+    const { get } = fakeApi(() => meAnswer({ globalContactsBlocked: true, canAddContacts: false }));
     await onFrame({ t: "notice", kind: "account" });
     expect(get).toHaveBeenCalledWith("/me");
     expect(useChat.getState().account.globalContactsBlocked).toBe(true);
@@ -182,7 +193,7 @@ describe("who may add contacts", () => {
 
   it("is read again after a refusal that names a switch, and the refusal reaches the caller", async () => {
     const { get } = fakeApi(
-      () => ({ contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false }),
+      () => meAnswer({ contactsBlocked: true, canAddContacts: false }),
       (path) => {
         if (path === "/pow/challenge") return { id: "ch1", salt: "s", parts: 1, bits: 1, memKiB: 8, iterations: 1, expiresAt: 0, multiplier: 1 };
         throw new ApiError(403, "forbidden", { reason: "self_blocked" });
@@ -306,5 +317,46 @@ describe("an open official conversation stays read", () => {
     release();
     await pending;
     expect(useChat.getState().unread[OFFICIAL]).toBe(0);
+  });
+});
+
+describe("the microphone and picture buttons", () => {
+  it("are hidden while GET /me says files are off, and come back when they are switched on", async () => {
+    let enabled = false;
+    fakeApi(() => meAnswer({ files: { enabled, monthlyMB: 100 } }));
+    await refreshMe();
+    expect(useChat.getState().filesOff).toBe(true);
+    enabled = true;
+    await refreshMe();
+    expect(useChat.getState().filesOff).toBe(false);
+  });
+
+  it("stay when the answer does not say", async () => {
+    fakeApi(() => ({ userId: ME, handle: "me", role: "user", config: { canAddContacts: true } }));
+    await refreshMe();
+    expect(useChat.getState().filesOff).toBe(false);
+  });
+});
+
+describe("the configuration the server pushes", () => {
+  it("is applied from the account notice itself, without asking again", async () => {
+    const { get } = fakeApi();
+    await onFrame({ t: "notice", kind: "account", config: config({ canAddContacts: false, files: { enabled: false, monthlyMB: 100 } }) });
+    expect(get).not.toHaveBeenCalled();
+    expect(useChat.getState().account.canAddContacts).toBe(false);
+    expect(useChat.getState().filesOff).toBe(true);
+  });
+
+  it("sets the limits the app works with, and a group limit above what this app supports is held at 32", async () => {
+    fakeApi(() => meAnswer({ limits: { messageMaxChars: 500, voiceMaxSec: 30, groupMax: 64, retentionDays: 7, favoriteMax: 10, monthlyMessages: null } }));
+    await refreshMe();
+    expect(useChat.getState()).toMatchObject({ messageMaxChars: 500, voiceMaxSec: 30, groupMax: 32, retentionDays: 7 });
+  });
+
+  it("keeps a limit the answer leaves out", async () => {
+    useChat.setState({ retentionDays: 9, voiceMaxSec: 20 });
+    fakeApi(() => ({ userId: ME, handle: "me", role: "user", config: { canAddContacts: true, limits: { groupMax: 10 } } }));
+    await refreshMe();
+    expect(useChat.getState()).toMatchObject({ retentionDays: 9, voiceMaxSec: 20, groupMax: 10 });
   });
 });

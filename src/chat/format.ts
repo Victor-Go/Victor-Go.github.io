@@ -6,14 +6,14 @@ const locale = (lang: Lang): string => (lang === "zh" ? "zh-CN" : "en");
 export const formatClock = (ms: number, lang: Lang): string =>
   new Intl.DateTimeFormat(locale(lang), { hour: "2-digit", minute: "2-digit" }).format(ms);
 
-/** A size in bytes as B, KB, MB or GB (1024 steps), one decimal from KB up. */
+/** A size in bytes as B, KB, MB or GB (steps of 1000, the same MB as the monthly file limit), one decimal from KB up. */
 export function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
   let v = n;
   let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
+  while (v >= 1000 && i < units.length - 1) {
+    v /= 1000;
     i++;
   }
   return i === 0 ? `${Math.round(v)} B` : `${v.toFixed(1)} ${units[i]}`;

@@ -3,6 +3,7 @@ import { isEmbeddedOrOpened } from "../../cipher/isolation";
 import { estimateBits } from "../../cipher/crypto/strength";
 import { Cancelled, cancelWorkNow as cancelWork, login, register, type Progress } from "../client";
 import { errorOf } from "../i18nApp";
+import { ApiError } from "../net/api";
 import { IDLE_CHOICES, patch, useChat } from "../store";
 import { useHealth, useLang } from "../useChat";
 import { checkHandle, checkPassword, normalizePassword, sanitizeInvite, strengthOf, type PasswordProblem } from "../validation";
@@ -63,8 +64,9 @@ export function AccountPage() {
       setNotice(m.fixErrors);
       return;
     }
-    if (!online) {
-      setNotice(m.serverDown);
+    // Only a settled, definite problem blocks the request. A failed or unfinished health check says nothing about the sign-in itself: the real request decides.
+    if (state.kind === "unconfigured" || state.kind === "incompatible") {
+      setNotice(m.status[state.kind]);
       return;
     }
     setNotice(null);
@@ -75,7 +77,11 @@ export function AccountPage() {
       setPassword("");
       setRepeat("");
     } catch (e) {
-      if (!(e instanceof Cancelled)) setNotice(errorOf(a, e));
+      if (!(e instanceof Cancelled)) {
+        setNotice(errorOf(a, e));
+        // The server could not be reached: bring the status bar up to date too.
+        if (e instanceof ApiError && e.status === 0) recheck();
+      }
     } finally {
       setProgress(null);
     }

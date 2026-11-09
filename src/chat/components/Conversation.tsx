@@ -1,7 +1,9 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Eye, Info, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
-import { addFavorite, deleteMessages, favoritesAmong, loadOlder, removeFavorite, sendText } from "../client";
+import { ApiError, addFavorite, deleteMessages, favoritesAmong, loadOlder, removeFavorite, sendImage, sendText } from "../client";
+import { ImageError } from "../image";
+import { voiceSupported } from "../voice";
 import { errorOf } from "../i18nApp";
 import { MESSAGE_MAX_CHARS } from "../crypto/message";
 import { deliveryOf } from "../delivery";
@@ -15,6 +17,8 @@ import { splitLinks } from "../links";
 import { DELETE_MAX, canDelete } from "../selection";
 import { Avatar, Modal } from "./ui";
 import { OfficialMessage } from "./OfficialMessage";
+import { ImageBubble } from "./ImageBubble";
+import { ImageViewer } from "./ImageViewer";
 import { VoiceBubble } from "./VoiceBubble";
 import { VoiceComposer } from "./VoiceComposer";
 
@@ -53,6 +57,11 @@ function MessageText({ text, handles, me, onLink }: { text: string; handles: str
   );
 }
 
+/** The text box keeps room for this many characters; when the buttons would leave less, they fold into the "+" panel. */
+const INPUT_MIN_CHARS = 15;
+/** What the full row needs besides the text box: 3 gaps of 8 px, the microphone, picture, emoji and send buttons (44 px each) and the gap of 6 px between the last two. */
+const COMPOSER_FIXED_PX = 3 * 8 + 4 * 44 + 6;
+
 /** Holding a message this long on a phone starts selecting. */
 const HOLD_MS = 1000;
 /** The side-by-side layout (a mouse is the main pointer there); below it is the phone layout. */
@@ -84,23 +93,33 @@ export function Conversation() {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const nextCaret = useRef<number | null>(null);
-  const [emojiOpen, setEmojiOpen] = useState(false);
+  // The floating panel above the composer: the "+" menu (emoji, picture, voice) or the emoji grid. On a wide composer the emoji button opens the grid directly.
+  const [panel, setPanel] = useState<"menu" | "emoji" | null>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
-  // The emoji panel closes on a tap elsewhere, on Escape, and when the chat changes.
-  useEffect(() => setEmojiOpen(false), [activeConv]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const micRef = useRef<{ start: () => void } | null>(null);
+  const footerRef = useRef<HTMLElement>(null);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [viewer, setViewer] = useState<{ url: string; w: number; h: number } | null>(null);
+  const closeViewer = useCallback(() => setViewer(null), []);
+  // Too narrow for a text box of about 15 characters beside four buttons: keep only "+" and send.
+  const [compact, setCompact] = useState(false);
+  const voiceOff = useChat((s) => s.voiceOff);
+  // The panel closes on a tap elsewhere, on Escape, and when the chat changes. While a picture is on its way it stays, and closes when that is over.
+  useEffect(() => setPanel(null), [activeConv]);
   useEffect(() => {
-    if (!emojiOpen) return;
+    if (!panel) return;
     const away = (e: PointerEvent) => {
-      if (!emojiRef.current?.contains(e.target as Node)) setEmojiOpen(false);
+      if (!imageBusy && !emojiRef.current?.contains(e.target as Node)) setPanel(null);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setEmojiOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && !imageBusy && setPanel(null);
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
     return () => {
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", esc);
     };
-  }, [emojiOpen]);
+  }, [panel, imageBusy]);
   const contact = contacts.find((c) => c.convId === activeConv);
   const group = groups.find((g) => g.id === activeConv);
   // The official conversation: the system's messages to me, plain and read-only. No composer, no key, nothing is ever opened.
@@ -111,6 +130,18 @@ export function Conversation() {
 
   // Selecting messages to delete. Only my own sent messages can be picked; the picked set holds sequence numbers.
   const [selecting, setSelecting] = useState(false);
+  // The composer's width decides whether the buttons fit: its content box less the gaps and four 44 px buttons leaves the room for the text box.
+  const composerShown = !selecting && !isOfficial;
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!composerShown || !el || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(([entry]) => {
+      const fontPx = parseFloat(getComputedStyle(inputRef.current ?? el).fontSize) || 16;
+      setCompact(entry.contentRect.width < COMPOSER_FIXED_PX + Math.ceil(INPUT_MIN_CHARS * fontPx));
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [composerShown, activeConv]);
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -414,6 +445,23 @@ export function Conversation() {
     setCaret(start + emoji.length);
   };
 
+  // The picture goes out as soon as it is chosen. The panel stays open until it is compressed, uploaded and sent, then closes.
+  const onPickImage = async (file: File | undefined) => {
+    if (!file || !activeConv || imageBusy) return;
+    setFavError(null);
+    setImageBusy(true);
+    try {
+      await sendImage(activeConv, file);
+    } catch (e) {
+      setFavError(e instanceof ImageError ? (e.message === "unreadable" ? a.imageUnreadable : a.imageFailed) : e instanceof ApiError ? errorOf(a, e) : a.imageFailed);
+    } finally {
+      setImageBusy(false);
+      setPanel(null);
+    }
+  };
+  const mediaOn = !voiceOff;
+  const micOn = mediaOn && voiceSupported();
+
   const submit = () => {
     if (!draft.trim() || length > MESSAGE_MAX_CHARS || !canSend) return;
     void sendText(activeConv, draft);
@@ -544,7 +592,7 @@ export function Conversation() {
                 ) : (
                   <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
                 )}
-                <div className={"ch-msg" + (m.mine ? " ch-mine" : "") + (m.payload ? "" : " ch-gone")}>
+                <div className={"ch-msg" + (m.mine ? " ch-mine" : "") + (m.payload ? "" : " ch-gone") + (m.payload?.k === "image" ? " ch-has-image" : "")}>
                   {!m.mine && group && (
                     <div className="ch-sender">
                       @{nameOf(m)} {m.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>}
@@ -556,6 +604,8 @@ export function Conversation() {
                     </div>
                   ) : m.payload?.k === "voice" ? (
                     <VoiceBubble conv={activeConv} m={m} />
+                  ) : m.payload?.k === "image" ? (
+                    <ImageBubble conv={activeConv} m={m} onOpen={(url, w, h) => !selecting && setViewer({ url, w, h })} />
                   ) : (
                     <div className="ch-text ch-gone-text">{a.undecryptable}</div>
                   )}
@@ -619,7 +669,21 @@ export function Conversation() {
           <span className="ch-hint">{a.officialReadonly}</span>
         </footer>
       ) : (
-      <footer className="ch-composer">
+      <footer className="ch-composer" ref={footerRef}>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          tabIndex={-1}
+          aria-hidden="true"
+          data-testid="image-input"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = ""; // choosing the same picture again must fire again
+            void onPickImage(file);
+          }}
+        />
         {open && (
           <ul className="ch-suggest" role="listbox" aria-label={a.mentionSuggestions}>
             {options.map((h, i) => (
@@ -684,12 +748,17 @@ export function Conversation() {
           }}
         />
         )}
-        <VoiceComposer key={activeConv} conv={activeConv} disabled={!canSend} onBusy={setRecording} onError={setFavError} />
+        <VoiceComposer key={activeConv} conv={activeConv} disabled={!canSend} onBusy={setRecording} onError={setFavError} compact={compact} controlRef={micRef} />
+        {!recording && !compact && mediaOn && (
+          <button type="button" className="ch-icon" aria-label={a.imagePick} aria-busy={imageBusy} disabled={!canSend || imageBusy} onClick={() => fileRef.current?.click()}>
+            {imageBusy ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : <ImageIcon size={24} />}
+          </button>
+        )}
         {!recording && (
         <div className="ch-composer-side">
           {length > MESSAGE_MAX_CHARS * 0.8 && <span className={length > MESSAGE_MAX_CHARS ? "ch-bad ch-hint" : "ch-hint"}>{a.charCount(length, MESSAGE_MAX_CHARS)}</span>}
           <div className="ch-emoji-wrap" ref={emojiRef}>
-            {emojiOpen && (
+            {panel === "emoji" && (
               <div className="ch-emoji-panel" role="group" aria-label={a.emoji}>
                 {EMOJIS.map((e) => (
                   <button
@@ -713,16 +782,46 @@ export function Conversation() {
                 ))}
               </div>
             )}
+            {panel === "menu" && (
+              <div className="ch-emoji-panel ch-plus-menu" role="group" aria-label={a.more}>
+                <button type="button" className="ch-plus-item" onPointerDown={(ev) => ev.preventDefault()} onClick={() => setPanel("emoji")}>
+                  <Smile size={26} aria-hidden="true" />
+                  <span>{a.emoji}</span>
+                </button>
+                {mediaOn && (
+                  // The picker opens from this tap itself (a browser only allows that from a user's action); the panel closes when the picture is sent.
+                  <button type="button" className="ch-plus-item" aria-label={a.imagePick} aria-busy={imageBusy} disabled={imageBusy} onClick={() => fileRef.current?.click()}>
+                    {imageBusy ? <span className="ch-spinner" aria-hidden="true" /> : <ImageIcon size={26} aria-hidden="true" />}
+                    <span>{a.imageShort}</span>
+                  </button>
+                )}
+                {micOn && (
+                  <button
+                    type="button"
+                    className="ch-plus-item"
+                    aria-label={a.voiceRecord}
+                    onPointerDown={(ev) => ev.preventDefault()}
+                    onClick={() => {
+                      setPanel(null);
+                      micRef.current?.start();
+                    }}
+                  >
+                    <Mic size={26} aria-hidden="true" />
+                    <span>{a.voiceShort}</span>
+                  </button>
+                )}
+              </div>
+            )}
             <button
               type="button"
               className="ch-icon"
-              aria-label={a.emoji}
-              aria-expanded={emojiOpen}
+              aria-label={compact ? a.more : a.emoji}
+              aria-expanded={panel !== null}
               disabled={!canSend}
               onPointerDown={(ev) => ev.preventDefault()}
-              onClick={() => setEmojiOpen((o) => !o)}
+              onClick={() => !imageBusy && setPanel((p) => (p ? null : compact ? "menu" : "emoji"))}
             >
-              <Smile size={24} />
+              {compact ? <Plus size={26} /> : <Smile size={24} />}
             </button>
           </div>
           <button type="button" className="ch-send" aria-label={a.send} disabled={!draft.trim() || length > MESSAGE_MAX_CHARS || !canSend} onClick={submit}>
@@ -745,6 +844,7 @@ export function Conversation() {
           </button>
         </Modal>
       )}
+      {viewer && <ImageViewer url={viewer.url} w={viewer.w} h={viewer.h} onClose={closeViewer} />}
       {info && group && <GroupInfo group={group} onClose={() => setInfo(false)} />}
       {info && contact && !contact.deleted && <ContactInfo contact={contact} onClose={() => setInfo(false)} />}
       {link && (

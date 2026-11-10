@@ -56,10 +56,64 @@ export interface HealthDeps {
   fetchImpl?: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
+  /** Pool only: how long a base has to answer before the next one is tried alongside it. */
+  staggerMs?: number;
+}
+
+/** A base that has not answered after this long gets company: the next one of the pool is tried too, and the first to answer is used. */
+export const POOL_STAGGER_MS = 1500;
+
+export interface PoolResult {
+  /** Which base of the pool answered (0 when none did). */
+  index: number;
+  state: HealthState;
+}
+
+/**
+ * Asks the pool in its order of preference: the first base at once, and each next one when the one before has failed, or has not
+ * answered within `staggerMs`. The first base that answers wins, so a dead (blocked) preferred address costs a moment, never the timeout.
+ * "Answers" means it is our server (the contract of `parseHealth`), whatever its protocol version. When none does, the result is the
+ * first base's failure.
+ */
+export function probePool(bases: string[], deps: HealthDeps = {}): Promise<PoolResult> {
+  if (bases.length === 0) return Promise.resolve({ index: 0, state: { kind: "unconfigured" } });
+  const stagger = deps.staggerMs ?? POOL_STAGGER_MS;
+  return new Promise((resolve) => {
+    const started = new Set<number>();
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const failures: HealthState[] = [];
+    let done = false;
+    const finish = (result: PoolResult): void => {
+      if (done) return;
+      done = true;
+      for (const t of timers) clearTimeout(t);
+      resolve(result);
+    };
+    const start = (i: number): void => {
+      if (done || i >= bases.length || started.has(i)) return;
+      started.add(i);
+      if (i + 1 < bases.length) timers.push(setTimeout(() => start(i + 1), stagger));
+      void checkOne(bases[i], deps).then((state) => {
+        if (state.kind !== "down") return finish({ index: i, state });
+        failures[i] = state;
+        if (Object.keys(failures).length === bases.length) return finish({ index: 0, state: failures[0] });
+        start(i + 1); // a base that failed hands over at once: the next one does not wait out the stagger
+      });
+    };
+    start(0);
+  });
+}
+
+/** The state of the server: of one base, or of the pool (the first that answers). */
+export async function checkHealth(api: string | string[] | null, deps: HealthDeps = {}): Promise<HealthState> {
+  if (api === null) return { kind: "unconfigured" };
+  if (typeof api === "string") return checkOne(api, deps);
+  if (api.length === 1) return checkOne(api[0], deps);
+  return (await probePool(api, deps)).state;
 }
 
 /** One plain HTTPS request: no cookies, no referrer, no cache. Never opens a WebSocket. */
-export async function checkHealth(api: string | null, deps: HealthDeps = {}): Promise<HealthState> {
+async function checkOne(api: string | null, deps: HealthDeps): Promise<HealthState> {
   if (!api) return { kind: "unconfigured" };
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.now ?? (() => performance.now());

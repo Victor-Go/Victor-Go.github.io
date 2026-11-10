@@ -45,6 +45,7 @@ jobs:
           VITE_CIPHER_EPOCHS: ${{ secrets.CIPHER_EPOCHS }}
           VITE_CIPHER_EPOCH_CURRENT: ${{ vars.CIPHER_EPOCH_CURRENT }}
           # Optional: server endpoints for /chat. Unset means the chat pages report "server not configured".
+          # CHAT_API and CHAT_WS take one address or several separated by commas (a, b, c): the first is preferred, the next ones are tried when it does not answer.
           VITE_CHAT_API: ${{ vars.CHAT_API }}
           VITE_CHAT_WS: ${{ vars.CHAT_WS }}
           # Storage origin for files (voice recordings and pictures): the server's Terraform output `files_origin`. Without it they cannot be sent or shown.

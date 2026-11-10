@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { epochHosts } from './src/cipher/epochsHosts.ts'
 import { DEFAULT_EPOCH_CURRENT, DEFAULT_EPOCH_TABLE, parseEpochs } from './src/cipher/crypto/epochs.ts'
-import { connectSrc } from './src/chat/csp.ts'
+import { connectSrc, unusableEndpoints } from './src/chat/csp.ts'
 import { CHAT_PATHS } from './src/chat/paths.ts'
 
 // The dev server injects inline scripts (React refresh preamble) that the strict
@@ -106,9 +106,11 @@ const cipherEpochsFile = (): Plugin => {
   }
 }
 
-// The chat pages may talk only to the server given at build time (VITE_CHAT_API / VITE_CHAT_WS) and to the
-// storage origin that holds files (voice recordings and pictures) (VITE_CHAT_FILES_ORIGIN, the server's Terraform output `files_origin`);
-// without them connect-src stays 'none'. Nothing about the server is hard-coded in the sources.
+// The chat pages may talk only to the server given at build time (VITE_CHAT_API / VITE_CHAT_WS, each one address or a comma-separated pool:
+// every address of a pool goes into connect-src) and to the storage origin that holds files (voice recordings and pictures)
+// (VITE_CHAT_FILES_ORIGIN, the server's Terraform output `files_origin`); without them connect-src stays 'none'.
+// Nothing about the server is hard-coded in the sources. An entry the page would refuse (a typo, http://) is named in the build log,
+// because it would otherwise silently shrink the pool.
 const chatConnectSrc = (): Plugin => {
   let value = "'none'"
   return {
@@ -117,6 +119,10 @@ const chatConnectSrc = (): Plugin => {
     configResolved(config) {
       const env = loadEnv(config.mode, config.envDir || config.root, 'VITE_CHAT_')
       value = connectSrc(env.VITE_CHAT_API, env.VITE_CHAT_WS, env.VITE_CHAT_FILES_ORIGIN)
+      for (const [name, kind] of [['VITE_CHAT_API', 'http'], ['VITE_CHAT_WS', 'ws']] as const) {
+        const bad = unusableEndpoints(env[name], kind)
+        if (bad.length) config.logger.warn(`${name}: not usable and left out: ${bad.join(', ')}`)
+      }
     },
     transformIndexHtml: {
       order: 'post',

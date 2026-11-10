@@ -75,7 +75,8 @@ type LockWhy = "expired" | "kicked" | "replaced";
 const s = {
   api: null as Api | null,
   ws: null as ChatSocket | null,
-  wsUrl: null as string | null,
+  /** The pool of addresses of the live channel, most preferred first; empty: the API address with `/ws` (the simulator). */
+  wsUrls: [] as string[],
   mk: null as Uint8Array | null,
   seed: null as Uint8Array | null,
   wrappedMK: "",
@@ -109,9 +110,9 @@ const s = {
   lockNotice: (_why: LockWhy) => "",
 };
 
-export function configure(api: Api | null, wsUrl: string | null, texts: { notifyTitle: (handle: string) => string; lockNotice: (why: LockWhy) => string }): void {
+export function configure(api: Api | null, wsUrls: string[] | null, texts: { notifyTitle: (handle: string) => string; lockNotice: (why: LockWhy) => string }): void {
   s.api = api;
-  s.wsUrl = wsUrl;
+  s.wsUrls = wsUrls ?? [];
   s.notifyTitle = texts.notifyTitle;
   s.lockNotice = texts.lockNotice;
   if (api) api.onUnauthorized = () => lock(s.lockNotice("expired"));
@@ -211,7 +212,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
     const mine = (): boolean => s.ws === sock;
     let firstOpen = true;
     const sock: ChatSocket = new ChatSocket({
-      url: s.wsUrl ?? a.base.replace(/^http/, "ws") + "/ws",
+      urls: s.wsUrls.length ? s.wsUrls : [a.base.replace(/^http/, "ws") + "/ws"],
       getTicket: async () => (await a.post<{ ticket: string }>("/auth/ws-ticket")).ticket,
       onFrame: (f) => mine() && void onFrame(f),
       onState: (socket) => {

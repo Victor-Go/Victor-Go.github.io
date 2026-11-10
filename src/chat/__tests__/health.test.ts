@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkHealth, parseHealth, PROTOCOL_VERSION, SLOW_RTT_MS } from "../net/health";
+import { checkHealth, parseHealth, probePool, PROTOCOL_VERSION, SLOW_RTT_MS } from "../net/health";
 
 const good = (minClient = PROTOCOL_VERSION) => ({
   server: { version: "0.1.0", commit: "abc1234", builtAt: 1, region: "ap-east-1" },
@@ -71,5 +71,62 @@ describe("checkHealth", () => {
         new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
     ) as unknown as typeof fetch;
     expect(await checkHealth("https://api.example.com", { fetchImpl: hang, timeoutMs: 20 })).toEqual({ kind: "down", reason: "timeout" });
+  });
+
+  it("asks a list of addresses as a pool, and an empty list is unconfigured", async () => {
+    expect(await checkHealth([])).toEqual({ kind: "unconfigured" });
+    const fetchImpl = reply(good());
+    expect((await checkHealth(["https://a.example.com"], { fetchImpl })).kind).toBe("ok");
+    expect((fetchImpl.mock.calls[0] as unknown as [string])[0]).toBe("https://a.example.com/health");
+  });
+});
+
+describe("probePool", () => {
+  const A = "https://a.example.com";
+  const B = "https://b.example.com";
+  const C = "https://c.example.com";
+  /** Each address answers as scripted: "ok", "fail" (refused at once) or "hang" (until the request is aborted). */
+  const script = (plan: Record<string, "ok" | "fail" | "hang">) => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn((url: string, init?: RequestInit) => {
+      const base = url.replace(/\/health$/, "");
+      calls.push(base);
+      if (plan[base] === "ok") return Promise.resolve({ ok: true, json: async () => good() } as Response);
+      if (plan[base] === "fail") return Promise.reject(new TypeError("Failed to fetch"));
+      return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  };
+
+  it("uses the first address when it answers, and asks no other", async () => {
+    const { fetchImpl, calls } = script({ [A]: "ok", [B]: "ok" });
+    const r = await probePool([A, B], { fetchImpl, staggerMs: 1000 });
+    expect(r.index).toBe(0);
+    expect(r.state.kind).toBe("ok");
+    expect(calls).toEqual([A]);
+  });
+
+  it("hands over at once from an address that fails, without waiting out the stagger", async () => {
+    const { fetchImpl, calls } = script({ [A]: "fail", [B]: "ok", [C]: "ok" });
+    const r = await probePool([A, B, C], { fetchImpl, staggerMs: 60_000 });
+    expect(r.index).toBe(1);
+    expect(calls).toEqual([A, B]);
+  });
+
+  it("asks the next address alongside one that stays silent, and the first answer wins", async () => {
+    const { fetchImpl } = script({ [A]: "hang", [B]: "ok" });
+    const r = await probePool([A, B], { fetchImpl, staggerMs: 20, timeoutMs: 5000 });
+    expect(r.index).toBe(1);
+  });
+
+  it("is the first address's failure when none answers", async () => {
+    const { fetchImpl } = script({ [A]: "fail", [B]: "fail" });
+    expect(await probePool([A, B], { fetchImpl })).toEqual({ index: 0, state: { kind: "down", reason: "network" } });
+  });
+
+  it("counts a server on a newer protocol as answering (it is our server), not as down", async () => {
+    const r = await probePool([A, B], { fetchImpl: reply(good(PROTOCOL_VERSION + 1)), staggerMs: 1000 });
+    expect(r.index).toBe(0);
+    expect(r.state.kind).toBe("incompatible");
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getConfig } from "./config";
 import { messages, type Lang, type Messages } from "./i18n";
 import { appMessages, type AppMessages } from "./i18nApp";
@@ -16,8 +16,9 @@ export function useLang(): { lang: Lang; m: Messages; a: AppMessages; toggle: ()
 
 /** Checks the server once on mount and again whenever `recheck` is called. */
 export function useHealth(): { state: HealthState; recheck: () => void } {
-  const { api } = getConfig();
-  const [state, setState] = useState<HealthState>(api ? { kind: "checking" } : { kind: "unconfigured" });
+  // The pool is a new array on every getConfig(): it must be taken once, or the effect below would run on every render.
+  const api = useMemo(() => getConfig().api, []);
+  const [state, setState] = useState<HealthState>(api.length ? { kind: "checking" } : { kind: "unconfigured" });
   const [round, setRound] = useState(0);
   useEffect(() => {
     let live = true;
@@ -29,7 +30,7 @@ export function useHealth(): { state: HealthState; recheck: () => void } {
     };
   }, [api, round]);
   const recheck = useCallback(() => {
-    if (api) setState({ kind: "checking" });
+    if (api.length) setState({ kind: "checking" });
     setRound((r) => r + 1);
   }, [api]);
   return { state, recheck };

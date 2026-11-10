@@ -25,8 +25,8 @@ export function App() {
   const phase = useChat((s) => s.phase);
   const role = useChat((s) => s.me?.role);
   const api = useMemo(() => {
-    const base = getConfig().api;
-    return base ? new Api(base) : null;
+    const bases = getConfig().api;
+    return bases.length ? new Api(bases) : null;
   }, []);
   const ready = phase === "ready";
 

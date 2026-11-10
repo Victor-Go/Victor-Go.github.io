@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
-import { connectSrc, parseEndpoint } from "../csp";
+import { connectSrc, parseEndpoint, parseEndpoints, unusableEndpoints } from "../csp";
 
 describe("parseEndpoint", () => {
   it("accepts https and wss without a trailing slash", () => {
@@ -30,7 +30,43 @@ describe("parseEndpoint", () => {
   });
 });
 
+describe("parseEndpoints (a pool: a, b, c)", () => {
+  it("keeps the order, which is the order of preference", () => {
+    expect(
+      parseEndpoints("https://b9t6xrjet5.execute-api.ap-east-1.amazonaws.com,https://api.cubicinnovative.com,https://api.waterwoodgames.com", "http"),
+    ).toEqual(["https://b9t6xrjet5.execute-api.ap-east-1.amazonaws.com", "https://api.cubicinnovative.com", "https://api.waterwoodgames.com"]);
+  });
+
+  it("accepts spaces and new lines around the commas, trailing slashes, and counts a repeat once", () => {
+    expect(parseEndpoints(" https://a.example.com/ ,\n https://b.example.com,https://a.example.com ", "http")).toEqual([
+      "https://a.example.com",
+      "https://b.example.com",
+    ]);
+  });
+
+  it("leaves out what is not usable, and one plain address is a pool of one", () => {
+    expect(parseEndpoints("https://a.example.com,http://evil.example,not a url,https://u:p@x.example", "http")).toEqual(["https://a.example.com"]);
+    expect(parseEndpoints("wss://ws.example.com", "ws")).toEqual(["wss://ws.example.com"]);
+    expect(parseEndpoints("https://a.example.com", "ws")).toEqual([]);
+    expect(parseEndpoints("", "http")).toEqual([]);
+    expect(parseEndpoints(undefined, "http")).toEqual([]);
+  });
+
+  it("names the entries it leaves out, so the build can warn", () => {
+    expect(unusableEndpoints("https://a.example.com, http://b.example.com,,typo", "http")).toEqual(["http://b.example.com", "typo"]);
+    expect(unusableEndpoints("https://a.example.com", "http")).toEqual([]);
+    expect(unusableEndpoints(undefined, "ws")).toEqual([]);
+  });
+});
+
 describe("connectSrc", () => {
+  it("lists every address of both pools", () => {
+    expect(connectSrc("https://a.example.com,https://b.example.com", "wss://x.example.com/prod,wss://y.example.com")).toBe(
+      "https://a.example.com https://b.example.com wss://x.example.com wss://y.example.com",
+    );
+    expect(connectSrc("https://a.example.com,http://evil.example", undefined)).toBe("https://a.example.com");
+  });
+
   it("is 'none' without a usable endpoint", () => {
     expect(connectSrc(undefined, undefined)).toBe("'none'");
     expect(connectSrc("http://evil.example", "ws://evil.example")).toBe("'none'");

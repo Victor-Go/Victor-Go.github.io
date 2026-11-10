@@ -24,16 +24,19 @@ export function Avatar({ userId, size = 40, admin = false }: { userId: string; s
 /** A dialog that closes on Escape and returns focus to where it came from. */
 export function Modal({ title, onClose, children, closeLabel }: { title: string; onClose: () => void; children: ReactNode; closeLabel: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  // The latest onClose, so a caller's new function on every render does not re-run the effect (which would steal the focus again and lose where it came from).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
       previous?.focus?.();
     };
-  }, [onClose]);
+  }, []);
   return (
     <div className="ch-modal-back" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ch-modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>

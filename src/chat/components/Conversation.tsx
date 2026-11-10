@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } f
 import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
 import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendImage, sendText } from "../client";
-import { ImageError } from "../image";
+import { ImageError, isPicture } from "../image";
 import { voiceSupported } from "../voice";
 import { errorOf } from "../i18nApp";
 import { deliveryOf } from "../delivery";
@@ -101,6 +101,22 @@ export function Conversation() {
   const [imageBusy, setImageBusy] = useState(false);
   const [viewer, setViewer] = useState<{ url: string; w: number; h: number } | null>(null);
   const closeViewer = useCallback(() => setViewer(null), []);
+  // A picture pasted or dropped waits here for the user's yes before it is sent.
+  const [pending, setPending] = useState<File | null>(null);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  useEffect(() => {
+    if (!pending) return setPendingUrl(null);
+    const url = URL.createObjectURL(pending);
+    setPendingUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pending]);
+  useEffect(() => {
+    setPending(null);
+    setDragging(false);
+    dragDepth.current = 0;
+  }, [activeConv]);
   // Too narrow for a text box of about 15 characters beside four buttons: keep only "+" and send.
   const [compact, setCompact] = useState(false);
   const filesOff = useChat((s) => s.filesOff);
@@ -461,6 +477,48 @@ export function Conversation() {
   };
   const mediaOn = !filesOff;
   const micOn = mediaOn && voiceSupported();
+  const canDrop = mediaOn && canSend && !selecting && !isOfficial && !imageBusy;
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  const firstImage = (files: ArrayLike<File> | undefined): File | undefined => Array.from(files ?? []).find(isPicture);
+  // While dragging only the kinds are known (not the names): a file with no kind at all may still be a picture, so it is let in and checked on drop.
+  const looksLikePicture = (e: React.DragEvent) => {
+    const items = Array.from(e.dataTransfer?.items ?? []).filter((i) => i.kind === "file");
+    return items.length === 0 || items.some((i) => i.type === "" || i.type.startsWith("image/"));
+  };
+  // Any file dragged over the chat is taken over by the page (never opened by the browser, which would leave the chat); whether it is accepted is decided here.
+  const dropHandlers = {
+    onDragEnter: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current++;
+      setDragging(canDrop && looksLikePicture(e));
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = canDrop && looksLikePicture(e) ? "copy" : "none";
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDragging(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      if (!canDrop) return;
+      const file = firstImage(e.dataTransfer.files);
+      if (file) setPending(file);
+      else setFavError(a.imageUnreadable); // not a picture: refused, and told so
+    },
+  };
+  const confirmImage = () => {
+    const file = pending;
+    setPending(null);
+    void onPickImage(file ?? undefined);
+  };
 
   const submit = () => {
     if (!draft.trim() || length > maxChars || !canSend) return;
@@ -471,7 +529,12 @@ export function Conversation() {
   const favId = (m: Msg) => `${activeConv}.${m.id}`.slice(0, 70);
 
   return (
-    <section className="ch-conv" aria-label={title}>
+    <section className="ch-conv" aria-label={title} {...dropHandlers}>
+      {dragging && (
+        <div className="ch-dropzone" aria-hidden="true">
+          {a.imageDropHere}
+        </div>
+      )}
       <header className="ch-conv-head">
         <button type="button" className="ch-icon ch-only-mobile" aria-label={a.back} onClick={() => go(PATH.home)}>
           <ArrowLeft size={22} />
@@ -673,7 +736,7 @@ export function Conversation() {
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif"
           hidden
           tabIndex={-1}
           aria-hidden="true"
@@ -722,6 +785,13 @@ export function Conversation() {
             setPick(0);
           }}
           onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onPaste={(e) => {
+            if (!canDrop) return;
+            const file = firstImage(e.clipboardData.files);
+            if (!file) return; // plain text pastes as usual
+            e.preventDefault();
+            setPending(file);
+          }}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing) return;
             if (open) {
@@ -840,6 +910,17 @@ export function Conversation() {
             {a.deleteConfirm}
           </button>
           <button type="button" className="ch-secondary" disabled={deleting} onClick={() => setConfirming(false)}>
+            {a.cancel}
+          </button>
+        </Modal>
+      )}
+      {pending && (
+        <Modal title={a.imageConfirmTitle} onClose={() => setPending(null)} closeLabel={a.close}>
+          {pendingUrl && <img className="ch-image-confirm" src={pendingUrl} alt="" />}
+          <button type="button" className="ch-primary" onClick={confirmImage}>
+            {a.imageConfirmSend}
+          </button>
+          <button type="button" className="ch-secondary" onClick={() => setPending(null)}>
             {a.cancel}
           </button>
         </Modal>

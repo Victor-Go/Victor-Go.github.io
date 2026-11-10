@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { toEpochs } from "../crypto/keys";
 import { IMAGE_SIDE_MAX, decryptMessage, encryptMessage, type Binding, type Payload } from "../crypto/message";
-import { IMAGE_MAX_BYTES, IMAGE_MAX_SIDE, ImageError, compressImage, drawSize, fitSize, fitToBudget } from "../image";
+import { IMAGE_MAX_BYTES, IMAGE_MAX_SIDE, ImageError, compressImage, drawSize, fitSize, fitToBudget, isPicture, outputFormat, sniffFormat } from "../image";
 import { planDeleteBatches } from "../selection";
 import type { Msg } from "../store";
 import { VOICE_MAX_BYTES } from "../voice";
@@ -34,6 +34,37 @@ describe("compressing", () => {
   it("refuses a file the browser cannot read as a picture", async () => {
     await expect(compressImage(new Blob(["not a picture"], { type: "image/png" }))).rejects.toMatchObject({ name: "Error", message: "unreadable" });
     await expect(compressImage(new Blob(["x"]))).rejects.toBeInstanceOf(ImageError);
+  });
+});
+
+describe("formats", () => {
+  it("sends PNG and HEIC/HEIF as PNG, everything else as JPEG", () => {
+    expect(outputFormat({ type: "image/png" })).toBe("image/png");
+    expect(outputFormat({ type: "image/heic" })).toBe("image/png");
+    expect(outputFormat({ type: "image/heif" })).toBe("image/png");
+    expect(outputFormat({ type: "", name: "IMG_0001.HEIC" })).toBe("image/png");
+    for (const type of ["image/jpeg", "image/bmp", "image/webp", "image/gif", ""]) expect(outputFormat({ type })).toBe("image/jpeg");
+  });
+
+  it("knows a picture by its type, or by its name when the system gave no type", () => {
+    expect(isPicture({ type: "image/webp" })).toBe(true);
+    expect(isPicture({ type: "", name: "photo.heic" })).toBe(true);
+    expect(isPicture({ type: "application/pdf", name: "a.pdf" })).toBe(false);
+    expect(isPicture({ type: "", name: "notes.txt" })).toBe(false);
+    expect(isPicture({ type: "" })).toBe(false);
+  });
+
+  it("tells a PNG from a JPEG by the first bytes", () => {
+    expect(sniffFormat(Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a))).toBe("image/png");
+    expect(sniffFormat(Uint8Array.of(0xff, 0xd8, 0xff, 0xe0, 0x00))).toBe("image/jpeg");
+    expect(sniffFormat(new Uint8Array(0))).toBe("image/jpeg");
+  });
+
+  it("a PNG has one quality to try, so only its size gives way", async () => {
+    const tried: number[] = [];
+    const r = await fitToBudget(4000, 3000, 1000, async (w, h, q) => (tried.push(q), { size: w * h }), [1]);
+    expect(new Set(tried)).toEqual(new Set([1]));
+    expect(r.out.size).toBeLessThanOrEqual(1000);
   });
 });
 

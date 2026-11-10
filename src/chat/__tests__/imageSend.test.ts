@@ -7,7 +7,7 @@ import { initialState, useChat } from "../store";
 // No master key in this test (no sign-in): the vault records the client writes are not sealed, the server mock just takes them.
 vi.mock("../crypto/vault", async (orig) => ({ ...(await orig<typeof import("../crypto/vault")>()), sealRecord: vi.fn(async () => "sealed") }));
 // The browser's canvas is not here: the compressed picture is a fixed set of bytes.
-const compressed = vi.hoisted(() => ({ bytes: new Uint8Array(0), w: 800, h: 600 }));
+const compressed = vi.hoisted(() => ({ bytes: new Uint8Array(0), w: 800, h: 600, type: "image/jpeg" }));
 vi.mock("../image", async (orig) => ({ ...(await orig<typeof import("../image")>()), compressImage: vi.fn(async () => compressed) }));
 
 const ME = "me";
@@ -88,6 +88,15 @@ describe("sending a picture", () => {
     const m = useChat.getState().messages[CONV].at(-1)!;
     expect(await imageUrl(CONV, m)).toBe("blob:local/1");
     expect(fetchMock).toHaveBeenCalledTimes(1); // the upload only
+  });
+
+  it("shows a PNG as image/png, and a downloaded one is told from its first bytes", async () => {
+    compressed.type = "image/png";
+    compressed.bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, ...compressed.bytes]);
+    await signedIn(grant);
+    await sendImage(CONV, new Blob(["picked"], { type: "image/png" }));
+    expect(created[0].type).toBe("image/png");
+    compressed.type = "image/jpeg";
   });
 
   it("keeps the picture under the key of the message, so the unsent and the sent message share it", async () => {

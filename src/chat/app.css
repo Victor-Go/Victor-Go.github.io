@@ -161,6 +161,12 @@ textarea:disabled {
   vertical-align: middle;
 }
 
+/* The owner's (负责人) badge is gold; the plain administrator badge keeps the theme colour. */
+.ch-admin.ch-owner {
+  background: var(--ch-gold);
+  color: #1c1400;
+}
+
 .ch-muted {
   color: var(--ch-muted);
 }

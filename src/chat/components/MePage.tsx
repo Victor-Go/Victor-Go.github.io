@@ -7,7 +7,7 @@ import { useChat } from "../store";
 import { useLang } from "../useChat";
 import { Empty, Group, Icon, Page, Row } from "./ios";
 import { SettingsFlow } from "./SettingsPage";
-import { Avatar } from "./ui";
+import { Avatar, TitleBadge } from "./ui";
 
 function FavoritesPage() {
   const { lang, a } = useLang();
@@ -77,7 +77,7 @@ export function MePage() {
           <Avatar userId={me.userId} size={64} admin={me.role === "admin"} />
           <div>
             <h2>@{me.handle}</h2>
-            {me.role === "admin" && <span className="ch-admin ios-badge">{a.adminBadge}</span>}
+            <TitleBadge userId={me.userId} role={me.role} className="ios-badge" />
           </div>
         </div>
       </Group>

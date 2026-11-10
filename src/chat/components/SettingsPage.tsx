@@ -198,6 +198,8 @@ function DeletePage() {
   const [password, setPassword] = useState("");
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The groups this person owns go with the account, for everybody in them: said before the person confirms.
+  const owned = useChat((s) => s.groups.filter((g) => g.ownerId === me.userId).length);
   const ready = confirm === me.handle && !!password && !progress;
   const remove = () => {
     if (!ready) return;
@@ -210,7 +212,7 @@ function DeletePage() {
   };
   return (
     <>
-      <Group header={a.typeToConfirm(me.handle)} footer={a.deleteAccountHint}>
+      <Group header={a.typeToConfirm(me.handle)} footer={owned > 0 ? <>{a.deleteAccountHint}<br />{a.deleteOwnedGroups(owned)}</> : a.deleteAccountHint}>
         <FormRow>
           <input
             className="ch-input"
@@ -288,11 +290,9 @@ export function SettingsFlow() {
       <Group>
         <Row icon={<Icon color="#34c759"><Wifi size={18} /></Icon>} title={a.connection} chevron onClick={() => setDetail("connection")} />
       </Group>
-      {!isAdmin && (
-        <Group>
-          <Row icon={<Icon color="#ff3b30"><Trash2 size={18} /></Icon>} title={a.deleteAccount} destructive chevron onClick={() => setDetail("delete")} />
-        </Group>
-      )}
+      <Group>
+        <Row icon={<Icon color="#ff3b30"><Trash2 size={18} /></Icon>} title={a.deleteAccount} destructive chevron onClick={() => setDetail("delete")} />
+      </Group>
     </Page>
   );
 }

@@ -14,7 +14,7 @@ export type Section = "contacts" | "me" | "manage";
 /** Telegram-like layout: a rail on wide screens, a bottom tab bar on phones. Settings live inside "Me", as in iOS. */
 export function Shell() {
   const { a } = useLang();
-  const me = useChat((s) => s.me)!;
+  const canManage = useChat((s) => s.permissions.length > 0);
   // A chat counts as open only while it still exists; otherwise the phone layout would sit on an empty pane with no way back.
   const loc = useLocation();
   const section: Section = sectionOf(loc.path);
@@ -47,7 +47,7 @@ export function Shell() {
     <>
       {nav("contacts", a.tabContacts, <MessageCircle size={22} />, unread, anyMention)}
       {nav("me", a.tabMe, <User size={22} />)}
-      {me.role === "admin" && nav("manage", a.tabManagement, <Shield size={22} />)}
+      {canManage && nav("manage", a.tabManagement, <Shield size={22} />)}
     </>
   );
   return (

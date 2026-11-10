@@ -2,11 +2,11 @@ import { useState } from "react";
 import { acceptOwnership, deleteGroup, inviteToGroup, kickMember, leaveGroup, rekeyGroup, transferGroup } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { GROUP_MAX, useChat, type Group } from "../store";
+import { GROUP_MAX, useCan, useChat, type Group } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
 import { HandleField } from "./HandleField";
-import { Avatar, Modal } from "./ui";
+import { Avatar, Modal, TitleBadge } from "./ui";
 
 export function GroupInfo({ group, onClose }: { group: Group; onClose: () => void }) {
   const { m, a } = useLang();
@@ -16,6 +16,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [transferTo, setTransferTo] = useState("");
+  const canDeleteAny = useCan("groups.delete_any");
   const isOwner = group.ownerId === me.userId;
   const offered = group.pendingOwner?.userId === me.userId;
 
@@ -97,7 +98,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
               <Avatar userId={mem.userId} size={32} admin={mem.role === "admin"} />
               <div className="ch-row-text ch-row-title">
                 @{mem.handle} {mem.userId === group.ownerId && <span className="ch-admin">{a.owner}</span>}
-                {mem.role === "admin" && mem.userId !== group.ownerId && <span className="ch-admin">{a.adminBadge}</span>}
+                {mem.userId !== group.ownerId && <TitleBadge userId={mem.userId} role={mem.role} />}
               </div>
               {isOwner && mem.userId !== me.userId && (
                 <button type="button" className="ch-secondary ch-small" disabled={busy} onClick={() => void run(() => kickMember(group.id, mem.userId))}>
@@ -129,7 +130,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
             {a.leave}
           </button>
         )}
-        {(isOwner || me.role === "admin") && (
+        {(isOwner || canDeleteAny) && (
           <button
             type="button"
             className="ch-danger"

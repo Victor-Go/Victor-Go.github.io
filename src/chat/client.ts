@@ -18,7 +18,7 @@ import { parseCard, parseRemoved } from "./official";
 import { playChime } from "./sound";
 import { stripControls } from "./text";
 import { canonicalHandle } from "./validation";
-import { compressImage } from "./image";
+import { compressImage, sniffFormat } from "./image";
 import { fitsServer } from "./voice";
 import { canDelete, planDeleteBatches } from "./selection";
 import { playVoice, stopVoice, stopVoiceIf } from "./voicePlayer";
@@ -1026,7 +1026,7 @@ export const sendVoice = (conv: string, mp3: Uint8Array, ms: number): Promise<vo
   sendStored(conv, mp3, (storedId, sentAt) => ({ k: "voice", voice: { id: storedId, ms }, sentAt }));
 
 /**
- * Sends a picture: it is shrunk to a JPEG that fits (image.ts), shown in the chat at once from the local copy, and then goes the way a recording
+ * Sends a picture: it is shrunk to a PNG or JPEG that fits (image.ts), shown in the chat at once from the local copy, and then goes the way a recording
  * does (the server's voice storage holds any sealed bytes). Throws ImageError when the file cannot be used as a picture; resolves when the upload and
  * the send are over, whether or not they worked (a failure shows on the bubble).
  */
@@ -1037,7 +1037,7 @@ export async function sendImage(conv: string, file: Blob): Promise<void> {
     conv,
     img.bytes,
     (storedId, sentAt) => ({ k: "image", image: { id: storedId, w: img.w, h: img.h }, sentAt }),
-    (msgId) => s.images.set(imageKey({ senderId: me().userId, id: msgId }), URL.createObjectURL(new Blob([img.bytes as BlobPart], { type: "image/jpeg" }))),
+    (msgId) => s.images.set(imageKey({ senderId: me().userId, id: msgId }), URL.createObjectURL(new Blob([img.bytes as BlobPart], { type: img.type }))),
   );
 }
 
@@ -1153,7 +1153,7 @@ export function imageUrl(conv: string, m: Msg): Promise<string | null> {
   const load = (async () => {
     const bytes = await openStored(conv, m, p.image.id);
     if (!bytes) return null;
-    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "image/jpeg" }));
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: sniffFormat(bytes) }));
     s.images.set(key, url);
     return url;
   })().finally(() => s.imageLoads.delete(key));

@@ -981,6 +981,30 @@ section > .ch-primary {
   color: inherit;
 }
 
+.ch-conv {
+  position: relative;
+}
+.ch-dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed currentColor;
+  border-radius: 12px;
+  background: rgba(127, 127, 127, 0.25);
+  font-weight: 600;
+  pointer-events: none;
+}
+.ch-image-confirm {
+  display: block;
+  max-width: 100%;
+  max-height: 50vh;
+  margin: 0 auto;
+  border-radius: 10px;
+  object-fit: contain;
+}
 .ch-link-target {
   margin: 0;
   padding: 10px 12px;

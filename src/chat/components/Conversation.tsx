@@ -14,7 +14,7 @@ import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
 import { DELETE_MAX, canDelete } from "../selection";
-import { Avatar, Modal } from "./ui";
+import { Avatar, Modal, TitleBadge } from "./ui";
 import { OfficialMessage } from "./OfficialMessage";
 import { ImageBubble } from "./ImageBubble";
 import { ImageViewer } from "./ImageViewer";
@@ -542,7 +542,7 @@ export function Conversation() {
         <Avatar userId={isOfficial ? "official" : (contact?.userId ?? group!.id)} size={36} admin={contact?.role === "admin"} />
         <div className="ch-row-text">
           <div className="ch-row-title">
-            {title} {contact?.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>}
+            {title} {contact && <TitleBadge userId={contact.userId} role={contact.role} />}
           </div>
           <div className="ch-hint">{isOfficial ? a.officialNote : group ? a.memberCount(group.members.length) : a.encryptedNote}</div>
         </div>
@@ -658,7 +658,7 @@ export function Conversation() {
                 <div className={"ch-msg" + (m.mine ? " ch-mine" : "") + (m.payload ? "" : " ch-gone") + (m.payload?.k === "image" ? " ch-has-image" : "")}>
                   {!m.mine && group && (
                     <div className="ch-sender">
-                      @{nameOf(m)} {m.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>}
+                      @{nameOf(m)} <TitleBadge userId={m.senderId} role={m.role} />
                     </div>
                   )}
                   {m.payload?.k === "text" ? (

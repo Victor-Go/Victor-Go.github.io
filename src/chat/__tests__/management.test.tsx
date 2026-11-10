@@ -27,7 +27,10 @@ const fake = {
 const lookupUser = vi.hoisted(() => vi.fn());
 vi.mock("../client", async (orig) => ({ ...(await orig<typeof import("../client")>()), rawApi: () => fake, lookupUser }));
 
-const user = { userId: "u2", handle: "bob", role: "user", createdAt: 1, lastLoginAt: 1, lastActiveAt: 1, ips: [], loginCount: 1, failedCount: 0, suspended: false, contactsBlocked: false };
+/** Test fixture only: what a server might list. The client keeps no such list. */
+const PERMISSIONS = ["audit", "cards", "config", "epochs", "groups.create", "groups.delete_any", "invites", "jobs", "starter", "status", "users.manage", "users.read", "wipe", "wipe_all"];
+const ALL_ACTIONS = { resetFailures: true, logout: true, suspend: true, contactsBlocked: true, delete: true };
+const user = { userId: "u2", handle: "bob", role: "user", title: "", actions: ALL_ACTIONS, createdAt: 1, lastLoginAt: 1, lastActiveAt: 1, ips: [], loginCount: 1, failedCount: 0, suspended: false, contactsBlocked: false };
 const post = (path: string) => calls.filter(([m, p]) => m === "POST" && p === path).map((c) => c[2]);
 
 beforeEach(() => {
@@ -36,7 +39,7 @@ beforeEach(() => {
   answers = {};
   failures = {};
   unlockedNow();
-  useChat.setState({ ...initialState, phase: "ready", me: { userId: "a", handle: "victor", role: "admin", publicKey: "" } });
+  useChat.setState({ ...initialState, phase: "ready", me: { userId: "a", handle: "victor", role: "admin", publicKey: "" }, title: "admin", permissions: PERMISSIONS });
 });
 
 describe("creating an invite", () => {
@@ -93,7 +96,7 @@ describe("the contact switches", () => {
   });
 
   it("an administrator row has no such switch", async () => {
-    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin" });
+    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, delete: false } });
     render(<ManagementPage />);
     await screen.findByText("@bob");
     expect(screen.queryByRole("switch", { name: "Block adding contacts" })).toBeNull();
@@ -284,7 +287,7 @@ describe("sending a contact card from a user page", () => {
   });
 
   it("an administrator page has no such button", async () => {
-    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin" });
+    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, delete: false } });
     render(<ManagementPage />);
     await screen.findByText("@bob");
     expect(screen.queryByText("Send contact card")).toBeNull();

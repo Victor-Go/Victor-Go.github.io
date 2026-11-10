@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Contact, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, Users } from "lucide-react";
+import { Activity, Contact, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, UserCheck, Users } from "lucide-react";
 import { ADMIN_LOCK_MS, lockAdmin, markAdminAction, unlockedNow, useAdminLock } from "../adminLock";
 import { ApiError, adminDeleteUser, rawApi, unlockAdmin, wipeEverything, type Progress } from "../client";
 import { formatBytes, formatClock, formatDay } from "../format";
 import { errorOf } from "../i18nApp";
 import { onEnter } from "../keys";
 import { PATH, go as navigate, useLocation } from "../route";
-import { GROUP_MAX, useChat } from "../store";
+import { GROUP_MAX, useCan, useChat } from "../store";
 import { useLang } from "../useChat";
 import { Alert, ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
 import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
 import { SendCardModal } from "./SendCardModal";
-import { Avatar, Loading, Steps } from "./ui";
+import { Avatar, Loading, Modal, Steps, TitleBadge } from "./ui";
 
 const PAGE_SIZE = 20;
 
@@ -20,6 +20,10 @@ interface AdminUser {
   userId: string;
   handle: string;
   role: string;
+  /** The administrator's title ("" for everybody else); only the badge reads it. */
+  title?: string;
+  /** What this person may be done to, as the server decides it (false for another administrator, and for all without `users.manage`). */
+  actions?: UserActions;
   createdAt: number;
   lastLoginAt: number;
   lastActiveAt: number;
@@ -35,6 +39,13 @@ interface AdminUser {
   /** This account may not add or be added as a contact (the administrator is exempt). */
   contactsBlocked?: boolean;
 }
+export interface UserActions {
+  resetFailures?: boolean;
+  logout?: boolean;
+  suspend?: boolean;
+  contactsBlocked?: boolean;
+  delete?: boolean;
+}
 interface Invite {
   id: string;
   note: string;
@@ -43,8 +54,13 @@ interface Invite {
   expiresAt: number;
   /** The account that registers with it starts with contacts blocked. */
   contactsBlocked?: boolean;
-  /** Present until the invite is used. */
+  /** Present until the invite is used; "********" for an unused administrator invite. */
   code?: string;
+  /** Makes an administrator (made and revoked by the AWS operator task only), with this title. */
+  adminInvite?: boolean;
+  title?: string;
+  /** False for an administrator invite: no revoke button. */
+  revocable?: boolean;
   uses: { userId: string; handle: string; at: number }[];
 }
 interface Config {
@@ -87,7 +103,7 @@ interface Job {
   error: string;
 }
 
-type View = { k: "root" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "audit" };
+type View = { k: "root" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "audit" } | { k: "starter" };
 
 /** Each screen has its own address (so the back gesture works); the selected user rides along in memory, never in the address. */
 function addressOf(v: View): { path: string; payload?: unknown } {
@@ -100,6 +116,7 @@ function addressOf(v: View): { path: string; payload?: unknown } {
     case "jobs":
     case "status":
     case "audit":
+    case "starter":
       return { path: PATH.managementPage(v.k) };
     case "user":
       return { path: PATH.managementPage("users/user"), payload: v.user };
@@ -123,6 +140,7 @@ function viewAt(path: string, payload: unknown): View {
     case "jobs":
     case "status":
     case "audit":
+    case "starter":
       return { k: name };
     case "users/user":
       return payload ? { k: "user", user: payload as AdminUser } : { k: "users" };
@@ -278,7 +296,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
             icon={<Avatar userId={u.userId} size={30} admin={u.role === "admin"} />}
             title={
               <>
-                @{u.handle} {u.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>}
+                @{u.handle} {u.role === "admin" && <TitleBadge userId={u.userId} role="admin" />} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>}
               </>
             }
             subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.fileBytes ? ` · ${a.manage.fileSummary(formatBytes(u.fileBytes))}` : ""}`}
@@ -299,6 +317,8 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
   const done = (fn: () => Promise<unknown>) => void run(fn).then((r) => r !== null && go({ k: "users" }));
   const [blocked, setBlocked] = useState(user.contactsBlocked === true);
   const [cardOpen, setCardOpen] = useState(false);
+  const canCard = useCan("cards");
+  const act = user.actions ?? {};
   const setContactsBlocked = (next: boolean) => {
     void run(() => rawApi().post(`/admin/users/${user.userId}/contacts-blocked`, { blocked: next })).then((r) => r !== null && setBlocked(next));
   };
@@ -306,6 +326,11 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
     <Page title={`@${user.handle}`} onBack={() => go({ k: "users" })} backLabel={a.manage.users}>
       <Loading busy={busy} first={false} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
+      {user.role === "admin" && (
+        <Group>
+          <Row title={a.manage.titleLabel} value={<TitleBadge userId={user.userId} role="admin" />} />
+        </Group>
+      )}
       <Group>
         <Row title={a.manage.registeredAt} value={when(user.createdAt)} />
         <Row title={a.manage.lastLogin} value={when(user.lastLoginAt)} />
@@ -321,31 +346,35 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
           <Row key={x.ip} title={<span className="ios-mono">{x.ip}</span>} value={when(x.at)} />
         ))}
       </Group>
-      {user.role !== "admin" && (
-        <>
-          <Group>
-            <Row disabled={busy} title={a.manage.sendCard} chevron onClick={() => setCardOpen(true)} />
-          </Group>
-          <Group footer={a.manage.contactsBlockedHint}>
-            <SwitchRow title={a.manage.contactsBlocked} checked={blocked} onChange={setContactsBlocked} />
-          </Group>
-          <Group>
-            <Row disabled={busy} title={a.manage.resetFailures} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/reset-failures`))} />
-            <Row disabled={busy} title={a.manage.forceLogout} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/logout`))} />
-            <Row disabled={busy} title={user.suspended ? a.manage.unsuspend : a.manage.suspend} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/suspend`, { suspended: !user.suspended }))} />
-          </Group>
-          <Group>
-            <Row
-              title={a.manage.delete}
-              center
-              destructive
-              disabled={busy}
-              onClick={() => {
-                if (window.prompt(a.manage.confirmDelete(user.handle)) === user.handle) done(() => adminDeleteUser(user.userId, user.handle));
-              }}
-            />
-          </Group>
-        </>
+      {canCard && user.role !== "admin" && (
+        <Group>
+          <Row disabled={busy} title={a.manage.sendCard} chevron onClick={() => setCardOpen(true)} />
+        </Group>
+      )}
+      {act.contactsBlocked === true && (
+        <Group footer={a.manage.contactsBlockedHint}>
+          <SwitchRow title={a.manage.contactsBlocked} checked={blocked} onChange={setContactsBlocked} />
+        </Group>
+      )}
+      {(act.resetFailures === true || act.logout === true || act.suspend === true) && (
+        <Group>
+          {act.resetFailures === true && <Row disabled={busy} title={a.manage.resetFailures} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/reset-failures`))} />}
+          {act.logout === true && <Row disabled={busy} title={a.manage.forceLogout} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/logout`))} />}
+          {act.suspend === true && <Row disabled={busy} title={user.suspended ? a.manage.unsuspend : a.manage.suspend} onClick={() => done(() => rawApi().post(`/admin/users/${user.userId}/suspend`, { suspended: !user.suspended }))} />}
+        </Group>
+      )}
+      {act.delete === true && (
+        <Group>
+          <Row
+            title={a.manage.delete}
+            center
+            destructive
+            disabled={busy}
+            onClick={() => {
+              if (window.prompt(a.manage.confirmDelete(user.handle)) === user.handle) done(() => adminDeleteUser(user.userId, user.handle));
+            }}
+          />
+        </Group>
       )}
       {cardOpen && <SendCardModal recipient={user} onClose={() => setCardOpen(false)} onLocked={lockAdmin} />}
     </Page>
@@ -411,7 +440,10 @@ function InvitesView({ go }: { go: (v: View) => void }) {
             <div key={i.id} className="ios-form ios-invite">
               <div className="ios-invite-note">{i.note || "–"}</div>
               {i.code ? (
-                <div className="ios-mono">{i.code}</div>
+                <div className="ios-mono">
+                  {i.code}
+                  {i.adminInvite && <TitleBadge title={i.title ?? "admin"} className="ios-badge" />}
+                </div>
               ) : (
                 <div className="ios-sub">
                   {a.manage.uses}: {i.uses.map((u) => `@${u.handle} (${a.manage.registeredAt} ${when(u.at)})`).join(", ")}
@@ -421,7 +453,8 @@ function InvitesView({ go }: { go: (v: View) => void }) {
                 {a.manage.created}: {when(i.createdAt)} · {a.manage.expires}: {when(i.expiresAt)}
               </div>
               {i.contactsBlocked && <div className="ios-sub">{a.manage.inviteContactsBlockedTag}</div>}
-              {i.code && (
+              {i.adminInvite && <div className="ios-sub">{a.manage.adminInviteHint}</div>}
+              {i.code && i.revocable !== false && !i.adminInvite && (
                 <div className="ios-actions">
                   <button type="button" className="ios-link" onClick={() => copy(i.code!)}>
                     {copied === i.code ? a.manage.copied : a.manage.copy}
@@ -581,6 +614,7 @@ function ConfigSavedDialog({ changes, onClose }: { changes: [string, string][]; 
 
 function ConfigView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
+  const canWipeAll = useCan("wipe_all");
   const { error, run, busy, loaded } = useAdmin();
   const [cfg, setCfg] = useState<Config | null>(null);
   // the settings a save changed, as the server answered: shown in a dialog until it is closed
@@ -631,9 +665,11 @@ function ConfigView({ go }: { go: (v: View) => void }) {
               <NumberField value={cfg.fileMonthlyMB >= 1 ? cfg.fileMonthlyMB : 100} min={1} max={256} label={a.manage.fileMonthlyMB} onCommit={(n) => void save({ ...cfg, fileMonthlyMB: n })} />
             </Row>
           </Group>
-          <Group>
-            <Row title={a.manage.wipeAll} destructive chevron onClick={() => go({ k: "wipeAll" })} />
-          </Group>
+          {canWipeAll && (
+            <Group>
+              <Row title={a.manage.wipeAll} destructive chevron onClick={() => go({ k: "wipeAll" })} />
+            </Group>
+          )}
         </>
       )}
     </Page>
@@ -673,6 +709,7 @@ interface EpochRows {
 /** The keys that make messages and favourites readable. Destroying one is how things are erased for good. */
 function EpochsView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
+  const canWipe = useCan("wipe");
   const when = useWhen();
   const { error, run, busy, loaded } = useAdmin();
   const [rows, setRows] = useState<EpochRows | null>(null);
@@ -731,10 +768,12 @@ function EpochsView({ go }: { go: (v: View) => void }) {
             ))}
             <Row disabled={busy} title={a.manage.newFavEpoch} center onClick={() => act(() => rawApi().post("/admin/fav-epochs/new"))} />
           </Group>
-          <Group>
-            <Row title={a.manage.wipeMessages} destructive chevron onClick={() => go({ k: "wipe", scope: "messages" })} />
-            <Row title={a.manage.wipeFavorites} destructive chevron onClick={() => go({ k: "wipe", scope: "favorites" })} />
-          </Group>
+          {canWipe && (
+            <Group>
+              <Row title={a.manage.wipeMessages} destructive chevron onClick={() => go({ k: "wipe", scope: "messages" })} />
+              <Row title={a.manage.wipeFavorites} destructive chevron onClick={() => go({ k: "wipe", scope: "favorites" })} />
+            </Group>
+          )}
         </>
       )}
     </Page>
@@ -882,13 +921,126 @@ function AuditView({ go }: { go: (v: View) => void }) {
   );
 }
 
+type Starter = { explicit: boolean; handle: string };
+const readStarter = (r: { explicit?: unknown; handle?: unknown }, fallback: string): Starter => ({ explicit: r.explicit === true, handle: typeof r.handle === "string" ? r.handle : fallback });
+
+/** Asks for the starter administrator's handle (an empty one goes back to the default). A failure stays inside the dialog. */
+function StarterDialog({ current, onSaved, onClose }: { current: Starter | null; onSaved: (s: Starter) => void; onClose: () => void }) {
+  const { a } = useLang();
+  const [handle, setHandle] = useState(current?.explicit ? current.handle : "");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const wanted = handle.trim().replace(/^@/, "");
+    try {
+      markAdminAction();
+      await rawApi().put("/admin/starter", { handle: wanted });
+      // The answer is not relied on: ask again for what is in force now (an empty name is the default, which has its own handle).
+      onSaved(readStarter(await rawApi().get<{ explicit: boolean; handle: string }>("/admin/starter"), wanted));
+    } catch (e) {
+      setBusy(false);
+      if (e instanceof ApiError && e.code === "stepup_required") {
+        lockAdmin();
+        onClose();
+      } else if (e instanceof ApiError && e.code === "not_found") setError(a.manage.starterNotFound);
+      else if (e instanceof ApiError && e.code === "conflict" && e.extra.reason === "not_admin") setError(a.manage.starterNotAdmin);
+      else setError(a.errors.internal);
+    }
+  };
+  return (
+    <Modal title={a.manage.starter} onClose={onClose} closeLabel={a.close}>
+      <label className="ch-field">
+        <span className="ch-label">{a.manage.starterHandle}</span>
+        <input
+          className="ch-input"
+          {...NO_AUTOFILL}
+          value={handle}
+          maxLength={40}
+          autoFocus
+          placeholder={a.manage.starterDefault}
+          onChange={(e) => {
+            setError(null);
+            setHandle(e.target.value.replace(/[^A-Za-z0-9_@-]/g, ""));
+          }}
+          onKeyDown={onEnter(() => void save())}
+        />
+      </label>
+      <p className="ch-hint">{a.manage.starterHint}</p>
+      {error && <div className="ch-notice" role="alert">{error}</div>}
+      <div className="ch-actions-col">
+        <button type="button" className="ch-primary" disabled={busy} onClick={() => void save()}>
+          {busy ? a.working : a.manage.starterSave}
+        </button>
+        <button type="button" className="ch-secondary" onClick={onClose}>
+          {a.cancel}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** The administrator new accounts start with as a contact (`GET /admin/starter`), read-only; "Edit" opens a dialog (`PUT /admin/starter`). */
+function StarterView({ go }: { go: (v: View) => void }) {
+  const { a } = useLang();
+  const { error, run, busy, loaded } = useAdmin();
+  const [current, setCurrent] = useState<Starter | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    void run(() => rawApi().get<{ explicit: boolean; userId: string; handle: string }>("/admin/starter")).then((r) => r && setCurrent(readStarter(r, "")));
+  }, [run]);
+  return (
+    <Page title={a.manage.starter} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      <Group>
+        <Row title={a.manage.starterCurrent} value={current ? `@${current.handle}${current.explicit ? "" : ` (${a.manage.starterDefault})`}` : "–"} />
+        <Row title={a.manage.starterEdit} center onClick={() => setOpen(true)} />
+      </Group>
+      {open && (
+        <StarterDialog
+          current={current}
+          onClose={() => setOpen(false)}
+          onSaved={(s) => {
+            setCurrent(s);
+            setOpen(false);
+          }}
+        />
+      )}
+    </Page>
+  );
+}
+
+/** The permission each management screen needs (the server checks every call anyway; this only keeps the page from showing what would be refused). */
+export const VIEW_PERMISSION: Record<string, string | null> = {
+  root: null,
+  users: "users.read",
+  user: "users.read",
+  invites: "invites",
+  cards: "cards",
+  config: "config",
+  epochs: "epochs",
+  wipe: "wipe",
+  wipeAll: "wipe_all",
+  jobs: "jobs",
+  status: "status",
+  audit: "audit",
+  starter: "starter",
+};
+
 /** Management as an iOS-style stack: a list of sections, each a page, behind a password lock that closes after five idle minutes. */
 export function ManagementPage() {
   const { a } = useLang();
-  const me = useChat((s) => s.me);
+  const permissions = useChat((s) => s.permissions);
   const locked = useAdminLock((s) => s.locked);
   const loc = useLocation();
-  const view = viewAt(loc.path, loc.payload);
+  const asked = viewAt(loc.path, loc.payload);
+  const need = VIEW_PERMISSION[asked.k] ?? null;
+  // A screen the account has no permission for shows the menu instead.
+  const view: View = need === null || permissions.includes(need) ? asked : { k: "root" };
+  const can = (p: string): boolean => permissions.includes(p);
   const setView = (v: View) => {
     const { path, payload } = addressOf(v);
     navigate(path, payload);
@@ -900,7 +1052,7 @@ export function ManagementPage() {
     }, 5000);
     return () => clearInterval(timer);
   }, []);
-  if (me?.role !== "admin") {
+  if (permissions.length === 0) {
     return (
       <Page title={a.manage.title}>
         <Group>
@@ -939,21 +1091,28 @@ export function ManagementPage() {
       return <StatusView go={setView} />;
     case "audit":
       return <AuditView go={setView} />;
+    case "starter":
+      return <StarterView go={setView} />;
     default:
       return (
         <Page title={a.manage.title}>
-          <Group>
-            <Row icon={<Icon color="#007aff"><Users size={18} /></Icon>} title={a.manage.users} chevron onClick={() => setView({ k: "users" })} />
-            <Row icon={<Icon color="#ff9500"><Ticket size={18} /></Icon>} title={a.manage.invites} chevron onClick={() => setView({ k: "invites" })} />
-            <Row icon={<Icon color="#30b0c7"><Contact size={18} /></Icon>} title={a.manage.cards} chevron onClick={() => setView({ k: "cards" })} />
-            <Row icon={<Icon color="#8e8e93"><SlidersHorizontal size={18} /></Icon>} title={a.manage.config} chevron onClick={() => setView({ k: "config" })} />
-          </Group>
-          <Group>
-            <Row icon={<Icon color="#34c759"><Activity size={18} /></Icon>} title={a.manage.status} chevron onClick={() => setView({ k: "status" })} />
-            <Row icon={<Icon color="#af52de"><KeyRound size={18} /></Icon>} title={a.manage.epochs} chevron onClick={() => setView({ k: "epochs" })} />
-            <Row icon={<Icon color="#ff9500"><Timer size={18} /></Icon>} title={a.manage.jobs} chevron onClick={() => setView({ k: "jobs" })} />
-            <Row icon={<Icon color="#5856d6"><ScrollText size={18} /></Icon>} title={a.manage.audit} chevron onClick={() => setView({ k: "audit" })} />
-          </Group>
+          {(can("users.read") || can("invites") || can("cards") || can("config") || can("starter")) && (
+            <Group>
+              {can("users.read") && <Row icon={<Icon color="#007aff"><Users size={18} /></Icon>} title={a.manage.users} chevron onClick={() => setView({ k: "users" })} />}
+              {can("invites") && <Row icon={<Icon color="#ff9500"><Ticket size={18} /></Icon>} title={a.manage.invites} chevron onClick={() => setView({ k: "invites" })} />}
+              {can("cards") && <Row icon={<Icon color="#30b0c7"><Contact size={18} /></Icon>} title={a.manage.cards} chevron onClick={() => setView({ k: "cards" })} />}
+              {can("starter") && <Row icon={<Icon color="#ff2d55"><UserCheck size={18} /></Icon>} title={a.manage.starter} chevron onClick={() => setView({ k: "starter" })} />}
+              {can("config") && <Row icon={<Icon color="#8e8e93"><SlidersHorizontal size={18} /></Icon>} title={a.manage.config} chevron onClick={() => setView({ k: "config" })} />}
+            </Group>
+          )}
+          {(can("status") || can("epochs") || can("jobs") || can("audit")) && (
+            <Group>
+              {can("status") && <Row icon={<Icon color="#34c759"><Activity size={18} /></Icon>} title={a.manage.status} chevron onClick={() => setView({ k: "status" })} />}
+              {can("epochs") && <Row icon={<Icon color="#af52de"><KeyRound size={18} /></Icon>} title={a.manage.epochs} chevron onClick={() => setView({ k: "epochs" })} />}
+              {can("jobs") && <Row icon={<Icon color="#ff9500"><Timer size={18} /></Icon>} title={a.manage.jobs} chevron onClick={() => setView({ k: "jobs" })} />}
+              {can("audit") && <Row icon={<Icon color="#5856d6"><ScrollText size={18} /></Icon>} title={a.manage.audit} chevron onClick={() => setView({ k: "audit" })} />}
+            </Group>
+          )}
           <Group footer={a.manage.lockedHint}>
             <Row icon={<Icon color="#ff3b30"><Lock size={18} /></Icon>} title={a.manage.lockNow} onClick={lockAdmin} />
           </Group>

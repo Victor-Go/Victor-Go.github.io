@@ -3,13 +3,13 @@ import { UserPlus, Users } from "lucide-react";
 import { acceptRequest, createGroup, declineRequest, requestContact, type Progress } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { useChat } from "../store";
+import { useCan, useChat } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
 import { HandleField } from "./HandleField";
 import { NotifyPrompt } from "./NotifyPrompt";
 import { NO_AUTOFILL } from "./noAutofill";
-import { Avatar, Modal, Steps } from "./ui";
+import { Avatar, Modal, Steps, TitleBadge } from "./ui";
 import { onEnter } from "../keys";
 
 function AddContactDialog({ onClose }: { onClose: () => void }) {
@@ -103,14 +103,14 @@ function NewGroupDialog({ onClose }: { onClose: () => void }) {
 
 export function ContactsPane() {
   const { a } = useLang();
-  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, me, lastActive, official, account } = useChat();
+  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, lastActive, official, account } = useChat();
   // Most recently used first; conversations with nothing known yet keep the server's order after them (the sort is stable).
   const contacts = useMemo(() => [...contactList].sort((x, y) => (lastActive[y.convId] ?? 0) - (lastActive[x.convId] ?? 0)), [contactList, lastActive]);
   const groups = useMemo(() => [...groupList].sort((x, y) => (lastActive[y.id] ?? 0) - (lastActive[x.id] ?? 0)), [groupList, lastActive]);
   const [dialog, setDialog] = useState<"add" | "group" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [answerError, setAnswerError] = useState<string | null>(null);
-  const isAdmin = me?.role === "admin";
+  const canCreateGroup = useCan("groups.create");
   // One answer at a time: both buttons stay disabled until the server has replied, so a request cannot be accepted or declined twice.
   const answer = (id: string, fn: (id: string) => Promise<void>) => {
     if (busy !== null) return;
@@ -130,7 +130,7 @@ export function ContactsPane() {
             {badge && (
               <>
                 {" "}
-                <span className="ch-admin">{a.adminBadge}</span>
+                <TitleBadge userId={userId} role="admin" />
               </>
             )}
           </div>
@@ -154,7 +154,7 @@ export function ContactsPane() {
               <UserPlus size={20} />
             </button>
           )}
-          {isAdmin && (
+          {canCreateGroup && (
             <button type="button" className="ch-icon" aria-label={a.newGroup} onClick={() => setDialog("group")}>
               <Users size={20} />
             </button>

@@ -53,7 +53,7 @@ describe("removing a contact from the chat", () => {
 });
 
 describe("sending a contact card from the contact's info panel", () => {
-  const asAdmin = () => useChat.setState({ me: { userId: "me", handle: "me", role: "admin", publicKey: "" } });
+  const asAdmin = () => useChat.setState({ me: { userId: "me", handle: "me", role: "admin", publicKey: "" }, title: "admin", permissions: ["cards", "groups.create"] });
   const open = () => {
     render(<Conversation />);
     fireEvent.click(screen.getByLabelText("联系人信息"));

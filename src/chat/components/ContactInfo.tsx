@@ -5,9 +5,9 @@ import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
 import type { Contact } from "../store";
 import { useLang } from "../useChat";
-import { useChat } from "../store";
+import { useCan } from "../store";
 import { SendCardModal } from "./SendCardModal";
-import { Avatar, Modal } from "./ui";
+import { Avatar, Modal, TitleBadge } from "./ui";
 
 /** The other person of a 1:1 chat: who they are, and the way to remove them (which removes the chat for both of you). */
 export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: () => void }) {
@@ -15,7 +15,7 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
-  const isAdmin = useChat((s) => s.me?.role === "admin");
+  const canSendCard = useCan("cards");
 
   const remove = async () => {
     if (busy || !window.confirm(a.confirmRemoveContact)) return;
@@ -40,12 +40,12 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
         <Avatar userId={contact.userId} size={48} admin={contact.role === "admin"} />
         <div className="ch-row-text">
           <div className="ch-row-title">
-            @{contact.handle} {contact.role === "admin" && <span className="ch-admin">{a.adminBadge}</span>}
+            @{contact.handle} <TitleBadge userId={contact.userId} role={contact.role} />
           </div>
         </div>
       </div>
       <div className="ch-actions-col">
-        {isAdmin && contact.role !== "admin" && (
+        {canSendCard && contact.role !== "admin" && (
           <button type="button" className="ch-secondary" disabled={busy} onClick={() => setCardOpen(true)}>
             {a.manage.sendCard}
           </button>

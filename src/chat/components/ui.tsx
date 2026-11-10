@@ -2,9 +2,25 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { OFFICIAL_ID, avatarUri } from "../avatar";
 import type { Progress } from "../client";
 import type { Messages } from "../i18n";
+import { useBadge, type Badge } from "../store";
+import { useLang } from "../useChat";
 
-/** Every avatar wears a ring in the theme blue, or gold for an administrator. */
-export function Avatar({ userId, size = 40, admin = false }: { userId: string; size?: number; admin?: boolean }) {
+/**
+ * The title badge of an administrator: "管理员", or the gold "负责人" for the owner. The title comes from the server's administrator list
+ * (`GET /admins`); `role` is only the fallback for somebody the list does not have. Nothing for anyone else.
+ */
+export function TitleBadge({ userId, role, title, className = "" }: { userId?: string; role?: string; title?: string; className?: string }) {
+  const { a } = useLang();
+  const looked = useBadge(userId, role);
+  // `title` is a title already known (an administrator invite carries one); it needs no lookup.
+  const badge: Badge = title === undefined ? looked : title === "owner" ? "owner" : "admin";
+  if (badge === "none") return null;
+  return <span className={"ch-admin" + (badge === "owner" ? " ch-owner" : "") + (className ? " " + className : "")} data-badge={badge}>{badge === "owner" ? a.ownerTitleBadge : a.adminBadge}</span>;
+}
+
+/** Every avatar wears a ring in the theme blue, or gold for an administrator (`admin`: the role says so; the title list may say it too). */
+export function Avatar({ userId, size = 40, admin: roleAdmin = false }: { userId: string; size?: number; admin?: boolean }) {
+  const admin = useBadge(userId, roleAdmin ? "admin" : undefined) !== "none";
   // The official channel is not a user: it always wears the fixed verified badge, with no ring.
   if (userId === OFFICIAL_ID) {
     return <img className="ch-avatar-official" src={avatarUri(OFFICIAL_ID)} width={size} height={size} alt="" draggable={false} />;

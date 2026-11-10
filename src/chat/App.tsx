@@ -23,7 +23,7 @@ const resumePath = (isAdmin: boolean): string => {
 export function App() {
   const { m, a } = useLang();
   const phase = useChat((s) => s.phase);
-  const role = useChat((s) => s.me?.role);
+  const canManage = useChat((s) => s.permissions.length > 0);
   const api = useMemo(() => {
     const bases = getConfig().api;
     return bases.length ? new Api(bases) : null;
@@ -68,7 +68,7 @@ export function App() {
 
   // Signed out, the address is the sign-in page; signing in lands on the page that was asked for (or the chat list).
   useEffect(() => {
-    showPath(ready ? resumePath(role === "admin") : PATH.account);
+    showPath(ready ? resumePath(canManage) : PATH.account);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
   // Going back to an old entry while signed out must not show a signed-in address.

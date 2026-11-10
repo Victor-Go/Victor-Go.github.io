@@ -145,7 +145,8 @@
   position: absolute;
   top: 0;
   left: var(--sep-left, 16px);
-  right: 0;
+  /* the same inset on the right as the row's own padding (the line used to run to the card's edge) */
+  right: 16px;
   height: 0.5px;
   background: var(--ios-sep);
 }

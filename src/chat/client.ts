@@ -227,7 +227,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
       onFinal: (reason) => mine() && lock(s.lockNotice(reason === "replaced" ? "replaced" : "kicked")),
     });
     s.ws = sock;
-    await Promise.all([refreshContacts(), refreshGroups()]);
+    await Promise.all([refreshContacts(), refreshGroups(), refreshAdmins().catch(() => {})]);
     await refreshUsage();
     await loadUnread().catch(() => {});
     s.ws.start();
@@ -299,6 +299,9 @@ export function applyConfig(c: Partial<ServerConfig> | null | undefined): void {
   const l = c.limits;
   const number = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   patch({
+    // Only the server says who may do what: a missing part is nothing, never what an earlier answer said (a title taken away must take the pages with it).
+    title: typeof c.title === "string" ? c.title : "",
+    permissions: Array.isArray(c.permissions) ? c.permissions.filter((p): p is string => typeof p === "string") : [],
     account: {
       contactsBlocked: c.contactsBlocked === true,
       globalContactsBlocked: c.globalContactsBlocked === true,
@@ -318,6 +321,17 @@ export function applyConfig(c: Partial<ServerConfig> | null | undefined): void {
 /** `GET /me`: the account's configuration. Called at sign-in when the answer lacks it, after a reconnect, and after a refusal that names a switch. */
 export async function refreshMe(): Promise<void> {
   applyConfig((await api().get<{ config?: Partial<ServerConfig> }>("/me")).config);
+}
+
+/**
+ * `GET /admins`: every administrator's title by user id, for the badge. Messages, contacts and group members carry only the class (`role`), never the title.
+ * A failure keeps what is known; a title is only ever compared (never shown as it came), so an unknown one cannot do harm.
+ */
+export async function refreshAdmins(): Promise<void> {
+  const r = await api().get<{ admins?: { userId?: unknown; title?: unknown }[] }>("/admins");
+  const admins: Record<string, string> = Object.create(null);
+  for (const x of Array.isArray(r.admins) ? r.admins : []) if (typeof x?.userId === "string") admins[x.userId] = typeof x.title === "string" ? x.title : "";
+  patch({ admins });
 }
 
 // ---------- epochs and vault ----------
@@ -865,6 +879,8 @@ async function resync(reconnected: boolean): Promise<void> {
     await loadUnread().catch(() => {});
     // A removal that happened while the socket was down arrives only as an official message that was never pushed here.
     await refreshContacts().catch(() => {});
+    // An administrator made, deleted or retitled while the socket was down was never pushed here.
+    await refreshAdmins().catch(() => {});
     // A change made while the socket was down was never pushed here.
     if (Date.now() - s.configAt > CONFIG_FRESH_MS) await refreshMe().catch(() => {});
   }
@@ -1254,6 +1270,7 @@ export async function onFrame(f: Frame): Promise<void> {
       else await refreshMe().catch(() => {});
     }
     else if (kind === "group_event" || kind === "group_deleted") await refreshGroups().catch(() => {});
+    else if (kind === "admins") await refreshAdmins().catch(() => {});
     else if (kind === "epochs") await refreshEpochs().catch(() => {});
     else if (kind === "wiped") {
       await refreshEpochs().catch(() => {});

@@ -32,6 +32,9 @@ export interface AccountFlags {
  * "account" notice (always the same object). Every part may be missing from an answer; what is missing keeps its value.
  */
 export interface ServerConfig {
+  /** The administrator's title ("" for everybody else) and what this account may do; the client keeps no list of either. */
+  title: string;
+  permissions: string[];
   canAddContacts: boolean;
   contactsBlocked: boolean;
   globalContactsBlocked: boolean;
@@ -141,6 +144,11 @@ export interface ChatState {
   /** Server clock minus this device's clock (ms), from the last answer that carried the server's time; used to judge when a card expires. */
   clockSkew: number;
   account: AccountFlags;
+  /** This account's title and permissions, from the server's `config`. */
+  title: string;
+  permissions: string[];
+  /** Every administrator's title by user id (`GET /admins`); only the badge reads it. */
+  admins: Record<string, string>;
   /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
   filesOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
@@ -152,6 +160,25 @@ export interface ChatState {
   /** Server time of the newest message known in each conversation, for ordering the list (most recent first). */
   lastActive: Record<string, number>;
 }
+
+/** Whether the signed-in account holds this permission (as the server listed it; the server checks every call as well). */
+export const hasPermission = (s: Pick<ChatState, "permissions">, permission: string): boolean => s.permissions.includes(permission);
+/** A hook form of `hasPermission`. */
+export const useCan = (permission: string): boolean => useChat((s) => s.permissions.includes(permission));
+
+/** How a person's badge looks: none, the plain administrator badge, or the gold one for the owner (a title the client does not know is the plain one). */
+export type Badge = "none" | "admin" | "owner";
+/**
+ * The badge of a sender or member: the title from `GET /admins` decides ("owner" is gold, any other title is the plain badge); somebody who is
+ * not in the list but whose `role` says administrator gets the plain badge. The title is only ever compared, never shown as it came.
+ */
+export function badgeOf(admins: Record<string, string>, userId: string | undefined, role?: string): Badge {
+  const title = userId !== undefined && Object.prototype.hasOwnProperty.call(admins, userId) ? admins[userId] : undefined;
+  if (title !== undefined) return title === "owner" ? "owner" : "admin";
+  return role === "admin" ? "admin" : "none";
+}
+/** The badge of somebody, from the store. */
+export const useBadge = (userId: string | undefined, role?: string): Badge => useChat((s) => badgeOf(s.admins, userId, role));
 
 /** A group has at most this many members (protocol 2); nothing in the UI offers more, whatever a server says. */
 export const GROUP_MAX = 32;
@@ -195,6 +222,9 @@ export const initialState: ChatState = {
   messageMaxChars: 1024,
   clockSkew: 0,
   account: { contactsBlocked: false, globalContactsBlocked: false, canAddContacts: true },
+  title: "",
+  permissions: [],
+  admins: {},
   filesOff: false,
   usage: null,
   section: "contacts",

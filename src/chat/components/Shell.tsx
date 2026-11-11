@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { MessageCircle, Shield, User } from "lucide-react";
 import { openConversation, resumeView } from "../client";
 import { PATH, go, isChatPath, sectionOf, sectionPath, useLocation } from "../route";
-import { patch, totalUnread, useChat } from "../store";
+import { avatarUri } from "../avatar";
+import { patch, totalUnread, useBadge, useChat } from "../store";
 import { useLang } from "../useChat";
 import { ContactsPane } from "./ContactsPane";
 import { Conversation } from "./Conversation";
@@ -10,6 +11,27 @@ import { ManagementPage } from "./ManagementPage";
 import { MePage } from "./MePage";
 
 export type Section = "contacts" | "me" | "manage";
+
+/**
+ * The 我的 tab's icon: the signed-in person's own picture (the generated one, cached, no request), round, with a thin neutral ring that turns to the
+ * accent colour while the tab is active. An administrator's ring is the static gold one (never animated here). The person icon shows until there is a person.
+ */
+function MeIcon({ active }: { active: boolean }) {
+  const userId = useChat((s) => s.me?.userId);
+  const role = useChat((s) => s.me?.role);
+  const badge = useBadge(userId, role);
+  if (!userId) return <User size={22} />;
+  return (
+    <img
+      className={"ch-nav-avatar" + (badge !== "none" ? " ch-gold" : "") + (active ? " ch-active" : "")}
+      src={avatarUri(userId)}
+      width={24}
+      height={24}
+      alt=""
+      draggable={false}
+    />
+  );
+}
 
 /** Telegram-like layout: a rail on wide screens, a bottom tab bar on phones. Settings live inside "Me", as in iOS. */
 export function Shell() {
@@ -46,7 +68,7 @@ export function Shell() {
   const items = (
     <>
       {nav("contacts", a.tabContacts, <MessageCircle size={22} />, unread, anyMention)}
-      {nav("me", a.tabMe, <User size={22} />)}
+      {nav("me", a.tabMe, <MeIcon active={section === "me"} />)}
       {canManage && nav("manage", a.tabManagement, <Shield size={22} />)}
     </>
   );

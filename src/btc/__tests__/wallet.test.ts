@@ -22,9 +22,12 @@ describe('wallet', () => {
 
   it('rejects bad checksums, wrong length and unknown words', () => {
     expect(isValidMnemonic24(BIP84)).toBe(false); // 12 words
-    const good = generateMnemonic24().split(' ');
-    good[23] = good[23] === 'zoo' ? 'abandon' : 'zoo';
-    expect(isValidMnemonic24(good.join(' '))).toBe(false);
+    // A fixed vector, not a random mnemonic: the last word carries 8 checksum bits, so swapping it in a random one is still valid once in 256 runs.
+    // 23 x "abandon" is completed by exactly one last word, "art".
+    const prefix = 'abandon '.repeat(23);
+    expect(isValidMnemonic24(`${prefix}art`)).toBe(true);
+    expect(isValidMnemonic24(`${prefix}zoo`)).toBe(false);
+    expect(isValidMnemonic24(`${prefix}abandon`)).toBe(false);
     expect(isValidMnemonic24(('foo ' as string).repeat(24))).toBe(false);
   });
 

@@ -158,13 +158,72 @@ textarea:disabled {
   font-weight: 700;
   background: var(--ch-accent);
   color: var(--ch-accent-fg);
+  /* centred on the name's text line: "middle" alone sits about a tenth of an em low (measured in the browser), so it is nudged up */
   vertical-align: middle;
+  position: relative;
+  top: -0.15em;
 }
 
-/* The owner's (负责人) badge is gold; the plain administrator badge keeps the theme colour. */
+/* in a flex row (the 我的 page) the row already centres it */
+.ios-profile .ch-admin {
+  top: 0;
+}
+
+/*
+ * The owner's (负责人) look: polished gold. The badge is static; only the avatar ring moves, by a transform of a pseudo-element (no filters,
+ * no shadow animation), so a long list of owners stays cheap. The plain administrator badge and avatars are untouched. Light and dark look the same on purpose.
+ */
 .ch-admin.ch-owner {
-  background: var(--ch-gold);
-  color: #1c1400;
+  background: linear-gradient(105deg, #8a5a00 0%, #d9a21b 22%, #ffe58a 45%, #fff6cf 52%, #e0a815 70%, #8a5a00 100%);
+  /* the lighter top edge is an inset shadow, so the badge is exactly as tall as the plain one */
+  box-shadow: inset 0 1px 0 rgba(255, 250, 220, 0.85);
+  color: #2e1d00;
+  text-shadow: 0 1px 0 rgba(255, 240, 180, 0.55);
+}
+
+/* The ring: a rotating conic gold gradient behind the picture (which keeps its own, unchanged pixels). Same outer size as a plain avatar. */
+.ch-avatar-owner {
+  position: relative;
+  display: block;
+  flex: none;
+  box-sizing: border-box;
+  padding: 2px;
+  border-radius: 50%;
+  overflow: hidden;
+  isolation: isolate;
+  background: #c8921a;
+  box-shadow: 0 0 6px 1px rgba(240, 180, 40, 0.45);
+}
+
+.ch-avatar-owner.ch-avatar-big {
+  padding: 3px;
+}
+
+.ch-avatar-owner::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  background: conic-gradient(from 0deg, #8a5a00, #e8b923, #fff3b8, #e8b923, #8a5a00, #e8b923, #fff3b8, #e8b923, #8a5a00);
+  animation: ch-gold-spin 3s linear infinite;
+}
+
+.ch-avatar-owner > .ch-avatar {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@keyframes ch-gold-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-avatar-owner::before {
+    animation: none;
+  }
 }
 
 .ch-muted {

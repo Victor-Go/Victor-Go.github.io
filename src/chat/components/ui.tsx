@@ -20,10 +20,20 @@ export function TitleBadge({ userId, role, title, className = "" }: { userId?: s
 
 /** Every avatar wears a ring in the theme blue, or gold for an administrator (`admin`: the role says so; the title list may say it too). */
 export function Avatar({ userId, size = 40, admin: roleAdmin = false }: { userId: string; size?: number; admin?: boolean }) {
-  const admin = useBadge(userId, roleAdmin ? "admin" : undefined) !== "none";
+  const badge = useBadge(userId, roleAdmin ? "admin" : undefined);
+  const admin = badge !== "none";
   // The official channel is not a user: it always wears the fixed verified badge, with no ring.
   if (userId === OFFICIAL_ID) {
     return <img className="ch-avatar-official" src={avatarUri(OFFICIAL_ID)} width={size} height={size} alt="" draggable={false} />;
+  }
+  const big = size >= 60 ? " ch-avatar-big" : "";
+  // The owner's ring is a wrapper (the ring is a pseudo-element behind the picture); its outer size is the same as a plain avatar's.
+  if (badge === "owner") {
+    return (
+      <span className={"ch-avatar-owner" + big} data-badge="owner" style={{ width: size, height: size }}>
+        <img className="ch-avatar" src={avatarUri(userId)} width={size} height={size} alt="" draggable={false} />
+      </span>
+    );
   }
   return (
     <img

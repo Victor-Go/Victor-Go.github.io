@@ -921,8 +921,8 @@ function AuditView({ go }: { go: (v: View) => void }) {
   );
 }
 
-type Starter = { explicit: boolean; handle: string };
-const readStarter = (r: { explicit?: unknown; handle?: unknown }, fallback: string): Starter => ({ explicit: r.explicit === true, handle: typeof r.handle === "string" ? r.handle : fallback });
+type Starter = { explicit: boolean; userId?: string; handle: string };
+const readStarter = (r: { explicit?: unknown; userId?: unknown; handle?: unknown }, fallback: string): Starter => ({ explicit: r.explicit === true, userId: typeof r.userId === "string" ? r.userId : undefined, handle: typeof r.handle === "string" ? r.handle : fallback });
 
 /** Asks for the starter administrator's handle (an empty one goes back to the default). A failure stays inside the dialog. */
 function StarterDialog({ current, onSaved, onClose }: { current: Starter | null; onSaved: (s: Starter) => void; onClose: () => void }) {
@@ -939,7 +939,7 @@ function StarterDialog({ current, onSaved, onClose }: { current: Starter | null;
       markAdminAction();
       await rawApi().put("/admin/starter", { handle: wanted });
       // The answer is not relied on: ask again for what is in force now (an empty name is the default, which has its own handle).
-      onSaved(readStarter(await rawApi().get<{ explicit: boolean; handle: string }>("/admin/starter"), wanted));
+      onSaved(readStarter(await rawApi().get<{ explicit: boolean; userId: string; handle: string }>("/admin/starter"), wanted));
     } catch (e) {
       setBusy(false);
       if (e instanceof ApiError && e.code === "stepup_required") {
@@ -996,7 +996,7 @@ function StarterView({ go }: { go: (v: View) => void }) {
       <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       <Group>
-        <Row title={a.manage.starterCurrent} value={current ? `@${current.handle}${current.explicit ? "" : ` (${a.manage.starterDefault})`}` : "–"} />
+        <Row title={a.manage.starterCurrent} value={current ? <>@{current.handle} <TitleBadge userId={current.userId} role="admin" />{current.explicit ? "" : ` (${a.manage.starterDefault})`}</> : "–"} />
         <Row title={a.manage.starterEdit} center onClick={() => setOpen(true)} />
       </Group>
       {open && (

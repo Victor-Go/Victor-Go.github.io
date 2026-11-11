@@ -328,10 +328,15 @@ export async function refreshMe(): Promise<void> {
  * A failure keeps what is known; a title is only ever compared (never shown as it came), so an unknown one cannot do harm.
  */
 export async function refreshAdmins(): Promise<void> {
-  const r = await api().get<{ admins?: { userId?: unknown; title?: unknown }[] }>("/admins");
+  const r = await api().get<{ admins?: { userId?: unknown; handle?: unknown; title?: unknown }[] }>("/admins");
   const admins: Record<string, string> = Object.create(null);
-  for (const x of Array.isArray(r.admins) ? r.admins : []) if (typeof x?.userId === "string") admins[x.userId] = typeof x.title === "string" ? x.title : "";
-  patch({ admins });
+  const adminList: { userId: string; handle: string }[] = [];
+  for (const x of Array.isArray(r.admins) ? r.admins : []) {
+    if (typeof x?.userId !== "string") continue;
+    admins[x.userId] = typeof x.title === "string" ? x.title : "";
+    if (typeof x.handle === "string") adminList.push({ userId: x.userId, handle: x.handle });
+  }
+  patch({ admins, adminList });
 }
 
 // ---------- epochs and vault ----------

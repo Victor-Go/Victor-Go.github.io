@@ -342,6 +342,32 @@ textarea:disabled {
   display: inline-flex;
 }
 
+/* The own picture as the 我的 icon: 24px with a ring, taking the 22px of the other icons (negative margin) so nothing moves. */
+.ch-nav-avatar {
+  display: block;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin: -1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ch-line);
+  background: var(--ch-card);
+}
+
+.ch-nav-avatar.ch-gold {
+  border-color: var(--ch-gold);
+}
+
+.ch-nav-avatar.ch-active {
+  border-color: var(--ch-accent);
+  box-shadow: 0 0 0 1px var(--ch-accent);
+}
+
+.ch-nav-avatar.ch-gold.ch-active {
+  border-color: var(--ch-gold);
+  box-shadow: 0 0 0 1px var(--ch-accent);
+}
+
 .ch-tabbar {
   display: flex;
   position: fixed;

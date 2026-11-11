@@ -149,6 +149,8 @@ export interface ChatState {
   permissions: string[];
   /** Every administrator's title by user id (`GET /admins`); only the badge reads it. */
   admins: Record<string, string>;
+  /** The same list with handles, oldest first: who a person whose contacts are blocked may still ask. */
+  adminList: { userId: string; handle: string }[];
   /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
   filesOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
@@ -225,6 +227,7 @@ export const initialState: ChatState = {
   title: "",
   permissions: [],
   admins: {},
+  adminList: [],
   filesOff: false,
   usage: null,
   section: "contacts",

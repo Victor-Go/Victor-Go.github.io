@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ManagementPage } from "../components/ManagementPage";
 import { SettingsFlow } from "../components/SettingsPage";
-import { TitleBadge } from "../components/ui";
+import { Avatar, TitleBadge } from "../components/ui";
 import { unlockedNow } from "../adminLock";
 import { applyConfig } from "../client";
 import { ApiError } from "../net/api";
@@ -82,6 +82,21 @@ describe("the badge, from the administrator list", () => {
     expect(badges[0].classList.contains("ch-owner")).toBe(true);
     expect(badges[1].classList.contains("ch-owner")).toBe(false);
     expect(container.querySelector("img")).toBeNull();
+  });
+  it("only the owner gets the animated gold ring around the avatar; the others keep the plain one", () => {
+    useChat.setState({ admins: { o1: "owner", a1: "admin" } });
+    const { container } = render(
+      <>
+        <Avatar userId="o1" admin />
+        <Avatar userId="a1" admin />
+        <Avatar userId="u1" />
+      </>,
+    );
+    expect(container.querySelectorAll(".ch-avatar-owner")).toHaveLength(1);
+    expect(container.querySelector(".ch-avatar-owner")?.getAttribute("data-badge")).toBe("owner");
+    expect(container.querySelector(".ch-avatar-owner img.ch-avatar")).not.toBeNull();
+    expect(container.querySelectorAll("img.ch-avatar.ch-gold")).toHaveLength(1);
+    expect(container.querySelectorAll("img.ch-avatar")).toHaveLength(3);
   });
   it("says 负责人 in Chinese", () => {
     setLang("zh");

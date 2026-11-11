@@ -425,6 +425,13 @@
   max-width: 120px;
 }
 
+.ios-fav-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
 .ios-gone {
   color: var(--ios-red);
   font-weight: 600;

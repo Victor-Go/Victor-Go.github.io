@@ -4,7 +4,7 @@ import { toB64, fromB64 } from "../crypto/b64";
 import { generateIdentity, publicKeyOf, toEpochs } from "../crypto/keys";
 import { unwrapKey, wrapKey } from "../crypto/kx";
 import { decryptMessage, encryptMessage, type Binding } from "../crypto/message";
-import { openFavoriteText, sealFavoriteText } from "../crypto/favorite";
+import { openFavoriteBytes, openFavoriteText, sealFavoriteBytes, sealFavoriteText } from "../crypto/favorite";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "../crypto/vault";
 import { leadingZeroBits, solvePart, type Challenge } from "../workers/solve";
 
@@ -136,6 +136,22 @@ describe("favourites and the archive constant", () => {
     await expect(openFavoriteText(mk, wiped, "u1", "fav1", 2, sealed)).rejects.toThrow();
     // and the old constant on its own (say, from a backup) is useless without the vault key
     await expect(openFavoriteText(newMasterKey(), archive, "u1", "fav1", 1, sealed)).rejects.toThrow();
+  });
+
+  it("seals a voice message or picture as raw bytes, bound like the text and never interchangeable with it", async () => {
+    const mk = newMasterKey();
+    const bytes = Uint8Array.from({ length: 3000 }, (_, i) => (i * 7) % 256);
+    const sealed = await sealFavoriteBytes(mk, archive, "u1", "fav1", bytes);
+    expect(sealed.length).toBe(bytes.length + 12 + 16); // nonce | ciphertext | tag: the exact size the server is told
+    expect(Array.from(await openFavoriteBytes(mk, archive, "u1", "fav1", 1, sealed))).toEqual(Array.from(bytes));
+    await expect(openFavoriteBytes(mk, archive, "u2", "fav1", 1, sealed)).rejects.toThrow();
+    await expect(openFavoriteBytes(mk, archive, "u1", "fav2", 1, sealed)).rejects.toThrow();
+    await expect(openFavoriteBytes(newMasterKey(), archive, "u1", "fav1", 1, sealed)).rejects.toThrow();
+    const wiped = { gen: 2, constant: "archive_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" };
+    await expect(openFavoriteBytes(mk, wiped, "u1", "fav1", 2, sealed)).rejects.toThrow(); // a new constant: the file cannot be opened any more
+    const tampered = sealed.slice();
+    tampered[20] ^= 1;
+    await expect(openFavoriteBytes(mk, archive, "u1", "fav1", 1, tampered)).rejects.toThrow();
   });
 
   it("is bound to its user and its id", async () => {

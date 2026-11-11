@@ -1,7 +1,7 @@
 import type { Epochs } from "../cipher/crypto/epochs";
 import { randomBytes } from "../cipher/crypto/secrets";
 import { fromB64, toB64 } from "./crypto/b64";
-import { openFavoriteText, sealFavoriteText } from "./crypto/favorite";
+import { openFavoriteBytes, openFavoriteText, sealFavoriteBytes, sealFavoriteText } from "./crypto/favorite";
 import { generateIdentity, publicKeyOf, toEpochs } from "./crypto/keys";
 import { KX_EPOCHS, unwrapKey, wrapKey } from "./crypto/kx";
 import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, voiceBinding, type Binding, type Payload } from "./crypto/message";
@@ -351,12 +351,12 @@ const epochs = (): Epochs => {
   return s.epochs;
 };
 
-async function putRecord(id: string, value: unknown): Promise<void> {
+async function putRecord(id: string, value: unknown, fileId?: string): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const base = s.versions.get(id) ?? 0;
     const ciphertext = await sealRecord(s.mk!, me().userId, id, base + 1, value);
     try {
-      const r = await api().put<{ version: number }>(`/vault/${encodeURIComponent(id)}`, { baseVersion: base, ciphertext });
+      const r = await api().put<{ version: number }>(`/vault/${encodeURIComponent(id)}`, { baseVersion: base, ciphertext, ...(fileId ? { fileId } : {}) });
       s.versions.set(id, r.version);
       return;
     } catch (e) {
@@ -411,11 +411,20 @@ interface FavoriteRecord {
   gen?: unknown;
   sealed?: unknown;
   text?: unknown;
+  kind?: unknown;
+  ms?: unknown;
+  w?: unknown;
+  h?: unknown;
 }
 
 /** A favourite from the vault: its text opens only while the favourite epoch it was sealed under still exists. */
 async function readFavorite(epoch: number, id: string, v: FavoriteRecord): Promise<Favorite> {
-  const base = { id, conv: String(v.conv ?? ""), from: String(v.from ?? ""), time: Number(v.time) || 0, savedAt: Number(v.savedAt) || 0, gen: epoch };
+  const kind = v.kind === "voice" || v.kind === "image" ? v.kind : "text";
+  const base: Omit<Favorite, "text"> = {
+    id, conv: String(v.conv ?? ""), from: String(v.from ?? ""), time: Number(v.time) || 0, savedAt: Number(v.savedAt) || 0, gen: epoch, kind,
+    ...(kind === "voice" ? { ms: Number(v.ms) || 0 } : {}),
+    ...(kind === "image" ? { w: Number(v.w) || 1, h: Number(v.h) || 1 } : {}),
+  };
   const constant = s.fav?.constants.get(epoch);
   if (typeof v.sealed === "string" && constant !== undefined && s.mk) {
     try {
@@ -427,12 +436,18 @@ async function readFavorite(epoch: number, id: string, v: FavoriteRecord): Promi
   return { ...base, text: null };
 }
 
-async function putFavorite(f: Favorite): Promise<void> {
+/** `fileId` is the upload of a voice message or picture saved with the favourite (protocol 10a); the record claims it. */
+async function putFavorite(f: Favorite, fileId?: string): Promise<void> {
   const constant = s.fav?.constants.get(s.fav.current);
   if (f.text === null || !s.fav || constant === undefined || !s.mk) return;
   const archive = { gen: s.fav.current, constant };
+  // A picture or recording seals an empty text: it is what shows whether the favourite epoch is still there (null text = destroyed).
   const sealed = await sealFavoriteText(s.mk, archive, me().userId, f.id, f.text);
-  await putRecord(`fav:${archive.gen}:${f.id}`, { conv: f.conv, from: f.from, time: f.time, savedAt: f.savedAt, sealed });
+  await putRecord(
+    `fav:${archive.gen}:${f.id}`,
+    { conv: f.conv, from: f.from, time: f.time, savedAt: f.savedAt, sealed, kind: f.kind ?? "text", ...(f.ms !== undefined ? { ms: f.ms } : {}), ...(f.w !== undefined ? { w: f.w, h: f.h } : {}) },
+    fileId,
+  );
 }
 
 // ---------- contacts ----------
@@ -1435,17 +1450,106 @@ export async function deleteGroup(gid: string): Promise<void> {
 
 // ---------- favourites ----------
 export async function addFavorite(conv: string, msg: Msg, from: string): Promise<void> {
-  if (msg.payload?.k !== "text") return;
-  const fav: Favorite = { id: `${conv}.${msg.id}`.slice(0, 70), conv, from, text: msg.payload.text, time: msg.time, savedAt: Date.now(), gen: s.fav?.current ?? 0 };
-  await putFavorite(fav);
+  const p = msg.payload;
+  if (!p) return;
+  const id = `${conv}.${msg.id}`.slice(0, 70);
+  const base = { id, conv, from, time: msg.time, savedAt: Date.now(), gen: s.fav?.current ?? 0 };
+  let fav: Favorite;
+  if (p.k === "text") {
+    fav = { ...base, text: p.text, kind: "text" };
+    await putFavorite(fav);
+  } else {
+    const storedId = p.k === "voice" ? p.voice.id : p.image.id;
+    if (!storedId) return; // still uploading: there is nothing to copy yet
+    fav = p.k === "voice" ? { ...base, text: "", kind: "voice", ms: p.voice.ms } : { ...base, text: "", kind: "image", w: p.image.w, h: p.image.h };
+    const constant = s.fav?.constants.get(s.fav.current);
+    if (!s.fav || constant === undefined || !s.mk) throw new ApiError(0, "unavailable");
+    // The chat's copy expires and its keys are destroyed, so the bytes are opened here and sealed again under the favourite's own key and epoch.
+    const bytes = await openStored(conv, msg, storedId);
+    if (!bytes) throw new ApiError(404, "not_found");
+    const raw = await sealFavoriteBytes(s.mk, { gen: s.fav.current, constant }, me().userId, id, bytes);
+    if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
+    const up = await api().post<{ fileId: string; upload: UploadTarget }>("/favorites/files", { size: raw.length });
+    await uploadBytes(up.upload, raw);
+    await putFavorite(fav, up.fileId);
+    wipeFavoriteCache(id);
+  }
   patch({ favorites: [fav, ...useChat.getState().favorites.filter((f) => f.id !== fav.id)] });
   void refreshUsage();
 }
 export async function removeFavorite(id: string): Promise<void> {
   const f = useChat.getState().favorites.find((x) => x.id === id);
   if (f) await deleteRecord(`fav:${f.gen}:${id}`);
+  wipeFavoriteCache(id);
   patch({ favorites: useChat.getState().favorites.filter((f) => f.id !== id) });
   void refreshUsage();
+}
+
+/** The opened file of a favourite is kept in memory under this key (the maps of opened voice and picture files), until the chat locks or the favourite goes. */
+const favKey = (id: string): string => `fav:${id}`;
+function wipeFavoriteCache(id: string): void {
+  stopVoiceIf(favKey(id));
+  s.voice.get(favKey(id))?.fill(0);
+  s.voice.delete(favKey(id));
+  const url = s.images.get(favKey(id));
+  if (url) URL.revokeObjectURL(url);
+  s.images.delete(favKey(id));
+  s.imageLoads.delete(favKey(id));
+}
+
+/**
+ * Downloads and opens the voice message or picture saved with a favourite: a short-lived address (owner only), the raw ciphertext, opened with the
+ * favourite's own key. Returns null when it is gone for good (the favourite epoch was destroyed, or the object is gone) or does not open.
+ */
+async function openFavoriteFile(f: Favorite): Promise<Uint8Array | null> {
+  const constant = s.fav?.constants.get(f.gen);
+  if (constant === undefined || !s.mk) return null;
+  let raw: Uint8Array;
+  try {
+    const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/favorites/${encodeURIComponent(`fav:${f.gen}:${f.id}`)}/file`);
+    raw = await downloadBytes(download.url);
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 410)) return null;
+    throw e;
+  }
+  try {
+    return await openFavoriteBytes(s.mk, { gen: f.gen, constant }, me().userId, f.id, f.gen, raw);
+  } catch {
+    return null;
+  }
+}
+
+/** Plays the recording saved with a favourite. Throws ApiError for the caller to show; false when it cannot be opened (gone). */
+export async function playFavoriteVoice(f: Favorite): Promise<boolean> {
+  if (f.kind !== "voice") return false;
+  let bytes = s.voice.get(favKey(f.id));
+  if (!bytes) {
+    const opened = await openFavoriteFile(f);
+    if (!opened) return false;
+    bytes = opened;
+    s.voice.set(favKey(f.id), bytes);
+  }
+  await playVoice(favKey(f.id), bytes);
+  return true;
+}
+
+/** A blob URL of the picture saved with a favourite (opened on the first call, kept until lock()); null when it is gone. */
+export function favoriteImageUrl(f: Favorite): Promise<string | null> {
+  if (f.kind !== "image") return Promise.resolve(null);
+  const key = favKey(f.id);
+  const have = s.images.get(key);
+  if (have) return Promise.resolve(have);
+  const under = s.imageLoads.get(key);
+  if (under) return under;
+  const load = (async () => {
+    const bytes = await openFavoriteFile(f);
+    if (!bytes) return null;
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: sniffFormat(bytes) }));
+    s.images.set(key, url);
+    return url;
+  })().finally(() => s.imageLoads.delete(key));
+  s.imageLoads.set(key, load);
+  return load;
 }
 
 // ---------- account settings ----------

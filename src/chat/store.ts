@@ -40,7 +40,7 @@ export interface ServerConfig {
   globalContactsBlocked: boolean;
   /** Voice messages and pictures: switched on by the administrator, and this person's monthly upload limit in MB (null: none). */
   files: { enabled: boolean; monthlyMB: number | null };
-  limits: { messageMaxChars: number; voiceMaxSec: number; groupMax: number; retentionDays: number; favoriteMax: number; monthlyMessages: number | null };
+  limits: { messageMaxChars: number; voiceMaxSec: number; groupMax: number; retentionDays: number; favoriteMax: number; favoriteFileMB?: number; monthlyMessages: number | null };
 }
 
 export interface RequestItem {
@@ -106,6 +106,12 @@ export interface Favorite {
   savedAt: number;
   /** Favourite epoch the text was sealed under. */
   gen: number;
+  /** What was saved: text (the default, and what older records are), or a voice message or a picture kept as a file of its own (protocol 10a). */
+  kind?: "text" | "voice" | "image";
+  /** Voice: the length in ms. Picture: the pixels. */
+  ms?: number;
+  w?: number;
+  h?: number;
 }
 
 export type Phase = "out" | "busy" | "ready";
@@ -154,7 +160,7 @@ export interface ChatState {
   /** The server refused a recording because the administrator switched voice off; the microphone button hides until the next sign-in. */
   filesOff: boolean;
   /** Messages sent this (UTC) month against the limit; limit is null for the administrator. */
-  usage: { used: number; limit: number | null; resetAt: number; favoriteCount?: number; favoriteMax?: number; fileBytes?: number; fileLimit?: number | null } | null;
+  usage: { used: number; limit: number | null; resetAt: number; favoriteCount?: number; favoriteMax?: number; fileBytes?: number; fileLimit?: number | null; favoriteFileBytes?: number; favoriteFileLimit?: number } | null;
   /** The part of the app being looked at; a conversation counts as read only while this is "contacts". */
   section: "contacts" | "me" | "manage";
   /** Conversations that still have older messages on the server to page back to. */

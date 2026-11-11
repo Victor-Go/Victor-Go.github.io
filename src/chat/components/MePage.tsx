@@ -7,6 +7,7 @@ import { useChat } from "../store";
 import { useLang } from "../useChat";
 import { Empty, Group, Icon, Page, Row } from "./ios";
 import { SettingsFlow } from "./SettingsPage";
+import { FavoriteMedia } from "./FavoriteMedia";
 import { Avatar, TitleBadge } from "./ui";
 
 function FavoritesPage() {
@@ -37,13 +38,14 @@ function FavoritesPage() {
           footer={
             <>
               {usage?.favoriteMax !== undefined && <div>{a.favoritesCount(usage.favoriteCount ?? favorites.length, usage.favoriteMax)}</div>}
+              {usage?.favoriteFileLimit !== undefined && <div>{a.favoritesFiles(((usage.favoriteFileBytes ?? 0) / 1_000_000).toFixed(1), (usage.favoriteFileLimit / 1_000_000).toFixed(0))}</div>}
               {a.favoritesNote}
             </>
           }
         >
           {favorites.map((f) => (
             <div key={f.id} className="ios-form ios-fav">
-              {f.text === null ? <div className="ios-text ios-gone">{a.undecryptable}</div> : <div className="ios-text">{f.text}</div>}
+              {f.text === null ? <div className="ios-text ios-gone">{a.undecryptable}</div> : f.kind === "voice" || f.kind === "image" ? <FavoriteMedia f={f} /> : <div className="ios-text">{f.text}</div>}
               <div className="ios-fav-meta">
                 <span>
                   @{f.from} · {formatDay(f.time, now, lang, { today: a.today, yesterday: a.yesterday })} {formatClock(f.time, lang)}

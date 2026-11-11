@@ -678,7 +678,7 @@ export function Conversation() {
                     <span>{formatClock(m.time, lang)}</span>
                     {m.mine && deliveryOf(m, reads[activeConv] ?? 0, !!contact) === "sent" && <Check size={14} aria-label={a.sentLabel} />}
                     {m.mine && deliveryOf(m, reads[activeConv] ?? 0, !!contact) === "read" && <Eye size={14} aria-label={a.readLabel} />}
-                    {m.payload?.k === "text" && (
+                    {(m.payload?.k === "text" || (m.payload?.k === "voice" && m.payload.voice.id !== "") || (m.payload?.k === "image" && m.payload.image.id !== "")) && (
                       <button
                         type="button"
                         className={"ch-star" + (fav ? " ch-on" : "")}

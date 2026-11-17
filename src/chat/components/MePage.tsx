@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Star } from "lucide-react";
-import { logout, removeFavorite } from "../client";
+import { Plus, Settings as SettingsIcon, Star } from "lucide-react";
+import { addNote, editNote, logout, removeFavorite } from "../client";
+import { errorOf } from "../i18nApp";
+import { NOTE_MAX } from "../validation";
 import { formatBytes, formatClock, formatDay } from "../format";
 import { PATH, go, useLocation } from "../route";
 import { useChat } from "../store";
@@ -10,8 +12,55 @@ import { SettingsFlow } from "./SettingsPage";
 import { FavoriteMedia } from "./FavoriteMedia";
 import { Avatar, TitleBadge } from "./ui";
 
+/** Writes a note of one's own into the favourites: a text box that opens under the title. */
+function NoteForm({ onDone, initial, id }: { onDone: () => void; initial?: string; id?: string }) {
+  const { a } = useLang();
+  const [text, setText] = useState(initial ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    if (busy || !text.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await (id ? editNote(id, text) : addNote(text));
+      onDone();
+    } catch (e) {
+      setError(errorOf(a, e));
+      setBusy(false);
+    }
+  };
+  const inner = (
+      <div className="ios-form">
+        <textarea
+          className="ch-input"
+          rows={4}
+          autoFocus
+          value={text}
+          disabled={busy}
+          placeholder={a.notePlaceholder(NOTE_MAX)}
+          aria-label={a.noteNew}
+          onChange={(e) => setText(Array.from(e.target.value).slice(0, NOTE_MAX).join(""))}
+        />
+        <div className="ios-fav-meta">
+          <button type="button" className="ios-link" disabled={busy} onClick={onDone}>
+            {a.cancel}
+          </button>
+          <button type="button" className="ios-link" disabled={busy || !text.trim()} aria-busy={busy} onClick={() => void save()}>
+            {a.noteSave}
+          </button>
+        </div>
+      </div>
+  );
+  // Editing happens inside the list's own group; a new note gets a group of its own.
+  if (id) return <>{inner}{error && <p className="ios-footer">{error}</p>}</>;
+  return <Group footer={error ?? undefined}>{inner}</Group>;
+}
+
 function FavoritesPage() {
   const { lang, a } = useLang();
+  const [writing, setWriting] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const favorites = useChat((s) => s.favorites);
   const usage = useChat((s) => s.usage);
   const [removing, setRemoving] = useState<ReadonlySet<string>>(new Set());
@@ -30,7 +79,17 @@ function FavoritesPage() {
   };
   const now = Date.now();
   return (
-    <Page title={a.favorites} onBack={() => go(PATH.me)} backLabel={a.tabMe}>
+    <Page
+      title={a.favorites}
+      onBack={() => go(PATH.me)}
+      backLabel={a.tabMe}
+      trailing={
+        <button type="button" className="ios-link" aria-label={a.noteNew} disabled={writing} onClick={() => setWriting(true)}>
+          <Plus size={22} />
+        </button>
+      }
+    >
+      {writing && <NoteForm onDone={() => setWriting(false)} />}
       {favorites.length === 0 ? (
         <Empty icon={<Star size={40} />}>{a.noFavorites}</Empty>
       ) : (
@@ -43,16 +102,25 @@ function FavoritesPage() {
             </>
           }
         >
-          {favorites.map((f) => (
+          {favorites.map((f) => editing === f.id && f.text !== null ? (
+            <NoteForm key={f.id} id={f.id} initial={f.text} onDone={() => setEditing(null)} />
+          ) : (
             <div key={f.id} className="ios-form ios-fav">
               {f.text === null ? <div className="ios-text ios-gone">{a.undecryptable}</div> : f.kind === "voice" || f.kind === "image" ? <FavoriteMedia f={f} /> : <div className="ios-text">{f.text}</div>}
               <div className="ios-fav-meta">
                 <span>
-                  @{f.from} · {formatDay(f.time, now, lang, { today: a.today, yesterday: a.yesterday })} {formatClock(f.time, lang)}
+                  {f.kind === "note" && <>{a.noteTag} · </>}@{f.from} · {formatDay(f.time, now, lang, { today: a.today, yesterday: a.yesterday })} {formatClock(f.time, lang)}
                 </span>
-                <button type="button" className="ios-link ios-destructive" disabled={removing.has(f.id)} aria-busy={removing.has(f.id)} onClick={() => remove(f.id)}>
-                  {removing.has(f.id) ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : a.removeFavorite}
-                </button>
+                <span className="ios-fav-actions">
+                  {f.kind === "note" && f.text !== null && (
+                    <button type="button" className="ios-link" onClick={() => setEditing(f.id)}>
+                      {a.noteEdit}
+                    </button>
+                  )}
+                  <button type="button" className="ios-link ios-destructive" disabled={removing.has(f.id)} aria-busy={removing.has(f.id)} onClick={() => remove(f.id)}>
+                    {removing.has(f.id) ? <span className="ch-spinner ch-spinner-sm" aria-hidden="true" /> : a.removeFavorite}
+                  </button>
+                </span>
               </div>
             </div>
           ))}

@@ -186,6 +186,12 @@ const zh = {
   officialRemoved: (handle: string, reason: string) =>
     reason === "self_deleted" ? `@${handle} 已注销账号,与对方的聊天记录已无法查看` : reason === "admin_deleted" ? `@${handle} 的账号已被管理员删除,与对方的聊天记录已无法查看` : `@${handle} 已将你从联系人中删除,聊天记录和收藏已销毁`,
   officialDeclined: (handle: string) => `@${handle} 拒绝了你的联系人申请`,
+  officialGroupDeleted: (name: string, reason: string, handle: string | null) =>
+    reason === "owner_deleted"
+      ? `群「${name}」已解散:群主${handle ? ` @${handle}` : ""} 的账号已被删除`
+      : handle
+        ? `@${handle} ${reason === "admin" ? "(管理员)" : ""}解散了群「${name}」`
+        : `群「${name}」已被管理员解散`,
   cardTitle: "联系人名片",
   cardFor: (handle: string) => `@${handle}`,
   cardExpires: (when: string) => `有效期至 ${when}`,
@@ -596,6 +602,12 @@ const en: AppMessages = {
         ? `@${handle}'s account was deleted by the administrator. The chat with them can no longer be read`
         : `@${handle} removed you from their contacts. The chat and its favourites are destroyed`,
   officialDeclined: (handle: string) => `@${handle} declined your request`,
+  officialGroupDeleted: (name: string, reason: string, handle: string | null) =>
+    reason === "owner_deleted"
+      ? `The group "${name}" was dissolved: its owner${handle ? ` @${handle}` : ""}'s account was deleted`
+      : handle
+        ? `@${handle}${reason === "admin" ? " (administrator)" : ""} dissolved the group "${name}"`
+        : `The group "${name}" was dissolved by an administrator`,
   cardTitle: "Contact card",
   cardFor: (handle: string) => `@${handle}`,
   cardExpires: (when: string) => `Valid until ${when}`,

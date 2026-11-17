@@ -14,15 +14,18 @@ export class ImageError extends Error {}
 
 export type PictureFormat = "image/png" | "image/jpeg";
 
-const HEIC = /\.(heic|heif)$/i;
 const PICTURE_NAME = /\.(png|jpe?g|gif|bmp|webp|avif|heic|heif|jfif|tiff?)$/i;
 
 /** Whether a picked, pasted or dropped file looks like a picture. Some systems give a HEIC photo no type at all, so the name counts too. */
 export const isPicture = (f: { type: string; name?: string }): boolean => f.type.startsWith("image/") || (f.type === "" && PICTURE_NAME.test(f.name ?? ""));
 
-/** PNG and HEIC/HEIF go out as PNG (sharp edges, screenshots, transparency, nothing lost); everything else (JPEG, BMP, WebP, GIF, ...) as JPEG. */
+/**
+ * The format a picture is tried in first: a PNG stays a PNG (sharp edges, screenshots, transparency, nothing lost) and everything else (JPEG, HEIC/HEIF,
+ * BMP, WebP, GIF, ...) goes as JPEG. A PNG is only kept while it fits the budget at full size (see fitPicture); a photo saved as PNG, or a HEIC photo
+ * turned into PNG, is several MB, and a lossless format can only get under the budget by shrinking the picture, which costs far more than JPEG's quality.
+ */
 export function outputFormat(f: { type: string; name?: string }): PictureFormat {
-  return f.type === "image/png" || f.type === "image/heic" || f.type === "image/heif" || HEIC.test(f.name ?? "") ? "image/png" : "image/jpeg";
+  return f.type === "image/png" ? "image/png" : "image/jpeg";
 }
 
 /** The format of sealed picture bytes, read from their first bytes (a PNG starts with 89 50 4E 47); anything else is a JPEG. */
@@ -70,14 +73,36 @@ export async function fitToBudget<T extends { size: number }>(
 }
 
 /**
- * Turns a picked picture into bytes that fit IMAGE_MAX_BYTES, whatever the original (see fitToBudget): a PNG for PNG and HEIC, a JPEG for the rest
- * (outputFormat). A PNG has no quality to give up, so only its size shrinks. An original already under the budget is not squeezed (full size
- * for PNG, the best quality for JPEG). Drawing it again on a canvas drops everything the file carried besides the pixels (camera data, the place
- * it was taken, the phone's name) and straightens a rotated photo; a JPEG also flattens transparency onto white. Throws ImageError("unreadable")
- * when the browser cannot read the file as a picture (a HEIC photo, for one, is only readable where the browser can open it, as Safari does).
+ * Picks the format and the size of a picture that fits `budget`. With `preferPng` (the original is a PNG) the PNG is kept when it fits at the
+ * largest size (IMAGE_MAX_SIDE), because then nothing is lost at all. Otherwise it is a JPEG: the biggest size and, at that size, the highest quality that
+ * fits (fitToBudget). A PNG is never made to fit by shrinking it: a JPEG at full size looks much better than a PNG at half the size.
+ * `encode(type, w, h, quality)` returns the encoded bytes (null when the browser cannot encode that type).
+ */
+export async function fitPicture<T extends { size: number }>(
+  srcW: number,
+  srcH: number,
+  budget: number,
+  preferPng: boolean,
+  small: boolean,
+  encode: (type: PictureFormat, w: number, h: number, quality: number) => Promise<T | null>,
+): Promise<{ out: T; w: number; h: number; type: PictureFormat }> {
+  if (preferPng) {
+    const { w, h } = fitSize(srcW, srcH, IMAGE_MAX_SIDE);
+    const out = await encode("image/png", w, h, 1);
+    if (out && out.size <= budget) return { out, w, h, type: "image/png" };
+  }
+  const r = await fitToBudget(srcW, srcH, budget, (w, h, q) => encode("image/jpeg", w, h, q), small ? SMALL_QUALITIES : QUALITIES);
+  return { ...r, type: "image/jpeg" };
+}
+
+/**
+ * Turns a picked picture into bytes that fit IMAGE_MAX_BYTES, whatever the original (see fitPicture): a PNG stays a PNG while it fits at full size,
+ * everything else is a JPEG (outputFormat). An original already under the budget is not squeezed (full size, the best quality). Drawing it again
+ * on a canvas drops everything the file carried besides the pixels (camera data, the place it was taken, the phone's name) and straightens a rotated photo;
+ * a JPEG also flattens transparency onto white. Throws ImageError("unreadable") when the browser cannot read the file as a picture (a HEIC photo,
+ * for one, is only readable where the browser can open it, as Safari does).
  */
 export async function compressImage(file: Blob & { name?: string }): Promise<{ bytes: Uint8Array; w: number; h: number; type: PictureFormat }> {
-  const type = outputFormat(file);
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -85,13 +110,13 @@ export async function compressImage(file: Blob & { name?: string }): Promise<{ b
     throw new ImageError("unreadable");
   }
   try {
-    const small = file.size <= IMAGE_MAX_BYTES;
-    const qualities = type === "image/png" ? [1] : small ? SMALL_QUALITIES : QUALITIES;
-    const { out, w, h } = await fitToBudget<Blob>(
+    const { out, w, h, type } = await fitPicture<Blob>(
       bitmap.width,
       bitmap.height,
       IMAGE_MAX_BYTES,
-      async (w, h, q) => {
+      outputFormat(file) === "image/png",
+      file.size <= IMAGE_MAX_BYTES,
+      async (type, w, h, q) => {
         const canvas = document.createElement("canvas");
         canvas.width = w;
         canvas.height = h;
@@ -105,7 +130,6 @@ export async function compressImage(file: Blob & { name?: string }): Promise<{ b
         const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, type, q));
         return blob && blob.type === type ? blob : null;
       },
-      qualities,
     );
     return { bytes: new Uint8Array(await out.arrayBuffer()), w, h, type };
   } finally {

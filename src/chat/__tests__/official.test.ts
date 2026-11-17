@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardStatus, parseCard, parseDeclined, parseRemoved } from "../official";
+import { cardStatus, parseCard, parseDeclined, parseGroupDeleted, parseRemoved } from "../official";
 import { canDelete } from "../selection";
 
 const card = { cardId: "c1", subjectId: "u2", subjectHandle: "bob", expiresAt: 10_000, state: "active" };
@@ -27,6 +27,25 @@ describe("parsing what an official message carries", () => {
     expect(parseCard({ ...card, subjectId: "" })).toBeNull();
     expect(parseCard({ ...card, expiresAt: "soon" })).toBeNull();
     expect(parseCard([])).toBeNull();
+  });
+});
+
+describe("a dissolved group", () => {
+  it("reads the name, the reason and who did it", () => {
+    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u1", handle: "ann" } })).toEqual({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u1", handle: "ann" } });
+    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "admin", by: { userId: "u1", handle: "ann" } })?.reason).toBe("admin");
+    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "owner_deleted", by: { userId: "u1", handle: "ann" } })?.reason).toBe("owner_deleted");
+  });
+
+  it("has no `by` when the operator did it, and treats an unknown reason as the owner's", () => {
+    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "admin" })).toEqual({ groupId: "g1", name: "Team", reason: "admin", by: null });
+    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "new", by: { handle: "x" } })).toEqual({ groupId: "g1", name: "Team", reason: "owner", by: null });
+  });
+
+  it("refuses a record without a group or a name", () => {
+    expect(parseGroupDeleted({ name: "Team" })).toBeNull();
+    expect(parseGroupDeleted({ groupId: "g1" })).toBeNull();
+    expect(parseGroupDeleted(null)).toBeNull();
   });
 });
 

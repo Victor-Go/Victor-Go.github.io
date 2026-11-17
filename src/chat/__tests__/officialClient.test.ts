@@ -217,6 +217,30 @@ describe("who may add contacts", () => {
   });
 });
 
+describe("a dissolved group", () => {
+  const dissolved = (seq: number) => wire(seq, "group_deleted", { groupId: "g1", name: "Team", reason: "owner", by: { userId: "u2", handle: "bob" } });
+  const groupLess = (path: string) => (path === "/groups" ? { groups: [] } : { messages: [dissolved(1)], lastSeq: 1, hasMore: false });
+
+  it("when the message is pushed, the groups are read again", async () => {
+    const { get } = fakeApi(groupLess);
+    await onFrame({ t: "message", ...dissolved(1) });
+    expect(get).toHaveBeenCalledWith("/groups");
+    expect(useChat.getState().messages[OFFICIAL][0]).toMatchObject({ kind: "group_deleted", payload: null });
+  });
+
+  it("when the official conversation is loaded (a dissolution that was missed), they are read again too", async () => {
+    const { get } = fakeApi(groupLess);
+    await loadHistory(OFFICIAL);
+    await vi.waitFor(() => expect(get).toHaveBeenCalledWith("/groups"));
+  });
+
+  it("a conversation without such a message does not read the groups", async () => {
+    const { get } = fakeApi(() => ({ messages: [wire(1, "card", cardData)], lastSeq: 1, hasMore: false }));
+    await loadHistory(OFFICIAL);
+    expect(get).not.toHaveBeenCalledWith("/groups");
+  });
+});
+
 describe("a declined contact request", () => {
   const declined = (seq: number) => wire(seq, "contact_declined", { userId: "u2", handle: "bob" });
   const pending = { id: "r1", direction: "out" as const, status: "pending", user: { userId: "u2", handle: "bob" }, createdAt: 1 };

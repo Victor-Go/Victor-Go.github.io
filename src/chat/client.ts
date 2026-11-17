@@ -871,6 +871,8 @@ export async function loadHistory(conv: string): Promise<void> {
   replaceRange(conv, incoming, (m) => m.seq === 0 || m.seq > r.lastSeq);
   // A declined request that was missed (offline, another device): the official conversation says so, and the list of requests is read again.
   if (incoming.some((m) => m.kind === "contact_declined")) void refreshContacts().catch(() => {});
+  // A group that was dissolved while this device was away: the official conversation says so, and the list of groups is read again.
+  if (incoming.some((m) => m.kind === "group_deleted")) void refreshGroups().catch(() => {});
   const st = useChat.getState();
   patch({
     olderMore: { ...st.olderMore, [conv]: r.hasMore },
@@ -1249,6 +1251,8 @@ export async function onFrame(f: Frame): Promise<void> {
     if (unseen && w.kind === "contact_removed") await onContactRemoved(w.data);
     // The request I made was declined: it is no longer waiting.
     if (unseen && w.kind === "contact_declined") await refreshContacts().catch(() => {});
+    // A group I was in was dissolved: it is gone from the list (the `group_deleted` notice does the same for an open socket).
+    if (unseen && w.kind === "group_deleted") await refreshGroups().catch(() => {});
   } else if (f.t === "updated") {
     if (typeof f.kind === "string" && isRecord(f.data) && Number.isInteger(f.seq)) {
       const conv = String(f.conv);

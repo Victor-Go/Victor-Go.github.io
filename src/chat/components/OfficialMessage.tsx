@@ -3,7 +3,7 @@ import { OFFICIAL_ID } from "../avatar";
 import { ApiError, requestViaCard, type Progress } from "../client";
 import { formatClock, formatDay } from "../format";
 import { errorOf } from "../i18nApp";
-import { cardStatus, parseCard, parseDeclined, parseRemoved } from "../official";
+import { cardStatus, parseCard, parseDeclined, parseGroupDeleted, parseRemoved } from "../official";
 import { useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
 import { Avatar, Steps } from "./ui";
@@ -35,6 +35,17 @@ export function OfficialMessage({ m, selecting }: { m: Msg; selecting: boolean }
       <div className="ch-system" role="note" data-official="contact_declined">
         <Avatar userId={OFFICIAL_ID} size={18} />
         <strong>{d ? a.officialDeclined(d.handle) : a.officialUnknown}</strong>
+        <span>{formatClock(m.time, lang)}</span>
+      </div>
+    );
+  }
+
+  if (m.kind === "group_deleted") {
+    const g = parseGroupDeleted(m.data);
+    return (
+      <div className="ch-system" role="note" data-official="group_deleted">
+        <Avatar userId={OFFICIAL_ID} size={18} />
+        <strong>{g ? a.officialGroupDeleted(g.name, g.reason, g.by?.handle || null) : a.officialUnknown}</strong>
         <span>{formatClock(m.time, lang)}</span>
       </div>
     );

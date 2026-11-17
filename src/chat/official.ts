@@ -48,6 +48,27 @@ export function parseDeclined(data: unknown): Declined | null {
   return userId ? { userId, handle: text(data.handle) ?? "" } : null;
 }
 
+export type GroupDeletedReason = "owner" | "admin" | "owner_deleted";
+
+export interface GroupDeleted {
+  groupId: string;
+  name: string;
+  reason: GroupDeletedReason;
+  /** Who dissolved it; missing when the AWS operator did (no account). */
+  by: { userId: string; handle: string } | null;
+}
+
+/** `group_deleted`: sent to every member of a dissolved group except the one who dissolved it (the group is gone, so its name is in the message). */
+export function parseGroupDeleted(data: unknown): GroupDeleted | null {
+  if (!isRecord(data)) return null;
+  const groupId = text(data.groupId);
+  const name = text(data.name, 100);
+  if (!groupId || name === null) return null;
+  const reason: GroupDeletedReason = data.reason === "admin" || data.reason === "owner_deleted" ? data.reason : "owner";
+  const by = isRecord(data.by) && text(data.by.userId) ? { userId: text(data.by.userId) as string, handle: text(data.by.handle) ?? "" } : null;
+  return { groupId, name, reason, by };
+}
+
 export function parseCard(data: unknown): Card | null {
   if (!isRecord(data)) return null;
   const cardId = text(data.cardId);

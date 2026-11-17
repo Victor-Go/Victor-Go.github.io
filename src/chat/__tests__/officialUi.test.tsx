@@ -243,6 +243,42 @@ describe("a contact_declined message", () => {
   });
 });
 
+describe("a group_deleted message", () => {
+  const dissolved = (data: Record<string, unknown>) =>
+    useChat.setState({ official: OFFICIAL, activeConv: OFFICIAL, messages: { [OFFICIAL]: [official(1, "group_deleted", data)] } });
+  const show = (data: Record<string, unknown>, text: string, zh: string) => {
+    dissolved(data);
+    const { unmount } = render(<Conversation />);
+    expect(screen.getByText(text)).toBeTruthy();
+    unmount();
+    setLang("zh");
+    render(<Conversation />);
+    expect(screen.getByText(zh)).toBeTruthy();
+  };
+
+  it("says who dissolved the group, in both languages", () => {
+    show({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u2", handle: "bob" } }, '@bob dissolved the group "Team"', "@bob 解散了群「Team」");
+  });
+
+  it("says when an administrator did it", () => {
+    show({ groupId: "g1", name: "Team", reason: "admin", by: { userId: "u2", handle: "bob" } }, '@bob (administrator) dissolved the group "Team"', "@bob (管理员)解散了群「Team」");
+  });
+
+  it("says why when the owner's account was deleted, and names the operator's action without a person", () => {
+    show({ groupId: "g1", name: "Team", reason: "owner_deleted", by: { userId: "u2", handle: "bob" } }, `The group "Team" was dissolved: its owner @bob's account was deleted`, "群「Team」已解散:群主 @bob 的账号已被删除");
+  });
+
+  it("without a person it is the administrators' doing", () => {
+    show({ groupId: "g1", name: "Team", reason: "admin" }, 'The group "Team" was dissolved by an administrator', "群「Team」已被管理员解散");
+  });
+
+  it("a malformed one is a plain note", () => {
+    dissolved({});
+    render(<Conversation />);
+    expect(screen.getByText("This version cannot show this system message.")).toBeTruthy();
+  });
+});
+
 describe("the official badge", () => {
   it("is a fixed picture, the same wherever the official channel shows, and not any user's avatar", async () => {
     const { Avatar } = await import("../components/ui");

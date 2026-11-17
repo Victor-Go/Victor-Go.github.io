@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { toEpochs } from "../crypto/keys";
 import { IMAGE_SIDE_MAX, decryptMessage, encryptMessage, type Binding, type Payload } from "../crypto/message";
-import { IMAGE_MAX_BYTES, IMAGE_MAX_SIDE, ImageError, compressImage, drawSize, fitSize, fitToBudget, isPicture, outputFormat, sniffFormat } from "../image";
+import { IMAGE_MAX_BYTES, IMAGE_MAX_SIDE, ImageError, compressImage, drawSize, fitPicture, fitSize, fitToBudget, isPicture, outputFormat, sniffFormat } from "../image";
 import { planDeleteBatches } from "../selection";
 import type { Msg } from "../store";
 import { VOICE_MAX_BYTES } from "../voice";
@@ -38,11 +38,11 @@ describe("compressing", () => {
 });
 
 describe("formats", () => {
-  it("sends PNG and HEIC/HEIF as PNG, everything else as JPEG", () => {
+  it("tries a PNG as a PNG and everything else, HEIC/HEIF included, as a JPEG", () => {
     expect(outputFormat({ type: "image/png" })).toBe("image/png");
-    expect(outputFormat({ type: "image/heic" })).toBe("image/png");
-    expect(outputFormat({ type: "image/heif" })).toBe("image/png");
-    expect(outputFormat({ type: "", name: "IMG_0001.HEIC" })).toBe("image/png");
+    expect(outputFormat({ type: "image/heic" })).toBe("image/jpeg");
+    expect(outputFormat({ type: "image/heif" })).toBe("image/jpeg");
+    expect(outputFormat({ type: "", name: "IMG_0001.HEIC" })).toBe("image/jpeg");
     for (const type of ["image/jpeg", "image/bmp", "image/webp", "image/gif", ""]) expect(outputFormat({ type })).toBe("image/jpeg");
   });
 
@@ -65,6 +65,40 @@ describe("formats", () => {
     const r = await fitToBudget(4000, 3000, 1000, async (w, h, q) => (tried.push(q), { size: w * h }), [1]);
     expect(new Set(tried)).toEqual(new Set([1]));
     expect(r.out.size).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe("choosing PNG or JPEG", () => {
+  /** PNG: `pngBytes` bytes per pixel whatever the size (lossless); JPEG: `jpegBytes` bytes per pixel at quality 1, scaled by the quality. */
+  const encode = (pngBytes: number, jpegBytes: number) => async (type: string, w: number, h: number, q: number) => ({ type, w, h, q, size: Math.round(w * h * (type === "image/png" ? pngBytes : jpegBytes * q)) });
+
+  it("keeps a PNG that fits at full size: nothing is lost", async () => {
+    const r = await fitPicture(1000, 800, 500_000, true, false, encode(0.1, 0.5));
+    expect([r.type, r.w, r.h]).toEqual(["image/png", 1000, 800]);
+  });
+
+  it("a PNG that does not fit becomes a JPEG at full size, not a PNG at half the size", async () => {
+    const r = await fitPicture(4000, 3000, 500_000, true, false, encode(3, 0.3));
+    expect(r.type).toBe("image/jpeg");
+    expect([r.w, r.h]).toEqual([IMAGE_MAX_SIDE, 1200]);
+    expect(r.out.size).toBeLessThanOrEqual(500_000);
+  });
+
+  it("anything that is not a PNG is a JPEG from the start, and never tries a PNG", async () => {
+    const tried: string[] = [];
+    const r = await fitPicture(4000, 3000, 500_000, false, false, async (type, w, h, q) => (tried.push(type), encode(3, 0.3)(type, w, h, q)));
+    expect(r.type).toBe("image/jpeg");
+    expect(new Set(tried)).toEqual(new Set(["image/jpeg"]));
+  });
+
+  it("a small original gets the best quality first", async () => {
+    const r = await fitPicture(800, 600, 500_000, false, true, encode(3, 0.3));
+    expect(r.out.q).toBe(0.95);
+  });
+
+  it("a browser that cannot encode a PNG still sends a JPEG", async () => {
+    const r = await fitPicture(800, 600, 500_000, true, false, async (type, w, h, q) => (type === "image/png" ? null : encode(3, 0.3)(type, w, h, q)));
+    expect(r.type).toBe("image/jpeg");
   });
 });
 

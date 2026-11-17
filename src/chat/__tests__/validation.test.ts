@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   canonicalHandle,
+  cleanNick,
+  NICK_MAX,
   checkHandle,
   checkPassword,
   normalizePassword,
@@ -87,5 +89,15 @@ describe("strengthOf and sanitizeInvite", () => {
 
   it("keeps invite codes URL-safe", () => {
     expect(sanitizeInvite(" ab-C_1 !@")).toBe("ab-C_1");
+  });
+});
+
+describe("contact nickname", () => {
+  it("is trimmed, free of control characters and at most 14 characters", () => {
+    expect(NICK_MAX).toBe(14);
+    expect(cleanNick("  老王\n ")).toBe("老王");
+    expect(cleanNick("a".repeat(20))).toBe("a".repeat(14));
+    expect(Array.from(cleanNick("😀".repeat(20))).length).toBe(14);
+    expect(cleanNick("   ")).toBe("");
   });
 });

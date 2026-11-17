@@ -8,7 +8,7 @@ import { errorOf } from "../i18nApp";
 import { deliveryOf } from "../delivery";
 import { dayKey, formatClock, formatDay, isExpired } from "../format";
 import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions";
-import { useChat, type Msg } from "../store";
+import { contactLabel, useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
 import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
@@ -413,7 +413,7 @@ export function Conversation() {
       </div>
     );
   }
-  const title = isOfficial ? a.officialTitle : contact ? `@${contact.handle}` : group!.name;
+  const title = isOfficial ? a.officialTitle : contact ? contactLabel(contact) : group!.name;
   const canSend = isOfficial ? false : contact ? contact.key !== null && !contact.deleted : (group?.keys.get(group!.gen) ?? null) !== null;
   const nameOf = (m: Msg): string => (m.mine ? me.handle : group ? (group.members.find((x) => x.userId === m.senderId)?.handle ?? "?") : (contact?.handle ?? "?"));
   const length = Array.from(draft).length;

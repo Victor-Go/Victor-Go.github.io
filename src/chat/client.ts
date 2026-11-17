@@ -17,7 +17,7 @@ import { mentionsHandle } from "./mentions";
 import { parseCard, parseRemoved } from "./official";
 import { playChime } from "./sound";
 import { stripControls } from "./text";
-import { canonicalHandle } from "./validation";
+import { canonicalHandle, cleanNick, NOTE_MAX } from "./validation";
 import { compressImage, sniffFormat } from "./image";
 import { fitsServer } from "./voice";
 import { canDelete, planDeleteBatches } from "./selection";
@@ -85,7 +85,7 @@ const s = {
   nextEpoch: 0,
   fav: null as { current: number; constants: Map<number, string> } | null,
   versions: new Map<string, number>(),
-  contactKeys: new Map<string, { key: Uint8Array; convId: string }>(),
+  contactKeys: new Map<string, { key: Uint8Array; convId: string; nick?: string }>(),
   groupKeys: new Map<string, Map<number, Uint8Array>>(),
   lastSeq: new Map<string, number>(),
   /** When the configuration was last applied (ms since the epoch), so a reconnect does not ask for it again at once. */
@@ -386,7 +386,7 @@ async function loadVault(): Promise<void> {
         if (typeof v.sound === "boolean") patch({ sound: v.sound });
         if (typeof v.notifyDismissed === "boolean") patch({ notifyDismissed: v.notifyDismissed });
       }
-      else if (rec.id.startsWith("contact:")) s.contactKeys.set(rec.id.slice(8), { key: fromB64(String(v.key)), convId: String(v.convId) });
+      else if (rec.id.startsWith("contact:")) s.contactKeys.set(rec.id.slice(8), { key: fromB64(String(v.key)), convId: String(v.convId), nick: typeof v.nick === "string" ? cleanNick(v.nick) || undefined : undefined });
       else if (rec.id.startsWith("group:")) {
         const keys = new Map<number, Uint8Array>();
         for (const [gen, k] of Object.entries(v.keys as Record<string, string>)) keys.set(Number(gen), fromB64(k));
@@ -419,7 +419,7 @@ interface FavoriteRecord {
 
 /** A favourite from the vault: its text opens only while the favourite epoch it was sealed under still exists. */
 async function readFavorite(epoch: number, id: string, v: FavoriteRecord): Promise<Favorite> {
-  const kind = v.kind === "voice" || v.kind === "image" ? v.kind : "text";
+  const kind = v.kind === "voice" || v.kind === "image" || v.kind === "note" ? v.kind : "text";
   const base: Omit<Favorite, "text"> = {
     id, conv: String(v.conv ?? ""), from: String(v.from ?? ""), time: Number(v.time) || 0, savedAt: Number(v.savedAt) || 0, gen: epoch, kind,
     ...(kind === "voice" ? { ms: Number(v.ms) || 0 } : {}),
@@ -484,7 +484,7 @@ export async function refreshContacts(): Promise<void> {
   const list = (await api().get<{ contacts: { userId: string; handle: string; role: string; convId: string; deleted?: boolean; lastAt?: number }[] }>("/contacts")).contacts;
   // The server says when each chat last had a message, which orders the list.
   for (const c of list) noteActive(c.convId, c.lastAt ?? 0);
-  const contacts: Contact[] = list.map((c) => ({ ...c, key: s.contactKeys.get(c.userId)?.key ?? null }));
+  const contacts: Contact[] = list.map((c) => ({ ...c, key: s.contactKeys.get(c.userId)?.key ?? null, nick: s.contactKeys.get(c.userId)?.nick }));
   // A key saved before the server confirmed the contact has no conversation id yet; now that it is known it is written down.
   for (const c of contacts) {
     const k = s.contactKeys.get(c.userId);
@@ -518,8 +518,20 @@ export async function refreshContacts(): Promise<void> {
 }
 
 async function saveContactKey(userId: string, handle: string, convId: string, key: Uint8Array): Promise<void> {
-  s.contactKeys.set(userId, { key, convId });
-  await putRecord(`contact:${userId}`, { key: toB64(key), convId, handle });
+  const nick = s.contactKeys.get(userId)?.nick; // rewriting the record must not lose the nickname
+  s.contactKeys.set(userId, { key, convId, nick });
+  await putRecord(`contact:${userId}`, { key: toB64(key), convId, handle, ...(nick ? { nick } : {}) });
+}
+
+/** Gives a contact a private nickname (at most NICK_MAX characters; empty clears it). Only the contact's record in this person's encrypted storage changes. */
+export async function setContactNick(userId: string, text: string): Promise<void> {
+  const k = s.contactKeys.get(userId);
+  const c = useChat.getState().contacts.find((x) => x.userId === userId);
+  if (!k || !c) throw new Error("no contact record");
+  const nick = cleanNick(text) || undefined;
+  await putRecord(`contact:${userId}`, { key: toB64(k.key), convId: k.convId, handle: c.handle, ...(nick ? { nick } : {}) });
+  k.nick = nick;
+  patch({ contacts: useChat.getState().contacts.map((x) => (x.userId === userId ? { ...x, nick } : x)) });
 }
 
 /** The refusals that mean the page's idea of "may I add contacts" is out of date: it is read again. */
@@ -1476,6 +1488,31 @@ export async function addFavorite(conv: string, msg: Msg, from: string): Promise
   }
   patch({ favorites: [fav, ...useChat.getState().favorites.filter((f) => f.id !== fav.id)] });
   void refreshUsage();
+}
+/** Writes a note of the person's own into the favourites (protocol 9: a favourite with no chat, so removing a contact never takes it). */
+export async function addNote(text: string): Promise<void> {
+  const body = Array.from(text.trim()).slice(0, NOTE_MAX).join("");
+  if (!body) return;
+  const bytes = randomBytes(8);
+  const id = `note-${Array.from(bytes, (b) => (b % 36).toString(36)).join("")}`;
+  const now = Date.now();
+  const fav: Favorite = { id, conv: "", from: me().handle, text: body, time: now, savedAt: now, gen: s.fav?.current ?? 0, kind: "note" };
+  await putFavorite(fav);
+  patch({ favorites: [fav, ...useChat.getState().favorites] });
+  void refreshUsage();
+}
+/**
+ * Changes the text of a note of one's own. Only notes can be edited (a saved chat message is a copy of what was said and stays as it was). The record keeps its
+ * name, so it stays sealed under the favourite epoch it was made in; a note whose epoch is destroyed cannot be opened and so not edited either.
+ */
+export async function editNote(id: string, text: string): Promise<void> {
+  const f = useChat.getState().favorites.find((x) => x.id === id);
+  const body = Array.from(text.trim()).slice(0, NOTE_MAX).join("");
+  const constant = f ? s.fav?.constants.get(f.gen) : undefined;
+  if (!f || f.kind !== "note" || f.text === null || !body || constant === undefined || !s.mk) throw new ApiError(0, "unavailable");
+  const sealed = await sealFavoriteText(s.mk, { gen: f.gen, constant }, me().userId, id, body);
+  await putRecord(`fav:${f.gen}:${id}`, { conv: "", from: f.from, time: f.time, savedAt: f.savedAt, editedAt: Date.now(), sealed, kind: "note" });
+  patch({ favorites: useChat.getState().favorites.map((x) => (x.id === id ? { ...x, text: body } : x)) });
 }
 export async function removeFavorite(id: string): Promise<void> {
   const f = useChat.getState().favorites.find((x) => x.id === id);

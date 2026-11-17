@@ -16,9 +16,14 @@ export interface Contact {
   convId: string;
   /** Chat key; null when the vault has none (the contact then cannot be used). */
   key: Uint8Array | null;
+  /** The private nickname this person gave the contact (kept in their encrypted storage, never sent to the server or the contact). */
+  nick?: string;
   /** The account is gone: only the name is left, the old messages stay until they expire, nothing new can be sent. */
   deleted?: boolean;
 }
+
+/** How a contact is shown: `@handle`, then the nickname in brackets when there is one. */
+export const contactLabel = (c: { handle: string; nick?: string }): string => `@${c.handle}${c.nick ? ` (${c.nick})` : ""}`;
 
 /** Whether this person may add or be added as a contact now, as the server says (`GET /me`); other people's switches are never known. */
 export interface AccountFlags {
@@ -106,8 +111,8 @@ export interface Favorite {
   savedAt: number;
   /** Favourite epoch the text was sealed under. */
   gen: number;
-  /** What was saved: text (the default, and what older records are), or a voice message or a picture kept as a file of its own (protocol 10a). */
-  kind?: "text" | "voice" | "image";
+  /** What was saved: text (the default, and what older records are), a voice message or a picture kept as a file of its own (protocol 10a), or a note the person wrote (no chat: `conv` is empty and `from` is their own handle). */
+  kind?: "text" | "voice" | "image" | "note";
   /** Voice: the length in ms. Picture: the pixels. */
   ms?: number;
   w?: number;

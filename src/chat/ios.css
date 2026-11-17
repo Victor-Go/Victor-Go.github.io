@@ -402,6 +402,12 @@
   color: var(--ios-label2);
 }
 
+.ios-fav-actions {
+  display: flex;
+  gap: 16px;
+  flex: none;
+}
+
 .ios-actions {
   justify-content: flex-start;
   gap: 20px;

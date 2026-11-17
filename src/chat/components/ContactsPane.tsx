@@ -3,7 +3,7 @@ import { UserPlus, Users } from "lucide-react";
 import { acceptRequest, createGroup, declineRequest, requestContact, type Progress } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { useCan, useChat } from "../store";
+import { contactLabel, useCan, useChat } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
 import { HandleField } from "./HandleField";
@@ -267,7 +267,7 @@ export function ContactsPane() {
         <section>
           <h3 className="ch-section">{a.contacts}</h3>
           {contacts.length === 0 && <p className="ch-hint ch-pad">{a.noContacts}</p>}
-          <ul className="ch-list-plain">{contacts.map((c) => row(c.convId, c.userId, `@${c.handle}`, c.deleted ? a.deletedTag : c.key ? undefined : a.keyMissing, c.role === "admin"))}</ul>
+          <ul className="ch-list-plain">{contacts.map((c) => row(c.convId, c.userId, contactLabel(c), c.deleted ? a.deletedTag : c.key ? undefined : a.keyMissing, c.role === "admin"))}</ul>
         </section>
       </div>
       {dialog === "add" && <AddContactDialog onClose={() => setDialog(null)} />}

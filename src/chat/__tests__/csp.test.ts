@@ -62,7 +62,7 @@ describe("parseEndpoints (a pool: a, b, c)", () => {
 describe("connectSrc", () => {
   it("lists every address of both pools", () => {
     expect(connectSrc("https://a.example.com,https://b.example.com", "wss://x.example.com/prod,wss://y.example.com")).toBe(
-      "https://a.example.com https://b.example.com wss://x.example.com wss://y.example.com",
+      "https://a.example.com https://b.example.com wss://x.example.com wss://y.example.com https://x.example.com https://y.example.com",
     );
     expect(connectSrc("https://a.example.com,http://evil.example", undefined)).toBe("https://a.example.com");
   });
@@ -73,13 +73,13 @@ describe("connectSrc", () => {
   });
 
   it("lists only the server origins, once each", () => {
-    expect(connectSrc("https://a.example.com/x", "wss://b.example.com/prod")).toBe("https://a.example.com wss://b.example.com");
+    expect(connectSrc("https://a.example.com/x", "wss://b.example.com/prod")).toBe("https://a.example.com wss://b.example.com https://b.example.com");
     expect(connectSrc("https://a.example.com", undefined)).toBe("https://a.example.com");
   });
 
   it("adds the voice storage origin, once, and ignores one that is not usable", () => {
     expect(connectSrc("https://a.example.com", "wss://b.example.com/prod", "https://voice-bucket.s3.ap-east-1.amazonaws.com/")).toBe(
-      "https://a.example.com wss://b.example.com https://voice-bucket.s3.ap-east-1.amazonaws.com",
+      "https://a.example.com wss://b.example.com https://b.example.com https://voice-bucket.s3.ap-east-1.amazonaws.com",
     );
     expect(connectSrc("https://a.example.com", undefined, "https://a.example.com")).toBe("https://a.example.com");
     expect(connectSrc("https://a.example.com", undefined, "http://voice.example.com")).toBe("https://a.example.com");

@@ -142,3 +142,106 @@ async function checkOne(api: string | null, deps: HealthDeps): Promise<HealthSta
     clearTimeout(timer);
   }
 }
+
+// ---------- the WebSocket side ----------
+
+export type WsState =
+  | { kind: "unconfigured" }
+  | { kind: "checking" }
+  | { kind: "ok" | "slow"; rttMs: number }
+  | { kind: "down"; reason: "timeout" | "network" };
+
+/**
+ * A browser WebSocket never says why a handshake failed (a refused ticket and a blocked address both end as code 1006), so the live channel is
+ * checked without opening one: one plain HTTPS request to the same host. It goes through the same DNS answer, address, port and TLS name that a
+ * blocker acts on, and any HTTP answer at all (even the 4xx that API Gateway gives a WebSocket host) proves they work. `no-cors` means the answer
+ * is never read, so no CORS header is needed and nothing reaches the server's code (no Lambda, no database).
+ */
+export function wsReachUrl(ws: string): string {
+  const u = new URL(ws);
+  u.protocol = u.protocol === "wss:" ? "https:" : "http:";
+  return u.href;
+}
+
+async function reachOne(ws: string, deps: HealthDeps): Promise<WsState> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const now = deps.now ?? (() => performance.now());
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? HEALTH_TIMEOUT_MS);
+  const started = now();
+  try {
+    await fetchImpl(wsReachUrl(ws), {
+      method: "GET",
+      mode: "no-cors",
+      credentials: "omit",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      signal: controller.signal,
+    });
+    const rttMs = Math.round(now() - started);
+    return { kind: rttMs >= SLOW_RTT_MS ? "slow" : "ok", rttMs };
+  } catch {
+    return { kind: "down", reason: controller.signal.aborted ? "timeout" : "network" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export interface WsPoolResult {
+  /** Which address of the pool answered (0 when none did). */
+  index: number;
+  state: WsState;
+}
+
+/** The same order as `probePool`: the first address at once, each next one when the one before failed or has been silent for `staggerMs`. */
+export function probeWsPool(urls: string[], deps: HealthDeps = {}): Promise<WsPoolResult> {
+  if (urls.length === 0) return Promise.resolve({ index: 0, state: { kind: "unconfigured" } });
+  const stagger = deps.staggerMs ?? POOL_STAGGER_MS;
+  return new Promise((resolve) => {
+    const started = new Set<number>();
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const failures: WsState[] = [];
+    let done = false;
+    const finish = (result: WsPoolResult): void => {
+      if (done) return;
+      done = true;
+      for (const t of timers) clearTimeout(t);
+      resolve(result);
+    };
+    const start = (i: number): void => {
+      if (done || i >= urls.length || started.has(i)) return;
+      started.add(i);
+      if (i + 1 < urls.length) timers.push(setTimeout(() => start(i + 1), stagger));
+      void reachOne(urls[i], deps).then((state) => {
+        if (state.kind !== "down") return finish({ index: i, state });
+        failures[i] = state;
+        if (Object.keys(failures).length === urls.length) return finish({ index: 0, state: failures[0] });
+        start(i + 1);
+      });
+    };
+    start(0);
+  });
+}
+
+// ---------- both together ----------
+
+/** What the person is told. The latency is the average of the two channels when both answered; a channel that failed is never averaged in. */
+export type Connectivity =
+  | { kind: "checking" | "unconfigured" | "incompatible" | "allDown" }
+  | { kind: "ok" | "slow"; rttMs: number; httpMs: number; wsMs: number | null }
+  /** The sign-in interface (HTTPS) cannot be reached. `wsMs` is the live channel's latency when that one answers. */
+  | { kind: "httpDown"; reason: "timeout" | "network" | "bad_response"; wsMs: number | null }
+  /** The live channel (WebSocket host) cannot be reached while the sign-in interface works. */
+  | { kind: "wsDown"; httpMs: number };
+
+export function summarize(http: HealthState, ws: WsState): Connectivity {
+  if (http.kind === "unconfigured") return { kind: "unconfigured" };
+  if (http.kind === "checking" || ws.kind === "checking") return { kind: "checking" };
+  if (http.kind === "incompatible") return { kind: "incompatible" };
+  const wsMs = ws.kind === "ok" || ws.kind === "slow" ? ws.rttMs : null;
+  if (http.kind === "down") return ws.kind === "down" ? { kind: "allDown" } : { kind: "httpDown", reason: http.reason, wsMs };
+  if (ws.kind === "down") return { kind: "wsDown", httpMs: http.rttMs };
+  const times = wsMs === null ? [http.rttMs] : [http.rttMs, wsMs];
+  const slow = http.kind === "slow" || ws.kind === "slow";
+  return { kind: slow ? "slow" : "ok", rttMs: Math.round(times.reduce((a, b) => a + b, 0) / times.length), httpMs: http.rttMs, wsMs };
+}

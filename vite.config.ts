@@ -118,7 +118,11 @@ const chatConnectSrc = (): Plugin => {
     apply: 'build',
     configResolved(config) {
       const env = loadEnv(config.mode, config.envDir || config.root, 'VITE_CHAT_')
-      value = connectSrc(env.VITE_CHAT_API, env.VITE_CHAT_WS, env.VITE_CHAT_FILES_ORIGIN)
+      // Only a build that has the public key for the signed address list gets its sources and name families into the CSP.
+      const signed = env.VITE_CHAT_ENDPOINTS_KEY
+        ? { sources: env.VITE_CHAT_ENDPOINTS_SOURCES || '/chat/endpoints.json', hosts: env.VITE_CHAT_ENDPOINT_HOSTS }
+        : undefined
+      value = connectSrc(env.VITE_CHAT_API, env.VITE_CHAT_WS, env.VITE_CHAT_FILES_ORIGIN, signed)
       for (const [name, kind] of [['VITE_CHAT_API', 'http'], ['VITE_CHAT_WS', 'ws']] as const) {
         const bad = unusableEndpoints(env[name], kind)
         if (bad.length) config.logger.warn(`${name}: not usable and left out: ${bad.join(', ')}`)

@@ -20,7 +20,7 @@ const RULES: PasswordProblem[] = ["length", "upper", "lower", "digit"];
 
 export function AccountPage() {
   const { m, a, toggle } = useLang();
-  const { state, recheck } = useHealth();
+  const { state, connectivity, recheck } = useHealth();
   const lockNotice = useChat((s) => s.notice);
   const idleMinutes = useChat((s) => s.idleMinutes);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -111,7 +111,7 @@ export function AccountPage() {
           </button>
         </header>
 
-        <ServerStatus state={state} m={m} onRetry={recheck} />
+        <ServerStatus state={state} connectivity={connectivity} m={m} onRetry={recheck} />
 
         <div role="tablist" aria-label={m.tabsLabel} className="ch-tabs">
           {(["in", "up"] as const).map((id) => (

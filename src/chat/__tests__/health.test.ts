@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { checkHealth, parseHealth, probePool, PROTOCOL_VERSION, SLOW_RTT_MS } from "../net/health";
+import { checkHealth, parseHealth, probePool, probeWsPool, PROTOCOL_VERSION, SLOW_RTT_MS, summarize, wsReachUrl, type HealthState, type WsState } from "../net/health";
 
 const good = (minClient = PROTOCOL_VERSION) => ({
   server: { version: "0.1.0", commit: "abc1234", builtAt: 1, region: "ap-east-1" },
@@ -128,5 +128,93 @@ describe("probePool", () => {
     const r = await probePool([A, B], { fetchImpl: reply(good(PROTOCOL_VERSION + 1)), staggerMs: 1000 });
     expect(r.index).toBe(0);
     expect(r.state.kind).toBe("incompatible");
+  });
+});
+
+describe("the live channel check", () => {
+  it("asks the host with one plain HTTPS request and never opens a WebSocket", () => {
+    expect(wsReachUrl("wss://ws.example.com")).toBe("https://ws.example.com/");
+    expect(wsReachUrl("wss://abc.execute-api.ap-east-1.amazonaws.com/prod")).toBe("https://abc.execute-api.ap-east-1.amazonaws.com/prod");
+    expect(wsReachUrl("ws://localhost:8788")).toBe("http://localhost:8788/");
+  });
+
+  it("counts any answer, even an opaque one, and reads nothing", async () => {
+    const fetchImpl = vi.fn(async () => ({ type: "opaque" }) as unknown as Response);
+    let t = 0;
+    const r = await probeWsPool(["wss://ws.example.com"], { fetchImpl, now: () => (t += 80) });
+    expect(r).toEqual({ index: 0, state: { kind: "ok", rttMs: 80 } });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://ws.example.com/");
+    expect(init).toMatchObject({ method: "GET", mode: "no-cors", credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer" });
+  });
+
+  it("is unconfigured without an address", async () => {
+    expect(await probeWsPool([])).toEqual({ index: 0, state: { kind: "unconfigured" } });
+  });
+
+  it("moves on at once from an address that fails, and says which one answered", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.startsWith("https://blocked.")) throw new TypeError("Failed to fetch");
+      return { type: "opaque" } as unknown as Response;
+    });
+    const r = await probeWsPool(["wss://blocked.example.com", "wss://ok.example.com"], { fetchImpl: fetchImpl as unknown as typeof fetch, staggerMs: 60_000 });
+    expect(r.index).toBe(1);
+    expect(r.state.kind).toBe("ok");
+  });
+
+  it("reports a down state when every address fails", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const r = await probeWsPool(["wss://a.example.com", "wss://b.example.com"], { fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(r.state).toEqual({ kind: "down", reason: "network" });
+  });
+
+  it("tells a timeout from a refusal", async () => {
+    const fetchImpl = vi.fn((_u: string, init?: RequestInit) => new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("a", "AbortError")))));
+    const r = await probeWsPool(["wss://a.example.com"], { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 5 });
+    expect(r.state).toEqual({ kind: "down", reason: "timeout" });
+  });
+});
+
+describe("summarize: what the person is told", () => {
+  const httpOk = (rttMs: number): HealthState => ({ kind: rttMs >= SLOW_RTT_MS ? "slow" : "ok", rttMs, health: parseHealth(good())! });
+  const wsOk = (rttMs: number): WsState => ({ kind: rttMs >= SLOW_RTT_MS ? "slow" : "ok", rttMs });
+  const down: HealthState = { kind: "down", reason: "network" };
+  const wsDown: WsState = { kind: "down", reason: "network" };
+
+  it("shows the average of the two when both answer", () => {
+    expect(summarize(httpOk(100), wsOk(200))).toEqual({ kind: "ok", rttMs: 150, httpMs: 100, wsMs: 200 });
+  });
+
+  it("is slow when either one is slow, whatever the average is", () => {
+    const s = summarize(httpOk(100), wsOk(SLOW_RTT_MS));
+    expect(s.kind).toBe("slow");
+    expect(summarize(httpOk(SLOW_RTT_MS), wsOk(10)).kind).toBe("slow");
+  });
+
+  it("names the channel that fails and never averages a failure in", () => {
+    expect(summarize(httpOk(120), wsDown)).toEqual({ kind: "wsDown", httpMs: 120 });
+    expect(summarize(down, wsOk(90))).toEqual({ kind: "httpDown", reason: "network", wsMs: 90 });
+  });
+
+  it("says the server cannot be reached when both fail", () => {
+    expect(summarize(down, wsDown)).toEqual({ kind: "allDown" });
+  });
+
+  it("waits until both have settled", () => {
+    expect(summarize(httpOk(100), { kind: "checking" })).toEqual({ kind: "checking" });
+    expect(summarize({ kind: "checking" }, wsOk(100))).toEqual({ kind: "checking" });
+  });
+
+  it("uses the sign-in interface alone when the build has no live channel address", () => {
+    expect(summarize(httpOk(100), { kind: "unconfigured" })).toEqual({ kind: "ok", rttMs: 100, httpMs: 100, wsMs: null });
+    expect(summarize(down, { kind: "unconfigured" })).toEqual({ kind: "httpDown", reason: "network", wsMs: null });
+  });
+
+  it("passes unconfigured and incompatible through", () => {
+    expect(summarize({ kind: "unconfigured" }, { kind: "unconfigured" })).toEqual({ kind: "unconfigured" });
+    const old: HealthState = { kind: "incompatible", rttMs: 10, health: parseHealth(good())! };
+    expect(summarize(old, wsOk(10))).toEqual({ kind: "incompatible" });
   });
 });

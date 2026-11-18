@@ -25,6 +25,8 @@ interface Options {
   onState: (state: SocketState) => void;
   /** The server closed the socket for good (deleted account, forced logout, signed in elsewhere); `reason` is the close reason ("replaced" for a newer sign-in). */
   onFinal: (reason: string) => void;
+  /** Which address of the pool a new `start()` begins with (default: the first). The page's connectivity check says which one answered. */
+  startIndex?: () => number;
 }
 
 /**
@@ -32,7 +34,7 @@ interface Options {
  *
  * With a pool of addresses it starts with the first. An address that never opens (refused, reset, or silent for `CONNECT_TIMEOUT_MS`) hands
  * over to the next one after a short pause, round and round, and only a whole round of failures backs off as usual. An address that opened
- * stays the one in use, also after it drops and on the two-hour roll-over. A new `start()` begins with the first again.
+ * stays the one in use, also after it drops and on the two-hour roll-over. A new `start()` begins with the first again, or with the one `startIndex` names.
  */
 export class ChatSocket {
   private ws: WebSocket | null = null;
@@ -55,7 +57,8 @@ export class ChatSocket {
 
   start(): void {
     this.stopped = false;
-    this.index = 0;
+    const first = this.o.startIndex?.() ?? 0;
+    this.index = Number.isInteger(first) && first >= 0 && first < this.o.urls.length ? first : 0;
     this.misses = 0;
     void this.connect();
   }

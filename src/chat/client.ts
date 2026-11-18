@@ -9,6 +9,7 @@ import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
 import { downloadBytes, uploadBytes, type UploadTarget } from "./net/blob";
+import { getPreferredWs } from "./net/preferred";
 import { ChatSocket, type Frame } from "./net/socket";
 import { GROUP_MAX, patch, reset, useChat, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem, type ServerConfig } from "./store";
 import { unlockedNow } from "./adminLock";
@@ -213,6 +214,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
     let firstOpen = true;
     const sock: ChatSocket = new ChatSocket({
       urls: s.wsUrls.length ? s.wsUrls : [a.base.replace(/^http/, "ws") + "/ws"],
+      startIndex: getPreferredWs,
       getTicket: async () => (await a.post<{ ticket: string }>("/auth/ws-ticket")).ticket,
       onFrame: (f) => mine() && void onFrame(f),
       onState: (socket) => {

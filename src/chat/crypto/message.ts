@@ -18,7 +18,13 @@ export type Payload =
   | { k: "text"; text: string; sentAt: number }
   | { k: "voice"; voice: { id: string; ms: number }; sentAt: number }
   /** `id` is the stored object's id (the server's voice storage); `w` and `h` are the pixels, so the bubble keeps its shape while the image loads. */
-  | { k: "image"; image: { id: string; w: number; h: number }; sentAt: number };
+  | { k: "image"; image: { id: string; w: number; h: number }; sentAt: number }
+  /** The record of a voice call, written by the caller's client when a call that rang has ended (protocol section 9b of the chat server). `sec`: whole seconds of talking. */
+  | { k: "call"; call: { outcome: "answered" | "noanswer" | "cancelled" | "failed"; sec: number }; sentAt: number };
+
+export const CALL_OUTCOMES: readonly string[] = ["answered", "noanswer", "cancelled", "failed"];
+/** The longest talk time a record may claim (a day); a bigger number is not drawn as claimed. */
+export const CALL_SEC_MAX = 24 * 3600;
 
 /** The most pixels along one side that a received image may claim; bigger numbers are not drawn as claimed. */
 export const IMAGE_SIDE_MAX = 4096;
@@ -95,6 +101,8 @@ export async function decryptMessage(chatKey: Uint8Array, epochs: Epochs, ct: st
     if (payload.k === "text" && typeof payload.text === "string") return payload;
     const v = payload.k === "voice" ? payload.voice : null;
     if (v && typeof v.id === "string" && v.id.length > 0 && v.id.length <= 128 && typeof v.ms === "number" && Number.isFinite(v.ms) && v.ms >= 0) return payload;
+    const call = payload.k === "call" ? payload.call : null;
+    if (call && CALL_OUTCOMES.includes(call.outcome) && typeof call.sec === "number" && Number.isInteger(call.sec) && call.sec >= 0 && call.sec <= CALL_SEC_MAX) return payload;
     const im = payload.k === "image" ? payload.image : null;
     const side = (n: unknown): boolean => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= IMAGE_SIDE_MAX;
     if (im && typeof im.id === "string" && im.id.length > 0 && im.id.length <= 128 && side(im.w) && side(im.h)) return payload;

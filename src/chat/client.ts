@@ -8,6 +8,8 @@ import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiph
 import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
+import { CallPeer, openMicrophone, type IceServer } from "./net/call";
+import { createCallFlow } from "./callFlow";
 import { downloadBytes, uploadBytes, type UploadTarget } from "./net/blob";
 import { getPreferredWs } from "./net/preferred";
 import { ChatSocket, type Frame } from "./net/socket";
@@ -16,7 +18,7 @@ import { unlockedNow } from "./adminLock";
 import { setLang, useLangStore } from "./lang";
 import { mentionsHandle } from "./mentions";
 import { parseCard, parseRemoved } from "./official";
-import { playChime } from "./sound";
+import { playChime, startRinging, startRingback, stopRinging, stopRingback } from "./sound";
 import { stripControls } from "./text";
 import { canonicalHandle, cleanNick, NOTE_MAX } from "./validation";
 import { compressImage, sniffFormat } from "./image";
@@ -108,13 +110,15 @@ const s = {
   imageLoads: new Map<string, Promise<string | null>>(),
   lastTouch: 0,
   notifyTitle: (_handle: string) => "",
+  callTitle: (_handle: string) => "",
   lockNotice: (_why: LockWhy) => "",
 };
 
-export function configure(api: Api | null, wsUrls: string[] | null, texts: { notifyTitle: (handle: string) => string; lockNotice: (why: LockWhy) => string }): void {
+export function configure(api: Api | null, wsUrls: string[] | null, texts: { notifyTitle: (handle: string) => string; callTitle?: (handle: string) => string; lockNotice: (why: LockWhy) => string }): void {
   s.api = api;
   s.wsUrls = wsUrls ?? [];
   s.notifyTitle = texts.notifyTitle;
+  s.callTitle = texts.callTitle ?? texts.notifyTitle;
   s.lockNotice = texts.lockNotice;
   if (api) api.onUnauthorized = () => lock(s.lockNotice("expired"));
 }
@@ -244,6 +248,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
 /** Wipes every key and message from memory and returns to the signed-out view. */
 export function lock(notice: string | null = null): void {
   cancelWork();
+  callFlow.reset(); // the microphone and the peer connection go with the session
   s.ws?.stop();
   s.ws = null;
   for (const b of [s.mk, s.seed]) b?.fill(0);
@@ -309,6 +314,8 @@ export function applyConfig(c: Partial<ServerConfig> | null | undefined): void {
       globalContactsBlocked: c.globalContactsBlocked === true,
       // A server that does not say keeps the door open; the server refuses anyway and the reason is shown.
       canAddContacts: c.canAddContacts !== false,
+      // Calling is off unless the server says so (an older server does not say).
+      canCall: c.canCall === true,
     },
     // the microphone and picture buttons are not shown while the administrator has files switched off
     filesOff: c.files?.enabled === false,
@@ -1043,13 +1050,18 @@ export function markRead(conv: string | null): void {
 export async function sendText(conv: string, text: string): Promise<void> {
   const clean = text.trim();
   if (!clean || Array.from(clean).length > useChat.getState().messageMaxChars || conv === useChat.getState().official) return;
+  return sendPlain(conv, { k: "text", text: clean, sentAt: Date.now() });
+}
+
+/** Seals and sends a message whose body needs no file (text, a call record): it shows at once, goes over the socket, and is sent again once if the epoch was replaced. */
+async function sendPlain(conv: string, payload: Payload & { sentAt: number }): Promise<void> {
   const myId = me().userId;
   const gen = currentGen(conv);
   const key = keyFor(conv, gen);
   if (!key) throw new ApiError(0, "forbidden");
   const id = newId();
-  const sentAt = Date.now();
-  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: { k: "text", text: clean, sentAt }, gen, status: "sending" };
+  const sentAt = payload.sentAt;
+  const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload, gen, status: "sending" };
   addMessage(conv, optimistic);
   try {
     await transmit(conv, optimistic);
@@ -1299,6 +1311,8 @@ export async function onFrame(f: Frame): Promise<void> {
       addMessage(conv, { ...m, status: "failed" });
     }
     if (f.code === "monthly_limit") void refreshUsage();
+  } else if (f.t === "call") {
+    callFlow.onFrame(f);
   } else if (f.t === "notice") {
     const kind = String(f.kind);
     // (A removed contact is no longer a notice: it arrives as a `contact_removed` official message.)
@@ -1316,6 +1330,48 @@ export async function onFrame(f: Frame): Promise<void> {
     }
   }
 }
+
+// ---------- voice calls (callFlow.ts; protocol section 9b of the chat server) ----------
+function notifyCall(userId: string): void {
+  if (!notificationsSupported() || Notification.permission !== "granted" || !(document.hidden || !document.hasFocus())) return;
+  const handle = useChat.getState().contacts.find((c) => c.userId === userId)?.handle ?? "";
+  try {
+    new Notification(s.callTitle(handle), { silent: false, tag: "call" });
+  } catch {
+    /* some platforms only allow notifications from a service worker */
+  }
+}
+
+const callFlow = createCallFlow({
+  send: (frame) => s.ws?.send(frame) ?? false,
+  iceServers: async () => (await api().get<{ iceServers: IceServer[] }>("/calls/ice")).iceServers,
+  microphone: openMicrophone,
+  makePeer: (ice, mic, ev) => new CallPeer(ice, mic, ev),
+  show: (call) => patch({ call }),
+  touch,
+  ring: (on) => (on ? startRinging() : stopRinging()),
+  ringback: (on) => (on ? startRingback() : stopRingback()),
+  record: (userId, outcome, sec) => {
+    // The record goes to the chat with this person; a failure to send it shows as a failed message there, like any other.
+    const conv = useChat.getState().contacts.find((c) => c.userId === userId)?.convId;
+    if (conv) void sendPlain(conv, { k: "call", call: { outcome, sec }, sentAt: Date.now() }).catch(() => {});
+  },
+  notify: notifyCall,
+  isContact: (userId) => useChat.getState().contacts.some((c) => c.userId === userId && !c.deleted),
+  newId: () => toB64(randomBytes(16)),
+  now: () => Date.now(),
+});
+
+/** Calls a contact (only when `account.canCall`: the server refuses anybody else). */
+export function startCall(userId: string): Promise<void> {
+  return useChat.getState().account.canCall ? callFlow.start(userId) : Promise.resolve();
+}
+export const answerCall = (): Promise<void> => callFlow.answer();
+export const declineCall = (): void => callFlow.decline();
+export const hangUpCall = (): void => callFlow.hangUp();
+export const setCallMuted = (muted: boolean): void => callFlow.setMuted(muted);
+/** Is a call going on? The idle timer does not sign anybody out in the middle of one. */
+export const callInProgress = (): boolean => callFlow.busy();
 
 // ---------- notifications ----------
 export const notificationsSupported = (): boolean => typeof Notification !== "undefined";
@@ -1469,7 +1525,7 @@ export async function deleteGroup(gid: string): Promise<void> {
 // ---------- favourites ----------
 export async function addFavorite(conv: string, msg: Msg, from: string): Promise<void> {
   const p = msg.payload;
-  if (!p) return;
+  if (!p || p.k === "call") return; // a call record is not something to keep
   const id = `${conv}.${msg.id}`.slice(0, 70);
   const base = { id, conv, from, time: msg.time, savedAt: Date.now(), gen: s.fav?.current ?? 0 };
   let fav: Favorite;

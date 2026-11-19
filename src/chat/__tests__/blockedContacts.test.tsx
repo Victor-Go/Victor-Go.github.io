@@ -8,7 +8,7 @@ const requestContact = vi.hoisted(() => vi.fn(async (_handle: string, _progress:
 const acceptRequest = vi.hoisted(() => vi.fn(async (_id: string) => {}));
 vi.mock("../client", async (orig) => ({ ...(await orig<typeof import("../client")>()), requestContact, acceptRequest }));
 
-const blocked = { contactsBlocked: false, globalContactsBlocked: true, canAddContacts: false };
+const blocked = { contactsBlocked: false, globalContactsBlocked: true, canAddContacts: false, canCall: false };
 const incoming = (id: string, handle: string, role: string, over: Partial<RequestItem> = {}): RequestItem => ({ id, direction: "in", status: "pending", user: { userId: id, handle, role }, createdAt: 1, ...over });
 
 beforeEach(() => {

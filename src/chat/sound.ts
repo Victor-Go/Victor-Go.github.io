@@ -58,6 +58,74 @@ function ring(c: AudioContext): void {
  * A short two-note chime, quiet enough not to startle. If the browser has put the audio to sleep (a background tab, a phone that
  * locked) it is woken first; that works once the user has ever touched the page. Silent if the browser still refuses.
  */
+/**
+ * The two telephone tones, made in the page (nothing is loaded): the ring an incoming call makes (two short bursts, a pause, again) and the ringback
+ * the caller hears while the other end rings (one tone, one second on, three off). Each repeats until stopped.
+ */
+function tone(c: AudioContext, freqs: number[], at: number, seconds: number, volume: number): void {
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(volume, at + 0.02);
+  gain.gain.setValueAtTime(volume, at + seconds - 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+  gain.connect(c.destination);
+  for (const f of freqs) {
+    const osc = c.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = f;
+    osc.connect(gain);
+    osc.start(at);
+    osc.stop(at + seconds + 0.02);
+  }
+}
+
+const ringPattern = (c: AudioContext): void => {
+  const t = c.currentTime;
+  tone(c, [440, 480], t, 0.4, 0.1);
+  tone(c, [440, 480], t + 0.6, 0.4, 0.1);
+};
+const ringbackPattern = (c: AudioContext): void => tone(c, [425], c.currentTime, 1, 0.08);
+
+/** Runs `pattern` now and every `everyMs` until `stop`; where the browser still refuses sound it stays silent. */
+function loop(pattern: (c: AudioContext) => void, everyMs: number): ReturnType<typeof setInterval> {
+  const play = () => {
+    const c = context();
+    if (!c) return;
+    if (c.state === "running") return pattern(c);
+    void c
+      .resume()
+      .then(() => c.state === "running" && pattern(c))
+      .catch(() => {});
+  };
+  play();
+  return setInterval(play, everyMs);
+}
+
+let ringTimer: ReturnType<typeof setInterval> | undefined;
+let ringbackTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Rings for an incoming call until `stopRinging`. */
+export function startRinging(): void {
+  stopRinging();
+  ringTimer = loop(ringPattern, 3000);
+}
+
+export function stopRinging(): void {
+  clearInterval(ringTimer);
+  ringTimer = undefined;
+}
+
+/** The caller's "tu... tu...": until `stopRingback`. */
+export function startRingback(): void {
+  stopRingback();
+  ringbackTimer = loop(ringbackPattern, 4000);
+}
+
+export function stopRingback(): void {
+  clearInterval(ringbackTimer);
+  ringbackTimer = undefined;
+}
+
 export function playChime(): void {
   const c = context();
   if (!c) return;

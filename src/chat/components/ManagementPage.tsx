@@ -38,12 +38,15 @@ interface AdminUser {
   messageLimit?: number | null;
   /** This account may not add or be added as a contact (the administrator is exempt). */
   contactsBlocked?: boolean;
+  /** This account may start voice calls (an administrator always may; everybody else starts without). */
+  canCall?: boolean;
 }
 export interface UserActions {
   resetFailures?: boolean;
   logout?: boolean;
   suspend?: boolean;
   contactsBlocked?: boolean;
+  canCall?: boolean;
   delete?: boolean;
 }
 interface Invite {
@@ -296,7 +299,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
             icon={<Avatar userId={u.userId} size={30} admin={u.role === "admin"} />}
             title={
               <>
-                @{u.handle} {u.role === "admin" && <TitleBadge userId={u.userId} role="admin" />} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>}
+                @{u.handle} {u.role === "admin" && <TitleBadge userId={u.userId} role="admin" />} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>} {u.role !== "admin" && u.canCall && <span className="ch-admin">{a.manage.canCallTag}</span>}
               </>
             }
             subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.fileBytes ? ` · ${a.manage.fileSummary(formatBytes(u.fileBytes))}` : ""}`}
@@ -316,11 +319,15 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
   const { error, run, busy } = useAdmin();
   const done = (fn: () => Promise<unknown>) => void run(fn).then((r) => r !== null && go({ k: "users" }));
   const [blocked, setBlocked] = useState(user.contactsBlocked === true);
+  const [canCall, setCanCall] = useState(user.canCall === true);
   const [cardOpen, setCardOpen] = useState(false);
   const canCard = useCan("cards");
   const act = user.actions ?? {};
   const setContactsBlocked = (next: boolean) => {
     void run(() => rawApi().post(`/admin/users/${user.userId}/contacts-blocked`, { blocked: next })).then((r) => r !== null && setBlocked(next));
+  };
+  const changeCanCall = (next: boolean) => {
+    void run(() => rawApi().post(`/admin/users/${user.userId}/can-call`, { allowed: next })).then((r) => r !== null && setCanCall(next));
   };
   return (
     <Page title={`@${user.handle}`} onBack={() => go({ k: "users" })} backLabel={a.manage.users}>
@@ -354,6 +361,11 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
       {act.contactsBlocked === true && (
         <Group footer={a.manage.contactsBlockedHint}>
           <SwitchRow title={a.manage.contactsBlocked} checked={blocked} onChange={setContactsBlocked} />
+        </Group>
+      )}
+      {act.canCall === true && (
+        <Group footer={a.manage.canCallHint}>
+          <SwitchRow title={a.manage.canCall} checked={canCall} onChange={changeCanCall} />
         </Group>
       )}
       {(act.resetFailures === true || act.logout === true || act.suspend === true) && (

@@ -10,6 +10,7 @@ import { dayKey, formatClock, formatDay, isExpired } from "../format";
 import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions";
 import { contactLabel, useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
+import { callsSupported } from "../net/call";
 import { CallBubble } from "./CallBubble";
 import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
@@ -85,7 +86,8 @@ export function Conversation() {
   const [dismissed, setDismissed] = useState(false);
   const [info, setInfo] = useState(false);
   // The call button shows only for a person an administrator has allowed to call, and not while a call is on.
-  const canCall = useChat((s) => s.account.canCall);
+  // (and only in a browser that can make a call: where it cannot, the button would only lead to an error)
+  const canCall = useChat((s) => s.account.canCall) && callsSupported();
   const inCall = useChat((s) => s.call !== null);
   const [link, setLink] = useState<string | null>(null);
   const [favError, setFavError] = useState<string | null>(null);

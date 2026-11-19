@@ -20,9 +20,9 @@ export type Payload =
   /** `id` is the stored object's id (the server's voice storage); `w` and `h` are the pixels, so the bubble keeps its shape while the image loads. */
   | { k: "image"; image: { id: string; w: number; h: number }; sentAt: number }
   /** The record of a voice call, written by the caller's client when a call that rang has ended (protocol section 9b of the chat server). `sec`: whole seconds of talking. */
-  | { k: "call"; call: { outcome: "answered" | "noanswer" | "cancelled" | "failed"; sec: number }; sentAt: number };
+  | { k: "call"; call: { outcome: "answered" | "noanswer" | "cancelled" | "declined" | "failed"; sec: number }; sentAt: number };
 
-export const CALL_OUTCOMES: readonly string[] = ["answered", "noanswer", "cancelled", "failed"];
+export const CALL_OUTCOMES: readonly string[] = ["answered", "noanswer", "cancelled", "declined", "failed"];
 /** The longest talk time a record may claim (a day); a bigger number is not drawn as claimed. */
 export const CALL_SEC_MAX = 24 * 3600;
 

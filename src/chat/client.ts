@@ -8,7 +8,7 @@ import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiph
 import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
-import { CallPeer, openMicrophone, type IceServer } from "./net/call";
+import { CallPeer, callsSupported, openMicrophone, type IceServer } from "./net/call";
 import { createCallFlow } from "./callFlow";
 import { downloadBytes, uploadBytes, type UploadTarget } from "./net/blob";
 import { getPreferredWs } from "./net/preferred";
@@ -1358,6 +1358,8 @@ const callFlow = createCallFlow({
   },
   notify: notifyCall,
   isContact: (userId) => useChat.getState().contacts.some((c) => c.userId === userId && !c.deleted),
+  myId: () => useChat.getState().me?.userId ?? "",
+  supported: callsSupported,
   newId: () => toB64(randomBytes(16)),
   now: () => Date.now(),
 });

@@ -5,10 +5,8 @@ import { canChooseOutput, keepScreenAwake, listOutputs, onOutputsChange, sendOut
 import { answerCall, declineCall, hangUpCall, setCallMuted } from "../client";
 import { contactLabel, useChat } from "../store";
 import { useLang } from "../useChat";
+import { HoldToUnlock } from "./HoldToUnlock";
 import { Avatar } from "./ui";
-
-/** How long the lock cover must be pressed to let go. */
-export const HOLD_MS = 3000;
 
 /** mm:ss since the audio came up. */
 function Elapsed({ since }: { since: number }) {
@@ -40,13 +38,6 @@ export function CallOverlay() {
   const [locked, setLocked] = useState(false);
   const [outputs, setOutputs] = useState<Output[]>([]);
   const [outputId, setOutputId] = useState("");
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // True while a finger is held on the lock cover: the ring fills for HOLD_MS, and only a press that lasts that long unlocks.
-  const [holding, setHolding] = useState(false);
-  const stopHold = () => {
-    clearTimeout(holdTimer.current);
-    setHolding(false);
-  };
   useEffect(() => {
     const el = audio.current;
     if (!el) return;
@@ -72,7 +63,6 @@ export function CallOverlay() {
   useEffect(() => {
     if (outputId && audio.current) void sendOutputTo(audio.current, outputId);
   }, [outputId, remote]);
-  useEffect(() => () => clearTimeout(holdTimer.current), []);
   if (!call) return null;
 
   const status =
@@ -92,32 +82,9 @@ export function CallOverlay() {
     <div className="ch-call" role="dialog" aria-modal="false" aria-label={a.call.title} data-phase={call.phase}>
       <audio ref={audio} autoPlay playsInline />
       {locked && live && (
-        <div
-          className="ch-call-lock"
-          role="button"
-          tabIndex={0}
-          aria-label={a.call.unlockHint}
-          onPointerDown={() => {
-            clearTimeout(holdTimer.current);
-            setHolding(true);
-            holdTimer.current = setTimeout(() => {
-              setHolding(false);
-              setLocked(false);
-            }, HOLD_MS);
-          }}
-          onPointerUp={stopHold}
-          onPointerLeave={stopHold}
-          onPointerCancel={stopHold}
-        >
-          <div className="ch-call-ring" data-holding={holding} style={{ "--hold": `${HOLD_MS}ms` } as React.CSSProperties}>
-            <svg className="ch-call-ring-svg" viewBox="0 0 44 44" width="72" height="72" aria-hidden="true">
-              <circle className="ch-call-ring-track" cx="22" cy="22" r="20" />
-              <circle className="ch-call-ring-fill" cx="22" cy="22" r="20" pathLength="100" />
-            </svg>
-            <Lock size={28} />
-          </div>
+        <div className="ch-call-lock">
+          <HoldToUnlock label={a.call.unlockHint} onUnlock={() => setLocked(false)} />
           <span>{a.call.lockedHint}</span>
-          <span>{a.call.unlockHint}</span>
         </div>
       )}
       <Avatar userId={call.userId} size={64} />

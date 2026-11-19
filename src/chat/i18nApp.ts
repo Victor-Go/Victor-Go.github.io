@@ -234,6 +234,7 @@ const zh = {
     lockedHint: "屏幕已锁定,通话继续",
     reasons: {
       ended: "通话已结束",
+      declined: "对方已拒绝",
       no_answer: "无人接听",
       missed: "未接来电",
       unavailable: "无法呼叫此联系人",
@@ -253,6 +254,8 @@ const zh = {
     missed: "未接来电",
     noAnswer: "对方无人接听",
     cancelled: "已取消",
+    declinedByThem: "对方已拒绝",
+    declinedByMe: "已拒接",
     failed: "通话未能接通",
   },
   manage: {
@@ -696,6 +699,7 @@ const en: AppMessages = {
     lockedHint: "Screen locked, the call goes on",
     reasons: {
       ended: "Call ended",
+      declined: "Declined",
       no_answer: "No answer",
       missed: "Missed call",
       unavailable: "This contact cannot be called",
@@ -715,6 +719,8 @@ const en: AppMessages = {
     missed: "Missed call",
     noAnswer: "No answer",
     cancelled: "Cancelled",
+    declinedByThem: "Declined",
+    declinedByMe: "You declined",
     failed: "The call could not connect",
   },
   manage: {

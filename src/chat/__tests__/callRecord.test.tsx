@@ -29,7 +29,7 @@ describe("the call record is an ordinary encrypted message", () => {
 
 describe("the call record in the chat", () => {
   beforeEach(() => setLang("en"));
-  const msg = (outcome: "answered" | "noanswer" | "cancelled" | "failed", sec: number, mine: boolean): Msg => ({
+  const msg = (outcome: "answered" | "noanswer" | "cancelled" | "declined" | "failed", sec: number, mine: boolean): Msg => ({
     id: "m", seq: 1, senderId: mine ? "me" : "bob", role: "user", time: 1, mine, status: "sent", payload: { k: "call", call: { outcome, sec }, sentAt: 1 },
   });
 
@@ -61,6 +61,14 @@ describe("the call record in the chat", () => {
       expect(container.textContent?.toLowerCase()).not.toMatch(/online|offline|busy|declin/);
       unmount();
     }
+  });
+
+  it("a declined call reads as declined for the caller and as a call you declined for the callee", () => {
+    const { unmount } = render(<CallBubble m={msg("declined", 0, true)} />);
+    expect(screen.getByText("Declined")).toBeTruthy();
+    unmount();
+    render(<CallBubble m={msg("declined", 0, false)} />);
+    expect(screen.getByText("You declined")).toBeTruthy();
   });
 
   it("a missed call is drawn in the warning colour only for the person who missed it", () => {

@@ -74,6 +74,8 @@ function setup(over: Partial<CallDeps> = {}) {
     record: (userId, outcome, sec) => records.push([userId, outcome, sec]),
     notify: () => {},
     isContact: (id) => id === "bob",
+    myId: () => "alice",
+    supported: () => true,
     newId: () => `call${++n}`,
     now: () => clock.now,
     ...over,
@@ -198,15 +200,25 @@ describe("calling out", () => {
   });
 });
 
-describe("presence is never revealed to the caller", () => {
-  it("a decline frame (there is none any more) changes nothing: the call rings out and ends as no answer", async () => {
+describe("presence is never revealed passively to the caller", () => {
+  it("the callee's own decline ends my call at once, with the record saying so (the one thing that shows they were there)", async () => {
     const t = setup();
     await t.flow.start("bob");
-    t.flow.onFrame({ t: "call", id: "call1", from: "bob", op: "decline", data: "busy" });
+    t.flow.onFrame({ t: "call", id: "call1", from: "bob", op: "decline" });
+    expect(t.last()).toMatchObject({ phase: "ended", reason: "declined" });
+    expect(t.records).toEqual([["bob", "declined", 0]]);
+    expect(t.peers[0].closed).toBe(true);
+    expect(t.backs.at(-1)).toBe(false);
+  });
+
+  it("a decline is only taken for the call it names, and only while it is ringing", async () => {
+    const t = setup();
+    await t.flow.start("bob");
+    t.flow.onFrame({ t: "call", id: "other", from: "bob", op: "decline" });
     expect(t.last()).toMatchObject({ phase: "calling" });
-    await vi.advanceTimersByTimeAsync(RING_MS + 1);
-    expect(t.last()).toMatchObject({ reason: "no_answer" });
-    expect(t.records).toEqual([["bob", "noanswer", 0]]);
+    t.flow.onFrame({ t: "call", id: "call1", from: "bob", op: "answer", data: "ANS" });
+    t.flow.onFrame({ t: "call", id: "call1", from: "bob", op: "decline" });
+    expect(t.last()?.phase).toBe("connecting");
   });
 
   it("the caller of a person who is not there sees exactly what the caller of one who ignores the ring sees: the frames sent and the screens are the same", async () => {
@@ -313,11 +325,12 @@ describe("being called", () => {
     expect(t.peers[0].candidates).toEqual(["theirs-1", "theirs-2"]);
   });
 
-  it("declining sends NOTHING (the caller must not tell it from nobody being there), stops the ring and clears the screen", () => {
+  it("declining tells the caller at once, stops the ring and clears the screen", () => {
     const t = setup();
     t.flow.onFrame(invite());
     t.flow.decline();
-    expect(t.sent).toEqual([]);
+    expect(t.sent).toEqual([{ t: "call", id: "in1", to: "bob", op: "decline" }]);
+    expect(t.records).toEqual([]); // the caller writes the record
     expect(t.rings.at(-1)).toBe(false);
     expect(t.last()).toBeNull();
   });
@@ -371,5 +384,90 @@ describe("being called", () => {
     expect(t.peers[0].closed).toBe(true);
     expect(t.mics[0].t.stopped).toBe(true);
     expect(t.last()).toBeNull();
+  });
+});
+
+describe("two calls that cross (both sides ring each other at the same moment)", () => {
+  const theirInvite = { t: "call", id: "theirs", from: "bob", op: "invite", data: "THEIR-OFFER" };
+
+  it("the side with the smaller id keeps its own call and ignores the other's invite", async () => {
+    const t = setup({ myId: () => "alice" }); // "alice" < "bob"
+    await t.flow.start("bob");
+    t.sent.length = 0;
+    t.flow.onFrame(theirInvite);
+    expect(t.sent).toEqual([]);
+    expect(t.last()).toMatchObject({ phase: "calling", dir: "out", id: "call1" });
+    expect(t.rings).not.toContain(true);
+    // and it connects when they answer it
+    t.flow.onFrame({ t: "call", id: "call1", from: "bob", op: "answer", data: "ANS" });
+    expect(t.last()?.phase).toBe("connecting");
+  });
+
+  it("the side with the larger id drops its own call without a record and answers the other at once, with no ring", async () => {
+    const t = setup({ myId: () => "carol" }); // "carol" > "bob"
+    await t.flow.start("bob");
+    t.sent.length = 0;
+    t.flow.onFrame(theirInvite);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.records).toEqual([]);
+    expect(t.peers[0].closed).toBe(true); // my own peer is gone
+    expect(t.peers).toHaveLength(2);
+    expect(t.peers[1].accepted).toBe("THEIR-OFFER");
+    expect(t.sent.map((f) => `${f.op}:${f.id}`)).toEqual(["answer:theirs"]);
+    expect(t.last()).toMatchObject({ phase: "connecting", dir: "in", id: "theirs", userId: "bob" });
+    expect(t.rings).not.toContain(true);
+    expect(t.backs.at(-1)).toBe(false);
+  });
+
+  it("the larger-id side that has not even sent its invite yet also gives way", async () => {
+    let release!: () => void;
+    const t = setup({
+      myId: () => "carol",
+      makePeer: (_i, _m, ev) => {
+        const p = new FakePeer(ev);
+        if (t0.peers.length === 0) p.offer = async () => (await new Promise<void>((r) => (release = r)), "OFFER");
+        t0.peers.push(p);
+        return p;
+      },
+    });
+    const t0 = t;
+    const started = t.flow.start("bob");
+    await vi.advanceTimersByTimeAsync(0);
+    t.flow.onFrame(theirInvite);
+    release();
+    await started;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls(t.sent, "invite")).toEqual([]); // the abandoned invite never went out
+    expect(calls(t.sent, "answer")).toHaveLength(1);
+  });
+
+  it("only the same person's call crosses: somebody else's invite during my call is still ignored", async () => {
+    const t = setup({ myId: () => "carol", isContact: () => true });
+    await t.flow.start("bob");
+    t.sent.length = 0;
+    t.flow.onFrame({ ...theirInvite, from: "dave" });
+    expect(t.sent).toEqual([]);
+    expect(t.last()).toMatchObject({ dir: "out", userId: "bob" });
+  });
+
+  it("once the call is answered a new invite is not a crossing", async () => {
+    const t = setup({ myId: () => "carol" });
+    await t.flow.start("bob");
+    t.flow.onFrame({ t: "call", id: "call1", from: "bob", op: "answer", data: "ANS" });
+    t.sent.length = 0;
+    t.flow.onFrame(theirInvite);
+    expect(t.sent).toEqual([]);
+    expect(t.last()).toMatchObject({ dir: "out", id: "call1" });
+  });
+});
+
+describe("a browser that cannot make calls", () => {
+  it("does not ring for an invite, shows nothing and sends nothing back (the caller just gets no answer)", () => {
+    const t = setup({ supported: () => false });
+    t.flow.onFrame({ t: "call", id: "in1", from: "bob", op: "invite", data: "OFFER" });
+    expect(t.views).toEqual([]);
+    expect(t.rings).toEqual([]);
+    expect(t.sent).toEqual([]);
+    expect(t.flow.busy()).toBe(false);
   });
 });

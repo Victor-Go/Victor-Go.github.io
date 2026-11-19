@@ -181,7 +181,12 @@ export class MicError extends Error {
 
 /** Is a call possible in this browser at all? (A secure page and the media and peer APIs.) */
 export function callsSupported(): boolean {
-  return typeof RTCPeerConnection !== "undefined" && typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+  return (
+    typeof RTCPeerConnection !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    (typeof isSecureContext === "undefined" || isSecureContext)
+  );
 }
 
 /** Asks for the microphone, only now. Throws MicError. */

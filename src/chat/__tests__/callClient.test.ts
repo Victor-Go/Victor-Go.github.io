@@ -10,6 +10,8 @@ function fakeApi(me: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("RTCPeerConnection", class {});
+  vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia: vi.fn() } });
   lock(null);
   useChat.setState({
     ...initialState,
@@ -19,7 +21,10 @@ beforeEach(() => {
     contacts: [{ userId: "bob", handle: "bob", role: "user", convId: "c1", key: null }],
   });
 });
-afterEach(() => lock(null));
+afterEach(() => {
+  lock(null);
+  vi.unstubAllGlobals();
+});
 
 describe("who may call, as the server says", () => {
   it("is off unless the server says canCall: true (an older server says nothing)", async () => {
@@ -40,7 +45,6 @@ describe("who may call, as the server says", () => {
     await startCall("bob");
     expect(useChat.getState().call).toBeNull();
     expect(getUserMedia).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
   });
 });
 
@@ -53,6 +57,12 @@ describe("an incoming call frame", () => {
 
   it("is ignored from somebody who is not a contact", async () => {
     await onFrame({ t: "call", id: "k1", from: "stranger", op: "invite", data: "offer" });
+    expect(useChat.getState().call).toBeNull();
+  });
+
+  it("does not ring in a browser that cannot take a call, and says nothing", async () => {
+    vi.unstubAllGlobals(); // jsdom: no RTCPeerConnection, no microphone
+    await onFrame({ t: "call", id: "k1", from: "bob", op: "invite", data: "offer" });
     expect(useChat.getState().call).toBeNull();
   });
 

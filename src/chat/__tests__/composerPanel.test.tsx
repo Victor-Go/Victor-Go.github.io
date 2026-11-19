@@ -225,6 +225,11 @@ describe("a composer too narrow for the text box (under about 15 characters)", (
 });
 
 describe("the call button", () => {
+  beforeEach(() => {
+    vi.stubGlobal("RTCPeerConnection", class {});
+    vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia: async () => ({}) } });
+  });
+
   it("is not there for an account that may not call (the default)", () => {
     render(<Conversation />);
     expect(screen.queryByLabelText("语音通话")).toBeNull();
@@ -236,5 +241,13 @@ describe("the call button", () => {
     expect((screen.getByLabelText("语音通话") as HTMLButtonElement).disabled).toBe(false);
     act(() => useChat.setState({ call: { id: "x", userId: "peer", dir: "out", phase: "calling", muted: false, startedAt: null, remote: null } }));
     expect((screen.getByLabelText("语音通话") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("the call button in a browser that cannot call", () => {
+  it("is not shown even for an account that may call", () => {
+    useChat.setState({ account: { ...useChat.getState().account, canCall: true } });
+    render(<Conversation />); // jsdom has no RTCPeerConnection or microphone: like an old or embedded browser
+    expect(screen.queryByLabelText("语音通话")).toBeNull();
   });
 });

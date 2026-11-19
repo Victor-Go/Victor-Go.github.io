@@ -223,3 +223,18 @@ describe("a composer too narrow for the text box (under about 15 characters)", (
     expect(menu.textContent).not.toContain("语音");
   });
 });
+
+describe("the call button", () => {
+  it("is not there for an account that may not call (the default)", () => {
+    render(<Conversation />);
+    expect(screen.queryByLabelText("语音通话")).toBeNull();
+  });
+
+  it("is there once the server allows calling, and is off while a call is on", () => {
+    useChat.setState({ account: { ...useChat.getState().account, canCall: true } });
+    render(<Conversation />);
+    expect((screen.getByLabelText("语音通话") as HTMLButtonElement).disabled).toBe(false);
+    act(() => useChat.setState({ call: { id: "x", userId: "peer", dir: "out", phase: "calling", muted: false, startedAt: null, remote: null } }));
+    expect((screen.getByLabelText("语音通话") as HTMLButtonElement).disabled).toBe(true);
+  });
+});

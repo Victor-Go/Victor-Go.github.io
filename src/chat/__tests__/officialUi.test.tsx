@@ -153,17 +153,17 @@ describe("who may add contacts, in the list", () => {
   it("offers adding a contact while allowed, and hides it when not", () => {
     const { rerender } = render(<ContactsPane />);
     expect(screen.getByRole("button", { name: "Add contact" })).toBeTruthy();
-    useChat.setState({ account: { contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false } });
+    useChat.setState({ account: { contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false, canCall: false } });
     rerender(<ContactsPane />);
     expect(screen.queryByRole("button", { name: "Add contact" })).toBeNull();
     expect(screen.getByText("Your account cannot add contacts or be added for now.")).toBeTruthy();
-    useChat.setState({ account: { contactsBlocked: false, globalContactsBlocked: true, canAddContacts: false } });
+    useChat.setState({ account: { contactsBlocked: false, globalContactsBlocked: true, canAddContacts: false, canCall: false } });
     rerender(<ContactsPane />);
     expect(screen.getByText("Adding contacts is turned off for now.")).toBeTruthy();
   });
 
   it("cannot accept an ordinary request while blocked (it can still be declined), but can accept one made with a card", () => {
-    useChat.setState({ account: { contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false }, requests: [request(false)] });
+    useChat.setState({ account: { contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false, canCall: false }, requests: [request(false)] });
     const { rerender } = render(<ContactsPane />);
     expect(screen.queryByRole("button", { name: "Accept" })).toBeNull();
     expect(screen.getByRole("button", { name: "Decline" })).toBeTruthy();

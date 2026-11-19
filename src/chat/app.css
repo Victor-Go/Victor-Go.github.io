@@ -1405,3 +1405,148 @@ section > .ch-primary {
 .ch-selecting .ch-official .ch-system[data-official] button {
   pointer-events: none;
 }
+
+/* ---------- voice call ---------- */
+.ch-call {
+  /* Centred with auto margins, not a transform: a transform would make the lock cover (a child, position: fixed) fill this box instead of the screen. */
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  top: 16px;
+  z-index: 80;
+  width: min(92vw, 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px 16px;
+  background: var(--ch-card);
+  color: var(--ch-fg);
+  border: 1px solid var(--ch-line);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+}
+.ch-call-who {
+  font-size: 18px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ch-call-status {
+  color: var(--ch-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  min-height: 1.4em;
+}
+.ch-call[data-phase="ended"] .ch-call-status {
+  color: var(--ch-fg);
+}
+.ch-call-actions {
+  display: flex;
+  gap: 24px;
+  margin-top: 8px;
+}
+.ch-call-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--ch-line);
+  background: var(--ch-bg);
+  color: var(--ch-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.ch-call-btn[aria-pressed="true"] {
+  background: var(--ch-fg);
+  color: var(--ch-bg);
+}
+.ch-call-accept {
+  background: var(--ch-good);
+  border-color: var(--ch-good);
+  color: #fff;
+}
+.ch-call-decline {
+  background: var(--ch-bad);
+  border-color: var(--ch-bad);
+  color: #fff;
+}
+
+.ch-call-select {
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--ch-line);
+  background: var(--ch-bg);
+  color: var(--ch-fg);
+}
+/* Locked: a black cover over everything, so a cheek or a pocket cannot hang up; only a press that lasts a second lets go. */
+.ch-call-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #000;
+  color: #8b9aa8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  touch-action: none;
+  user-select: none;
+}
+
+/* The ring around the lock: empty until a finger is held on the cover, then filled over --hold; letting go empties it again. */
+.ch-call-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ch-call-ring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.ch-call-ring circle {
+  fill: none;
+  stroke-width: 3;
+}
+.ch-call-ring-track {
+  stroke: #243242;
+}
+.ch-call-ring-fill {
+  stroke: #4da3f5;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+.ch-call-ring[data-holding="true"] .ch-call-ring-fill {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--hold) linear;
+}
+
+.ch-call-net {
+  font-size: 12px;
+  color: var(--ch-muted);
+  text-align: center;
+}
+.ch-call-net[data-flowing="true"] {
+  color: var(--ch-good);
+}
+
+/* The record of a voice call in the message list. */
+.ch-callrec {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ch-callrec.ch-bad {
+  color: var(--ch-bad);
+}

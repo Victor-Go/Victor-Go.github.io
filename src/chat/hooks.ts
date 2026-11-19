@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { lock, touch } from "./client";
+import { callInProgress, lock, touch } from "./client";
 import { useChat } from "./store";
 
 /** Anything the user does with the page counts, including just swiping or moving the pointer. */
@@ -19,6 +19,8 @@ export function useIdleLogout(enabled: boolean, onExpired: string): { warning: b
     let last = Date.now();
     const limit = idleMinutes * 60_000;
     const check = () => {
+      // A voice call is activity: the person is talking, not idle, and signing them out would cut the call.
+      if (callInProgress()) last = Date.now();
       const idle = Date.now() - last;
       if (idle >= limit) lock(onExpired);
       else setWarning(limit - idle <= WARN_MS);

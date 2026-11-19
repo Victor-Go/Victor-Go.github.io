@@ -9,6 +9,7 @@ import { appMessages } from "./i18nApp";
 import { useLangStore } from "./lang";
 import { Api } from "./net/api";
 import { armSound } from "./sound";
+import { CallOverlay } from "./components/CallOverlay";
 import { CHAT_PATHS, PATH, isChatPath, sectionOf, showPath, startPath, useLocation } from "./route";
 import { totalUnread, useChat } from "./store";
 import { useLang } from "./useChat";
@@ -62,6 +63,7 @@ export function App() {
     const text = () => appMessages[useLangStore.getState().lang];
     configure(api, getConfig().ws, {
       notifyTitle: (who) => text().notifyTitle(who),
+      callTitle: (who) => text().callNotifyTitle(who),
       lockNotice: (why) => (why === "expired" ? text().lockedExpired : why === "replaced" ? text().lockedReplaced : text().lockedKicked),
     });
   }, [api]);
@@ -84,6 +86,7 @@ export function App() {
   return (
     <>
       {ready ? <Shell /> : <AccountPage />}
+      {ready && <CallOverlay />}
       {warning && (
         <div className="ch-toast" role="alert">
           {a.idleWarning}

@@ -180,7 +180,7 @@ describe("who may add contacts", () => {
   it("is read from GET /me", async () => {
     fakeApi(() => meAnswer({ contactsBlocked: true, canAddContacts: false }));
     await refreshMe();
-    expect(useChat.getState().account).toEqual({ contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false });
+    expect(useChat.getState().account).toEqual({ contactsBlocked: true, globalContactsBlocked: false, canAddContacts: false, canCall: false });
   });
 
   it("is read again when the server sends an account notice", async () => {

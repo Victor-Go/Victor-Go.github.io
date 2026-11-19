@@ -30,6 +30,44 @@ export interface AccountFlags {
   contactsBlocked: boolean;
   globalContactsBlocked: boolean;
   canAddContacts: boolean;
+  /** An administrator has allowed this account to start voice calls (always true for an administrator); the server refuses the invite otherwise. */
+  canCall: boolean;
+}
+
+/** How a call that rang turned out, as the caller's client records it in the chat (the plaintext `call.outcome`, protocol section 9b of the chat server). */
+export type CallOutcome = "answered" | "noanswer" | "cancelled" | "failed";
+
+/** Why a call ended, as the call screen says it (`callFlow.ts`). */
+export type CallReason =
+  | "ended"
+  | "no_answer"
+  | "missed"
+  | "unavailable"
+  | "not_allowed"
+  | "rate"
+  | "failed"
+  | "unreachable"
+  | "mic_denied"
+  | "mic_missing"
+  | "mic_failed"
+  | "unsupported";
+
+/** The call on screen. Only what the screen needs; the peer connection and the microphone live in callFlow.ts. One call at a time. */
+export interface CallView {
+  id: string;
+  /** The other person. */
+  userId: string;
+  dir: "out" | "in";
+  /** calling: ringing at the other end; ringing: someone is calling me; connecting: answered, the audio path is being made; ended: shows `reason` for a moment. */
+  phase: "calling" | "ringing" | "connecting" | "active" | "ended";
+  muted: boolean;
+  /** Device time when the audio came up, for the timer. */
+  startedAt: number | null;
+  reason?: CallReason;
+  /** The other person's audio, played by the call screen. */
+  remote: MediaStream | null;
+  /** How the media path is doing, refreshed every couple of seconds while connecting or in the call (shown small, to tell a silent call from a broken one). */
+  net?: { conn: string; ice: string; path: "direct" | "relay" | "none"; flowing: boolean };
 }
 
 /**
@@ -43,6 +81,8 @@ export interface ServerConfig {
   canAddContacts: boolean;
   contactsBlocked: boolean;
   globalContactsBlocked: boolean;
+  /** May start voice calls (the server sends it; an older server does not, which means no). */
+  canCall?: boolean;
   /** Voice messages and pictures: switched on by the administrator, and this person's monthly upload limit in MB (null: none). */
   files: { enabled: boolean; monthlyMB: number | null };
   limits: { messageMaxChars: number; voiceMaxSec: number; groupMax: number; retentionDays: number; favoriteMax: number; favoriteFileMB?: number; monthlyMessages: number | null };
@@ -172,6 +212,8 @@ export interface ChatState {
   olderMore: Record<string, boolean>;
   /** Server time of the newest message known in each conversation, for ordering the list (most recent first). */
   lastActive: Record<string, number>;
+  /** The voice call on screen, if any (callFlow.ts). Memory only. */
+  call: CallView | null;
 }
 
 /** Whether the signed-in account holds this permission (as the server listed it; the server checks every call as well). */
@@ -234,7 +276,7 @@ export const initialState: ChatState = {
   voiceMaxSec: 60,
   messageMaxChars: 1024,
   clockSkew: 0,
-  account: { contactsBlocked: false, globalContactsBlocked: false, canAddContacts: true },
+  account: { contactsBlocked: false, globalContactsBlocked: false, canAddContacts: true, canCall: false },
   title: "",
   permissions: [],
   admins: {},
@@ -244,6 +286,7 @@ export const initialState: ChatState = {
   section: "contacts",
   olderMore: {},
   lastActive: {},
+  call: null,
 };
 
 export const useChat = create<ChatState>(() => initialState);

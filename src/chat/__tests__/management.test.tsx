@@ -29,8 +29,8 @@ vi.mock("../client", async (orig) => ({ ...(await orig<typeof import("../client"
 
 /** Test fixture only: what a server might list. The client keeps no such list. */
 const PERMISSIONS = ["audit", "cards", "config", "epochs", "groups.create", "groups.delete_any", "invites", "jobs", "starter", "status", "users.manage", "users.read", "wipe", "wipe_all"];
-const ALL_ACTIONS = { resetFailures: true, logout: true, suspend: true, contactsBlocked: true, delete: true };
-const user = { userId: "u2", handle: "bob", role: "user", title: "", actions: ALL_ACTIONS, createdAt: 1, lastLoginAt: 1, lastActiveAt: 1, ips: [], loginCount: 1, failedCount: 0, suspended: false, contactsBlocked: false };
+const ALL_ACTIONS = { resetFailures: true, logout: true, suspend: true, contactsBlocked: true, canCall: true, delete: true };
+const user = { userId: "u2", handle: "bob", role: "user", title: "", actions: ALL_ACTIONS, createdAt: 1, lastLoginAt: 1, lastActiveAt: 1, ips: [], loginCount: 1, failedCount: 0, suspended: false, contactsBlocked: false, canCall: false };
 const post = (path: string) => calls.filter(([m, p]) => m === "POST" && p === path).map((c) => c[2]);
 
 beforeEach(() => {
@@ -84,6 +84,25 @@ describe("creating an invite", () => {
   });
 });
 
+describe("who may start voice calls", () => {
+  it("is off by default; the switch posts {allowed} and follows the server's yes", async () => {
+    go(PATH.managementPage("users/user"), user);
+    render(<ManagementPage />);
+    const sw = await screen.findByRole("switch", { name: "Allow voice calls" });
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(sw);
+    await waitFor(() => expect(post("/admin/users/u2/can-call")).toEqual([{ allowed: true }]));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Allow voice calls" }).getAttribute("aria-checked")).toBe("true"));
+  });
+
+  it("shows no switch where the server offers none (another administrator)", async () => {
+    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, canCall: false, delete: false } });
+    render(<ManagementPage />);
+    await screen.findByText("@bob");
+    expect(screen.queryByRole("switch", { name: "Allow voice calls" })).toBeNull();
+  });
+});
+
 describe("the contact switches", () => {
   it("a user can be blocked from adding contacts, and the switch follows the server's yes", async () => {
     go(PATH.managementPage("users/user"), user);
@@ -96,7 +115,7 @@ describe("the contact switches", () => {
   });
 
   it("an administrator row has no such switch", async () => {
-    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, delete: false } });
+    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, canCall: false, delete: false } });
     render(<ManagementPage />);
     await screen.findByText("@bob");
     expect(screen.queryByRole("switch", { name: "Block adding contacts" })).toBeNull();
@@ -287,7 +306,7 @@ describe("sending a contact card from a user page", () => {
   });
 
   it("an administrator page has no such button", async () => {
-    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, delete: false } });
+    go(PATH.managementPage("users/user"), { ...user, userId: "a", role: "admin", title: "admin", actions: { resetFailures: true, logout: false, suspend: false, contactsBlocked: false, canCall: false, delete: false } });
     render(<ManagementPage />);
     await screen.findByText("@bob");
     expect(screen.queryByText("Send contact card")).toBeNull();

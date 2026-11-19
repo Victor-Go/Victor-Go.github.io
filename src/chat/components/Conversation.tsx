@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Phone, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
-import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendImage, sendText } from "../client";
+import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendImage, sendText, startCall } from "../client";
 import { ImageError, isPicture } from "../image";
 import { voiceSupported } from "../voice";
 import { errorOf } from "../i18nApp";
@@ -10,6 +10,7 @@ import { dayKey, formatClock, formatDay, isExpired } from "../format";
 import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions";
 import { contactLabel, useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
+import { CallBubble } from "./CallBubble";
 import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
@@ -83,6 +84,9 @@ export function Conversation() {
   const [pick, setPick] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [info, setInfo] = useState(false);
+  // The call button shows only for a person an administrator has allowed to call, and not while a call is on.
+  const canCall = useChat((s) => s.account.canCall);
+  const inCall = useChat((s) => s.call !== null);
   const [link, setLink] = useState<string | null>(null);
   const [favError, setFavError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -546,6 +550,11 @@ export function Conversation() {
           </div>
           <div className="ch-hint">{isOfficial ? a.officialNote : group ? a.memberCount(group.members.length) : a.encryptedNote}</div>
         </div>
+        {canCall && contact && !contact.deleted && !isOfficial && (
+          <button type="button" className="ch-icon" aria-label={a.call.start} disabled={inCall} onClick={() => void startCall(contact.userId)}>
+            <Phone size={20} />
+          </button>
+        )}
         {!isOfficial && (group || (contact && !contact.deleted)) && (
           <button type="button" className="ch-icon" aria-label={group ? a.groupInfo : a.contactInfo} onClick={() => setInfo(true)}>
             <Info size={20} />
@@ -667,6 +676,8 @@ export function Conversation() {
                     </div>
                   ) : m.payload?.k === "voice" ? (
                     <VoiceBubble conv={activeConv} m={m} />
+                  ) : m.payload?.k === "call" ? (
+                    <CallBubble m={m} />
                   ) : m.payload?.k === "image" ? (
                     <ImageBubble conv={activeConv} m={m} onOpen={(url, w, h) => !selecting && setViewer({ url, w, h })} />
                   ) : (

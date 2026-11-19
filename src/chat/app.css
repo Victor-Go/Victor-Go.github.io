@@ -1509,7 +1509,8 @@ section > .ch-primary {
   align-items: center;
   justify-content: center;
 }
-.ch-call-ring svg {
+/* Only the ring's own drawing: the lock icon is an svg too, and must stay centred and upright. */
+.ch-call-ring > .ch-call-ring-svg {
   position: absolute;
   inset: 0;
   transform: rotate(-90deg);

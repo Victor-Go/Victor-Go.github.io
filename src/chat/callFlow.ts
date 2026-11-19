@@ -7,13 +7,13 @@ import type { CallOutcome, CallReason, CallView } from "./store";
  * to send and what a frame means. Everything it touches is handed in, so a test can drive it with a fake peer and no network.
  *
  *   caller:  invite -> (answer) -> ice both ways -> connected -> end
- *   callee:  rings on invite -> answer -> ice both ways -> connected -> end
+ *   callee:  rings on invite -> answer (or decline) -> ice both ways -> connected -> end
  *
  * One call at a time. A frame whose call id is not the current one is ignored (the server relays blindly).
  *
- * **Presence is never revealed** (protocol section 9b): a callee who refuses, or who is already on a call, sends nothing at all; the caller keeps
- * hearing the ringback until the ring time is up and the call ends as "no answer", exactly as for somebody who is not there. There is no
- * "offline", "busy" or "declined" on the caller's screen.
+ * **Presence is never revealed passively** (protocol section 9b): a callee who is already on a call, or whose browser cannot call, sends nothing; the
+ * caller keeps hearing the ringback until the ring time is up and the call ends as "no answer", exactly as for somebody who is not there. There is no
+ * "offline" or "busy" on the caller's screen. The one exception is the callee's own decision to decline: it is sent at once and ends the caller's call.
  *
  * Every call that rang leaves one message in the chat, written by the caller (`record`).
  */
@@ -39,6 +39,10 @@ export interface CallDeps {
   isContact: (userId: string) => boolean;
   newId: () => string;
   now: () => number;
+  /** Can this browser make and take calls at all? When it cannot, an invite is ignored without a sound or a word (the caller sees "no answer"). */
+  supported: () => boolean;
+  /** My own user id: it decides which of two calls that cross is kept (the smaller id wins). Empty when not known, and then nothing is resolved. */
+  myId: () => string;
 }
 
 /** How long a call rings before the caller gives up and the callee stops ringing. */
@@ -97,7 +101,7 @@ export function createCallFlow(d: CallDeps) {
    * rang, the record is written here: answered (with the seconds from the moment the audio came up), or what `opts.record` says it was while nobody had
    * answered, or failed (answered but the audio never came up). `opts.silent` writes none (signing out; the server refused the invite).
    */
-  function finish(reason?: CallReason, opts: { record?: "noanswer" | "cancelled"; silent?: boolean } = {}): void {
+  function finish(reason?: CallReason, opts: { record?: "noanswer" | "cancelled" | "declined"; silent?: boolean } = {}): void {
     const c = cur;
     if (!c) return;
     cur = null;
@@ -215,7 +219,7 @@ export function createCallFlow(d: CallDeps) {
     };
   }
 
-  return {
+  const api = {
     /** Is there a call going on (ringing, connecting or active)? */
     busy: (): boolean => cur !== null,
 
@@ -274,10 +278,11 @@ export function createCallFlow(d: CallDeps) {
       }
     },
 
-    /** The callee refuses: nothing is sent (the caller must not be able to tell this from nobody being there), the ring stops and the screen clears. */
+    /** The callee refuses: the caller is told at once (their call ends), the ring stops and the screen clears. */
     decline(): void {
       const c = cur;
       if (!c || c.view.dir !== "in" || c.view.phase !== "ringing") return;
+      send({ id: c.view.id, to: c.view.userId, op: "decline" });
       finish();
     },
 
@@ -312,12 +317,29 @@ export function createCallFlow(d: CallDeps) {
 
       if (op === "invite") {
         if (!from || !id || !data || !d.isContact(from)) return;
+        // A browser that cannot take a call does not ring: the person could not answer it, and the caller must not learn why (or that anybody is here).
+        if (!d.supported()) return;
         // Already on a call: nothing is sent back (the caller must not learn that I am here and busy); it shows up as a missed call from their record.
-        if (cur) return;
+        // One case is not "busy": we are ringing each other at the same moment. Both would ring out for nothing, so both sides apply the same rule: the call
+        // of the person with the smaller user id stays. The other side gives up its own call (no record: it was never meant to be one) and answers that call at
+        // once, as the person was trying to talk to them anyway. The side that stays ignores the other's invite, so only one call ever connects.
+        let crossed = false;
+        if (cur) {
+          const mine = cur;
+          const me = d.myId();
+          const crossing = mine.view.dir === "out" && mine.view.phase === "calling" && mine.view.userId === from && mine.view.id !== id;
+          if (!crossing || !me || me < from) return;
+          finish(undefined, { silent: true });
+          crossed = true;
+        }
         const c = (cur = newCurrent(from, "in", id));
         c.offer = data;
         c.outbox = []; // candidates made while answering wait until the answer is out
         show();
+        if (crossed) {
+          void api.answer();
+          return;
+        }
         d.ring(true);
         d.notify(from);
         c.ringTimer = setTimeout(() => {
@@ -350,6 +372,9 @@ export function createCallFlow(d: CallDeps) {
         if (!data) return;
         if (c.peer) void c.peer.addCandidate(data);
         else c.early.push(data);
+      } else if (op === "decline") {
+        // The callee refused while it rang: my call ends now and the record says it was declined.
+        if (c.view.dir === "out" && c.view.phase === "calling") finish("declined", { record: "declined" });
       } else if (op === "end") {
         // An `end` before I answered (or before the audio came up for the caller) is a call that was not taken up.
         const unanswered = c.view.dir === "out" && c.view.phase === "calling";
@@ -357,6 +382,7 @@ export function createCallFlow(d: CallDeps) {
       }
     },
   };
+  return api;
 }
 
 export type CallFlow = ReturnType<typeof createCallFlow>;

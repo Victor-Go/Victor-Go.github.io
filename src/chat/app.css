@@ -1484,7 +1484,7 @@ section > .ch-primary {
   background: var(--ch-bg);
   color: var(--ch-fg);
 }
-/* Locked: a black cover over everything, so a cheek or a pocket cannot hang up; only a press that lasts a second lets go. */
+/* Locked: a black cover over everything, so a cheek or a pocket cannot hang up. Only the hold target (HoldToUnlock), pressed for three seconds, lets go. */
 .ch-call-lock {
   position: fixed;
   inset: 0;
@@ -1500,7 +1500,7 @@ section > .ch-primary {
   user-select: none;
 }
 
-/* The ring around the lock: empty until a finger is held on the cover, then filled over --hold; letting go empties it again. */
+/* The ring around the lock: its fill is a ratio set from code on every frame while the target is held, and empties again when it is let go. */
 .ch-call-ring {
   position: relative;
   width: 72px;
@@ -1528,9 +1528,19 @@ section > .ch-primary {
   stroke-dasharray: 100;
   stroke-dashoffset: 100;
 }
-.ch-call-ring[data-holding="true"] .ch-call-ring-fill {
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset var(--hold) linear;
+/* The ring's fill is set from code on every frame (HoldToUnlock), so there is no CSS transition to wait for. */
+.ch-call-hold {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  cursor: pointer;
+  touch-action: none;
+  outline-offset: 4px;
+}
+.ch-call-hold[data-holding="true"] {
+  color: #c8d3de;
 }
 
 .ch-call-net {

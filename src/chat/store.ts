@@ -35,11 +35,12 @@ export interface AccountFlags {
 }
 
 /** How a call that rang turned out, as the caller's client records it in the chat (the plaintext `call.outcome`, protocol section 9b of the chat server). */
-export type CallOutcome = "answered" | "noanswer" | "cancelled" | "failed";
+export type CallOutcome = "answered" | "noanswer" | "cancelled" | "declined" | "failed";
 
 /** Why a call ended, as the call screen says it (`callFlow.ts`). */
 export type CallReason =
   | "ended"
+  | "declined"
   | "no_answer"
   | "missed"
   | "unavailable"

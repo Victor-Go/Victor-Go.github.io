@@ -26,7 +26,11 @@ export function CallBubble({ m }: { m: Msg }) {
       ? a.callRecord.answered(talkTime(sec))
       : outcome === "failed"
         ? a.callRecord.failed
-        : missed
+        : outcome === "declined"
+          ? mine
+            ? a.callRecord.declinedByThem
+            : a.callRecord.declinedByMe
+          : missed
           ? a.callRecord.missed
           : outcome === "cancelled"
             ? a.callRecord.cancelled

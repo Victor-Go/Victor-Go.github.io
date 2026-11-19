@@ -110,7 +110,7 @@ export function CallOverlay() {
           onPointerCancel={stopHold}
         >
           <div className="ch-call-ring" data-holding={holding} style={{ "--hold": `${HOLD_MS}ms` } as React.CSSProperties}>
-            <svg viewBox="0 0 44 44" width="72" height="72" aria-hidden="true">
+            <svg className="ch-call-ring-svg" viewBox="0 0 44 44" width="72" height="72" aria-hidden="true">
               <circle className="ch-call-ring-track" cx="22" cy="22" r="20" />
               <circle className="ch-call-ring-fill" cx="22" cy="22" r="20" pathLength="100" />
             </svg>

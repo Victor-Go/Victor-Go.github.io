@@ -641,12 +641,19 @@ textarea:disabled {
   overflow-wrap: anywhere;
 }
 
-/* "> text": a translucent grey box (decoration only). Fits both the light bubble and my accent-coloured one. */
+/* "> text": an opaque grey box (decoration only) with light text, readable on the light card, the dark card and my accent-coloured bubble alike. */
 .ch-quote {
-  background: rgba(128, 128, 128, 0.22);
+  background: #6b7280;
+  color: #fff;
   border-radius: 6px;
   padding: 3px 8px;
   margin: 2px 0;
+}
+
+/* links and mentions inside the box take its text colour (the accent colour would not show on the grey) */
+.ch-quote .ch-url,
+.ch-quote .ch-at-me {
+  color: inherit;
 }
 
 .ch-text strong {

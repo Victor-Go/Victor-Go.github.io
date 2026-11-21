@@ -641,19 +641,21 @@ textarea:disabled {
   overflow-wrap: anywhere;
 }
 
-/* "> text": an opaque grey box (decoration only) with light text, readable on the light card, the dark card and my accent-coloured bubble alike. */
+/* "> text": an opaque, softly tinted box with a bar on its left edge (decoration only). The tint is mixed from the bubble's own colour, so it fits the
+   light card, the dark card and my accent bubble, and the text keeps the bubble's colour. */
 .ch-quote {
-  background: #6b7280;
-  color: #fff;
-  border-radius: 6px;
-  padding: 3px 8px;
-  margin: 2px 0;
+  background: #e8ebf0; /* fallback for browsers without color-mix */
+  background: color-mix(in srgb, var(--ch-card) 90%, #64748b);
+  border-left: 3px solid #94a3b8;
+  border-radius: 3px 8px 8px 3px;
+  padding: 4px 10px;
+  margin: 3px 0;
 }
 
-/* links and mentions inside the box take its text colour (the accent colour would not show on the grey) */
-.ch-quote .ch-url,
-.ch-quote .ch-at-me {
-  color: inherit;
+.ch-msg.ch-mine .ch-quote {
+  background: #2f73c4;
+  background: color-mix(in srgb, var(--ch-accent) 78%, #0b2a52);
+  border-left-color: rgba(255, 255, 255, 0.75);
 }
 
 .ch-text strong {

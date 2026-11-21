@@ -545,6 +545,23 @@ textarea:disabled {
   color: var(--ch-muted);
 }
 
+/* Only the text of a message can be selected (not avatars, times, call cards); conversation.tsx keeps a selection inside one message. */
+.ch-messages {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ch-messages .ch-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOS: an ancestor with user-select none must never make the box uneditable. */
+.ch-input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .ch-messages {
   position: relative;
   flex: 1;
@@ -622,6 +639,18 @@ textarea:disabled {
 .ch-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* "> text": a translucent grey box (decoration only). Fits both the light bubble and my accent-coloured one. */
+.ch-quote {
+  background: rgba(128, 128, 128, 0.22);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin: 2px 0;
+}
+
+.ch-text strong {
+  font-weight: 700;
 }
 
 .ch-sender {

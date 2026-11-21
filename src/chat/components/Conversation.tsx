@@ -15,6 +15,7 @@ import { CallBubble } from "./CallBubble";
 import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
+import { quoteInto, splitBlocks, splitBold } from "../richText";
 import { DELETE_MAX, canDelete } from "../selection";
 import { Avatar, Modal, TitleBadge } from "./ui";
 import { OfficialMessage } from "./OfficialMessage";
@@ -25,8 +26,8 @@ import { VoiceComposer } from "./VoiceComposer";
 
 const EMOJIS = ["👌", "👍", "🤝", "❤️", "😄", "😁", "😆", "😅", "🤣", "😂", "😉", "😊", "😇", "🥲", "😛", "😝", "🫢", "🫣", "🤫", "🤐", "🥺", "🥹", "😭", "😱", "😖", "😣", "😞", "😓", "😫"];
 
-/** A message's text with @mentions of group members highlighted (as spans, never as markup). */
-function MessageText({ text, handles, me, onLink }: { text: string; handles: string[]; me: string; onLink: (href: string) => void }) {
+/** Links and @mentions of group members in one piece of text (as buttons and spans, never as markup). */
+function Inline({ text, handles, me, onLink }: { text: string; handles: string[]; me: string; onLink: (href: string) => void }) {
   return (
     <>
       {splitLinks(text).map((piece, i) => {
@@ -54,6 +55,33 @@ function MessageText({ text, handles, me, onLink }: { text: string; handles: str
           </Fragment>
         );
       })}
+    </>
+  );
+}
+
+/** A message's text: "> " lines in a grey box, **bold**, links and @mentions (see richText.ts). Everything is built as elements, never as markup. */
+function MessageText(props: { text: string; handles: string[]; me: string; onLink: (href: string) => void }) {
+  const line = (text: string) =>
+    splitBold(text).map((p, i) =>
+      p.bold ? (
+        <strong key={i}>
+          <Inline {...props} text={p.text} />
+        </strong>
+      ) : (
+        <Inline key={i} {...props} text={p.text} />
+      ),
+    );
+  return (
+    <>
+      {splitBlocks(props.text).map((b, i) =>
+        b.quote ? (
+          <div key={i} className="ch-quote">
+            {line(b.text)}
+          </div>
+        ) : (
+          <Fragment key={i}>{line(b.text)}</Fragment>
+        ),
+      )}
     </>
   );
 }
@@ -170,7 +198,9 @@ export function Conversation() {
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const press = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null);
   const swallowClick = useRef(false);
-  const drag = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  // The last tap on a text message, to recognise a double tap (own detection: a double-click event is not reliable on phones).
+  const lastTap = useRef<{ seq: number; t: number; x: number; y: number } | null>(null);
+  const drag =useRef<{ x: number; y: number; active: boolean } | null>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const raf = useRef(0);
   const deletable = new Set(visible.filter(canDelete).map((m) => m.seq));
@@ -404,6 +434,21 @@ export function Conversation() {
     setCaret(inputRef.current?.value.length ?? 0);
     setDismissed(false);
   }, [activeConv]);
+  // A text selection stays inside the one message it began in (the browser would let the handles run on over the next bubbles, avatars and times).
+  useEffect(() => {
+    const keepInOne = () => {
+      const sel = window.getSelection();
+      const list = listRef.current;
+      if (!sel || sel.isCollapsed || !sel.anchorNode || !sel.focusNode || !list) return;
+      const host = (n: Node) => (n instanceof Element ? n : n.parentElement)?.closest(".ch-text") ?? null;
+      const from = host(sel.anchorNode);
+      if (!from || !list.contains(from) || host(sel.focusNode) === from) return;
+      const forward = !!(sel.anchorNode.compareDocumentPosition(sel.focusNode) & Node.DOCUMENT_POSITION_FOLLOWING);
+      sel.setBaseAndExtent(sel.anchorNode, sel.anchorOffset, from, forward ? from.childNodes.length : 0);
+    };
+    document.addEventListener("selectionchange", keepInOne);
+    return () => document.removeEventListener("selectionchange", keepInOne);
+  }, []);
   // After picking a suggestion the caret goes right behind the inserted "@name ".
   useLayoutEffect(() => {
     if (nextCaret.current !== null && inputRef.current) {
@@ -435,6 +480,26 @@ export function Conversation() {
     setDraft(r.text);
     setCaret(r.caret);
     nextCaret.current = r.caret;
+    setPick(0);
+    inputRef.current?.focus();
+  };
+
+  // Double click / double tap on a text message: its text goes into the composer as a quote (see quoteInto), on lines of its own.
+  const tapMessage = (e: React.MouseEvent, m: Msg) => {
+    if (m.payload?.k !== "text" || !canSend || recording || !(e.target instanceof Element) || e.target.closest("a, button") || !e.target.closest(".ch-text")) return;
+    const last = lastTap.current;
+    const now = Date.now();
+    if (!last || last.seq !== m.seq || now - last.t > 350 || Math.hypot(e.clientX - last.x, e.clientY - last.y) > 30) {
+      lastTap.current = { seq: m.seq, t: now, x: e.clientX, y: e.clientY };
+      return;
+    }
+    lastTap.current = null;
+    const next = quoteInto(draft, m.payload.text);
+    if (next === null) return;
+    window.getSelection()?.removeAllRanges(); // the double tap also selected a word
+    setDraft(next);
+    nextCaret.current = next.length;
+    setCaret(next.length);
     setPick(0);
     inputRef.current?.focus();
   };
@@ -650,9 +715,10 @@ export function Conversation() {
                 onContextMenu={(e) => {
                   if (!isWide() && deletable.has(m.seq)) e.preventDefault();
                 }}
-                onClick={() => {
+                onClick={(e) => {
                   if (swallowClick.current) swallowClick.current = false;
                   else if (selecting) toggle(m.seq);
+                  else tapMessage(e, m);
                 }}
               >
                 {selecting && deletable.has(m.seq) ? (

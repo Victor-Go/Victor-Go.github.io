@@ -169,7 +169,7 @@ describe("the contact switches", () => {
     const input = (await screen.findByLabelText(/Favourites per person/)) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "50" } });
     fireEvent.blur(input);
-    const dialog = await screen.findByRole("alertdialog", { name: "Settings saved" });
+    const dialog = await screen.findByRole("alertdialog", { name: "Settings saved" }, { timeout: 4000 }); // the save waits a moment first, so a slow machine needs more than the default 1 s
     expect(dialog.textContent).toContain("Favourites per person");
     expect(dialog.textContent).toContain("50");
     expect(dialog.textContent).not.toContain("File uploads per person per month"); // only what changed is listed

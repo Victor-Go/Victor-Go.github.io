@@ -181,7 +181,16 @@ export function Conversation() {
   // Selecting messages to delete. Only my own sent messages can be picked; the picked set holds sequence numbers.
   const [selecting, setSelecting] = useState(false);
   // The composer's width decides whether the buttons fit: its content box less the gaps and four 44 px buttons leaves the room for the text box.
+  // A muted member's composer is replaced by a line saying so. The server refuses the message anyway (403 "muted"); this only saves the try.
+  const ownMute = !!me && !!group && me.role !== "admin" && group.ownerId !== me.userId && (group.mutedUsers ?? []).includes(me.userId);
+  const allMute = !!me && !!group && me.role !== "admin" && group.ownerId !== me.userId && !!group.muted;
+  // The whole-group mute is named first: it is the reason even for somebody who is also muted on their own.
+  const mutedNote = allMute ? a.mutedAllNote : ownMute ? a.mutedNote : null;
   const composerShown = !selecting && !isOfficial;
+  // The composer stays, but empty and disabled, with the reason in the box itself. Whatever was typed before the mute is dropped.
+  useEffect(() => {
+    if (mutedNote && activeConv) setDraft("");
+  }, [mutedNote, activeConv]);
   useEffect(() => {
     const el = footerRef.current;
     if (!composerShown || !el || typeof ResizeObserver === "undefined") return;
@@ -465,7 +474,13 @@ export function Conversation() {
     );
   }
   const title = isOfficial ? a.officialTitle : contact ? contactLabel(contact) : group!.name;
-  const canSend = isOfficial ? false : contact ? contact.key !== null && !contact.deleted : (group?.keys.get(group!.gen) ?? null) !== null;
+  const keyOk = isOfficial ? false : contact ? contact.key !== null && !contact.deleted : (group?.keys.get(group!.gen) ?? null) !== null;
+  const canSend = keyOk && !mutedNote;
+  // How a group member is shown: the nickname I gave them, when they are one of my contacts (the nickname is mine alone and never leaves this browser).
+  const labelOf = (userId: string, handle: string): string => {
+    const c = contacts.find((x) => x.userId === userId);
+    return c ? contactLabel(c) : "@" + handle;
+  };
   const nameOf = (m: Msg): string => (m.mine ? me.handle : group ? (group.members.find((x) => x.userId === m.senderId)?.handle ?? "?") : (contact?.handle ?? "?"));
   const length = Array.from(draft).length;
   const memberHandles = group ? group.members.map((x) => x.handle) : [];
@@ -610,7 +625,13 @@ export function Conversation() {
         <button type="button" className="ch-icon ch-only-mobile" aria-label={a.back} onClick={() => go(PATH.home)}>
           <ArrowLeft size={22} />
         </button>
-        <Avatar userId={isOfficial ? "official" : (contact?.userId ?? group!.id)} size={36} admin={contact?.role === "admin"} />
+        {!isOfficial && (group || (contact && !contact.deleted)) ? (
+          <button type="button" className="ch-avatar-btn" aria-label={title} onClick={() => setInfo(true)}>
+            <Avatar userId={contact?.userId ?? group!.id} size={36} admin={contact?.role === "admin"} />
+          </button>
+        ) : (
+          <Avatar userId={isOfficial ? "official" : (contact?.userId ?? group!.id)} size={36} admin={contact?.role === "admin"} />
+        )}
         <div className="ch-row-text">
           <div className="ch-row-title">
             {title} {contact && <TitleBadge userId={contact.userId} role={contact.role} />}
@@ -653,7 +674,7 @@ export function Conversation() {
         )}
         {favError && <div className="ch-notice">{favError}</div>}
         {contact?.deleted && <div className="ch-notice">{a.contactDeleted}</div>}
-        {!canSend && !isOfficial && !contact?.deleted && <div className="ch-notice">{contact ? a.keyMissingHint : a.keyMissing}</div>}
+        {!keyOk && !isOfficial && !contact?.deleted && <div className="ch-notice">{contact ? a.keyMissingHint : a.keyMissing}</div>}
         {visible.map((m, i) => {
           const prev = visible[i - 1];
           const newDay = !prev || dayKey(prev.time) !== dayKey(m.time);
@@ -729,13 +750,17 @@ export function Conversation() {
                   <button type="button" className="ch-avatar-btn" aria-label={`@${nameOf(m)}`} onClick={() => mentionSender(nameOf(m))}>
                     <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
                   </button>
+                ) : contact && !contact.deleted && !m.mine ? (
+                  <button type="button" className="ch-avatar-btn" aria-label={contactLabel(contact)} onClick={() => setInfo(true)}>
+                    <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
+                  </button>
                 ) : (
                   <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
                 )}
                 <div className={"ch-msg" + (m.mine ? " ch-mine" : "") + (m.payload ? "" : " ch-gone") + (m.payload?.k === "image" ? " ch-has-image" : "")}>
                   {!m.mine && group && (
                     <div className="ch-sender">
-                      @{nameOf(m)} <TitleBadge userId={m.senderId} role={m.role} />
+                      {labelOf(m.senderId, nameOf(m))} <TitleBadge userId={m.senderId} role={m.role} />
                     </div>
                   )}
                   {m.payload?.k === "text" ? (
@@ -852,8 +877,8 @@ export function Conversation() {
           rows={1}
           value={draft}
           disabled={!canSend}
-          placeholder={a.placeholder}
-          aria-label={a.placeholder}
+          placeholder={mutedNote ?? a.placeholder}
+          aria-label={mutedNote ?? a.placeholder}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}

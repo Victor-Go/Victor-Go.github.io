@@ -157,7 +157,7 @@ function NewGroupDialog({ onClose }: { onClose: () => void }) {
 
 export function ContactsPane() {
   const { a } = useLang();
-  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, lastActive, official, account, adminList, me } = useChat();
+  const { contacts: contactList, groups: groupList, requests, unread, mentions, activeConv, lastActive, official, account, adminList, me, socket } = useChat();
   // Most recently used first; conversations with nothing known yet keep the server's order after them (the sort is stable).
   const contacts = useMemo(() => [...contactList].sort((x, y) => (lastActive[y.convId] ?? 0) - (lastActive[x.convId] ?? 0)), [contactList, lastActive]);
   const groups = useMemo(() => [...groupList].sort((x, y) => (lastActive[y.id] ?? 0) - (lastActive[x.id] ?? 0)), [groupList, lastActive]);
@@ -201,7 +201,11 @@ export function ContactsPane() {
   return (
     <aside className="ch-list">
       <header className="ch-list-head">
-        <h1>{a.tabContacts}</h1>
+        <div className="ch-head-title">
+          <h1>{a.tabContacts}</h1>
+          {/* While the chat server cannot be reached (connecting for the first time, or reconnecting), a small spinner says so. */}
+          {(socket === "connecting" || socket === "reconnecting") && <span className="ch-spinner ch-spinner-sm" role="status" aria-label={a.socketState[socket]} title={a.socketState[socket]} />}
+        </div>
         <span>
           {/* Blocked: the same entry opens the administrators-only list (the server lets those through). */}
           <button type="button" className="ch-icon" aria-label={account.canAddContacts ? a.addContact : a.addAdminTitle} onClick={() => setDialog(account.canAddContacts ? "add" : "admins")}>

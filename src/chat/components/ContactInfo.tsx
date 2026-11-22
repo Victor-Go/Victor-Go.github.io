@@ -3,12 +3,12 @@ import { ApiError } from "../net/api";
 import { refreshContacts, removeContact, setContactNick } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { contactLabel, type Contact } from "../store";
+import { contactLabel, useChat, type Contact } from "../store";
 import { NICK_MAX, cleanNick } from "../validation";
 import { useLang } from "../useChat";
 import { useCan } from "../store";
 import { SendCardModal } from "./SendCardModal";
-import { Avatar, Modal, TitleBadge } from "./ui";
+import { Avatar, ConfirmModal, Modal, TitleBadge } from "./ui";
 
 /** The other person of a 1:1 chat: who they are, and the way to remove them (which removes the chat for both of you). */
 export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: () => void }) {
@@ -16,6 +16,10 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  // What the deletion takes with it: the favourites made from this chat (a note has no chat and stays).
+  const favs = useChat((st) => st.favorites).filter((f) => f.conv === contact.convId);
+  const favFiles = favs.filter((f) => f.kind === "voice" || f.kind === "image").length;
   const canSendCard = useCan("cards");
   const [nick, setNick] = useState(contact.nick ?? "");
   const nickChanged = cleanNick(nick) !== (contact.nick ?? "");
@@ -35,7 +39,8 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
   };
 
   const remove = async () => {
-    if (busy || !window.confirm(a.confirmRemoveContact)) return;
+    if (busy) return;
+    setConfirming(false);
     setBusy(true);
     setError(null);
     try {
@@ -51,15 +56,11 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
   };
 
   return (
-    <Modal title={contactLabel(contact)} onClose={onClose} closeLabel={a.close}>
+    <Modal title={contactLabel(contact)} titleExtra={<TitleBadge userId={contact.userId} role={contact.role} className="ch-title-badge" />} onClose={onClose} closeLabel={a.close}>
       {error && <div className="ch-notice">{error}</div>}
-      <div className="ch-row">
-        <Avatar userId={contact.userId} size={48} admin={contact.role === "admin"} />
-        <div className="ch-row-text">
-          <div className="ch-row-title">
-            {contactLabel(contact)} <TitleBadge userId={contact.userId} role={contact.role} />
-          </div>
-        </div>
+      {/* The name and the badge are in the title above: the picture is shown large (2.5 times the old 48 px) and centred. */}
+      <div className="ch-row ch-contact-head">
+        <Avatar userId={contact.userId} size={120} admin={contact.role === "admin"} />
       </div>
       {contact.key && !contact.deleted && (
         <label className="ch-field">
@@ -84,10 +85,19 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
             {a.manage.sendCard}
           </button>
         )}
-        <button type="button" className="ch-danger" disabled={busy} onClick={() => void remove()}>
+        <button type="button" className="ch-danger" disabled={busy} onClick={() => setConfirming(true)}>
           {a.removeContact}
         </button>
       </div>
+      {confirming && (
+        <ConfirmModal title={a.removeContact} confirmLabel={a.removeContact} cancelLabel={a.cancel} closeLabel={a.close} danger onConfirm={() => void remove()} onCancel={() => setConfirming(false)}>
+          <p>{a.removeContactBody}</p>
+          <div className="ch-callout">
+            <strong>{a.removeContactFavTitle}</strong>
+            <p>{a.removeContactFav(favs.length, favFiles)}</p>
+          </div>
+        </ConfirmModal>
+      )}
       {cardOpen && <SendCardModal recipient={contact} onClose={() => setCardOpen(false)} />}
     </Modal>
   );

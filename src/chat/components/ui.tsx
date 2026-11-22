@@ -48,7 +48,7 @@ export function Avatar({ userId, size = 40, admin: roleAdmin = false }: { userId
 }
 
 /** A dialog that closes on Escape and returns focus to where it came from. */
-export function Modal({ title, onClose, children, closeLabel }: { title: string; onClose: () => void; children: ReactNode; closeLabel: string }) {
+export function Modal({ title, titleExtra, onClose, children, closeLabel }: { title: string; titleExtra?: ReactNode; onClose: () => void; children: ReactNode; closeLabel: string }) {
   const ref = useRef<HTMLDivElement>(null);
   // The latest onClose, so a caller's new function on every render does not re-run the effect (which would steal the focus again and lose where it came from).
   const closeRef = useRef(onClose);
@@ -67,7 +67,10 @@ export function Modal({ title, onClose, children, closeLabel }: { title: string;
     <div className="ch-modal-back" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ch-modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
         <div className="ch-modal-head">
-          <h2>{title}</h2>
+          <h2>
+            {title}
+            {titleExtra}
+          </h2>
           <button type="button" className="ch-link" onClick={onClose}>
             {closeLabel}
           </button>
@@ -75,6 +78,56 @@ export function Modal({ title, onClose, children, closeLabel }: { title: string;
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * A yes/no question in our own dialog (never the browser's alert, confirm or prompt). The confirm button is red when `danger`. With
+ * `requireText` the person has to type exactly that text (a name) before the button works.
+ */
+export function ConfirmModal({
+  title,
+  children,
+  confirmLabel,
+  cancelLabel,
+  closeLabel,
+  danger = false,
+  busy = false,
+  requireText,
+  requireLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  cancelLabel: string;
+  closeLabel: string;
+  danger?: boolean;
+  busy?: boolean;
+  requireText?: string;
+  requireLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const blocked = requireText !== undefined && typed !== requireText;
+  return (
+    <Modal title={title} onClose={() => !busy && onCancel()} closeLabel={closeLabel}>
+      {children}
+      {requireText !== undefined && (
+        <label className="ch-field">
+          <span className="ch-label">{requireLabel}</span>
+          <input className="ch-input" value={typed} autoComplete="off" autoCapitalize="off" spellCheck={false} onChange={(e) => setTyped(e.target.value)} />
+        </label>
+      )}
+      <button type="button" className={danger ? "ch-danger" : "ch-primary"} disabled={busy || blocked} onClick={onConfirm}>
+        {confirmLabel}
+      </button>
+      <button type="button" className="ch-secondary" disabled={busy} onClick={onCancel}>
+        {cancelLabel}
+      </button>
+    </Modal>
   );
 }
 

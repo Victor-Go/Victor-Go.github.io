@@ -137,6 +137,10 @@ export interface Group {
   max: number;
   needsRekey: boolean;
   pendingOwner: { userId: string } | null;
+  /** The whole group is muted: only the owner and administrators may write. (Missing on a server older than 2026-11-21: not muted.) */
+  muted?: boolean;
+  /** Members who may not write (never the owner or an administrator). */
+  mutedUsers?: string[];
   members: GroupMember[];
   /** Key generation -> key; filled from the vault and the server's wrapped keys. */
   keys: Map<number, Uint8Array>;
@@ -183,6 +187,10 @@ export interface ChatState {
   sound: boolean;
   /** The user chose "later" on the notification prompt; kept in the vault with the language. */
   notifyDismissed: boolean;
+  /** Set when an account was just created: the one-time notice about signing out and typing is shown until it is closed. */
+  welcome: boolean;
+  /** Bumped when the server says the AWS usage snapshot changed (notice "aws"), and when the socket comes back: the usage page reads it again. */
+  awsTick: number;
   activeConv: string | null;
   socket: SocketState;
   /** Idle logout in minutes; always starts at the default and is never saved. */
@@ -268,6 +276,8 @@ export const initialState: ChatState = {
   reads: {},
   sound: true,
   notifyDismissed: false,
+  welcome: false,
+  awsTick: 0,
   activeConv: null,
   socket: "idle",
   idleMinutes: DEFAULT_IDLE_MINUTES,

@@ -15,7 +15,10 @@ export function useIdleLogout(enabled: boolean, onExpired: string): { warning: b
   const idleMinutes = useChat((s) => s.idleMinutes);
   const [warning, setWarning] = useState(false);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setWarning(false); // signed out (by this timer or any other way): the warning that was up has nothing left to warn about
+      return;
+    }
     let last = Date.now();
     const limit = idleMinutes * 60_000;
     const check = () => {

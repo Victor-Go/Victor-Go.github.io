@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Settings as SettingsIcon, Star } from "lucide-react";
-import { addNote, editNote, logout, removeFavorite } from "../client";
+import { addNote, editNote, logout, refreshUsage, removeFavorite } from "../client";
 import { errorOf } from "../i18nApp";
 import { NOTE_MAX } from "../validation";
 import { formatBytes, formatClock, formatDay } from "../format";
@@ -138,6 +138,9 @@ export function MePage() {
   const usage = useChat((s) => s.usage);
   const filesOff = useChat((s) => s.filesOff);
   const { path } = useLocation();
+  useEffect(() => {
+    void refreshUsage(); // the counters are shown here (and on the favourites page below), so this is where they are read
+  }, []);
   if (path === PATH.favourites) return <FavoritesPage />;
   if (path.startsWith(PATH.settings)) return <SettingsFlow />;
   return (

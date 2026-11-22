@@ -10,6 +10,7 @@ import { useLangStore } from "./lang";
 import { Api } from "./net/api";
 import { armSound } from "./sound";
 import { CallOverlay } from "./components/CallOverlay";
+import { WelcomeNotice } from "./components/WelcomeNotice";
 import { CHAT_PATHS, PATH, isChatPath, sectionOf, showPath, startPath, useLocation } from "./route";
 import { totalUnread, useChat } from "./store";
 import { useLang } from "./useChat";
@@ -87,7 +88,8 @@ export function App() {
     <>
       {ready ? <Shell /> : <AccountPage />}
       {ready && <CallOverlay />}
-      {warning && (
+      {ready && <WelcomeNotice />}
+      {ready && warning && (
         <div className="ch-toast" role="alert">
           {a.idleWarning}
         </div>

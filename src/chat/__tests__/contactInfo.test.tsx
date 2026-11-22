@@ -30,18 +30,26 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("removing a contact from the chat", () => {
   it("the info button opens the contact, and nothing is removed until it is confirmed", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const alert = vi.spyOn(window, "confirm");
     render(<Conversation />);
     fireEvent.click(screen.getByLabelText("联系人信息"));
     fireEvent.click(screen.getByText("删除联系人"));
+    // our own dialog asks, with a word about favourites; the browser's confirm is never used
+    expect(screen.getByText("关于收藏")).toBeTruthy();
+    expect(alert).not.toHaveBeenCalled();
+    expect(removeContact).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("取消"));
+    expect(screen.queryByText("关于收藏")).toBeNull();
     expect(removeContact).not.toHaveBeenCalled();
   });
 
   it("confirming removes that contact", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    useChat.setState({ favorites: [{ id: "f1", conv: CONV, from: "peer", text: "x", time: 1, savedAt: 1, gen: 1, kind: "voice" }] });
     render(<Conversation />);
     fireEvent.click(screen.getByLabelText("联系人信息"));
     fireEvent.click(screen.getByText("删除联系人"));
+    expect(screen.getByText((t) => t.includes("你从这个聊天收藏的 1 条内容会被一并删除(其中 1 条是随收藏保存的语音或图片文件)"))).toBeTruthy();
+    fireEvent.click(screen.getAllByText("删除联系人").at(-1)!);
     await waitFor(() => expect(removeContact).toHaveBeenCalledWith("peer"));
   });
 

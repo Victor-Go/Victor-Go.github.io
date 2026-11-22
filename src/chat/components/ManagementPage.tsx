@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Contact, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, UserCheck, Users } from "lucide-react";
+import { Activity, Cloud, Contact, KeyRound, Lock, ScrollText, SlidersHorizontal, Ticket, Timer, UserCheck, Users } from "lucide-react";
 import { ADMIN_LOCK_MS, lockAdmin, markAdminAction, unlockedNow, useAdminLock } from "../adminLock";
 import { ApiError, adminDeleteUser, rawApi, unlockAdmin, wipeEverything, type Progress } from "../client";
 import { formatBytes, formatClock, formatDay } from "../format";
@@ -12,7 +12,7 @@ import { Alert, ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "
 import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
 import { SendCardModal } from "./SendCardModal";
-import { Avatar, Loading, Modal, Steps, TitleBadge } from "./ui";
+import { Avatar, ConfirmModal, Loading, Modal, Steps, TitleBadge } from "./ui";
 
 const PAGE_SIZE = 20;
 
@@ -106,7 +106,39 @@ interface Job {
   error: string;
 }
 
-type View = { k: "root" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "audit" } | { k: "starter" };
+/** The AWS usage snapshot (GET /admin/aws): collected once a day by the jobs function, and when an administrator asks. */
+interface AwsSnapshot {
+  fetchedAt: number;
+  lambdas: { name: string; invocations: number; errors: number; throttles: number; avgMs: number; maxMs: number }[];
+  tables: {
+    name: string;
+    readProvisioned: number;
+    writeProvisioned: number;
+    items: number;
+    sizeBytes: number;
+    readUnits: number;
+    writeUnits: number;
+    readPeak: number;
+    writePeak: number;
+    readThrottles: number;
+    writeThrottles: number;
+    indexes: { name: string; readProvisioned: number; writeProvisioned: number }[];
+  }[];
+  apis: { name: string; kind: "http" | "websocket"; requests: number; connects: number }[];
+  bucket: { name: string; sizeBytes: number; objects: number } | null;
+  provisionedRead: number;
+  provisionedWrite: number;
+}
+interface AwsState {
+  snapshot: AwsSnapshot | null;
+  error: string;
+  failedAt: number;
+  requestedAt: number;
+  refreshing: boolean;
+  nextAt: number;
+}
+
+type View = { k: "root" } | { k: "aws" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "audit" } | { k: "starter" };
 
 /** Each screen has its own address (so the back gesture works); the selected user rides along in memory, never in the address. */
 function addressOf(v: View): { path: string; payload?: unknown } {
@@ -117,6 +149,7 @@ function addressOf(v: View): { path: string; payload?: unknown } {
     case "config":
     case "epochs":
     case "jobs":
+    case "aws":
     case "status":
     case "audit":
     case "starter":
@@ -141,6 +174,7 @@ function viewAt(path: string, payload: unknown): View {
     case "config":
     case "epochs":
     case "jobs":
+    case "aws":
     case "status":
     case "audit":
     case "starter":
@@ -321,6 +355,7 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
   const [blocked, setBlocked] = useState(user.contactsBlocked === true);
   const [canCall, setCanCall] = useState(user.canCall === true);
   const [cardOpen, setCardOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const canCard = useCan("cards");
   const act = user.actions ?? {};
   const setContactsBlocked = (next: boolean) => {
@@ -382,11 +417,27 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
             center
             destructive
             disabled={busy}
-            onClick={() => {
-              if (window.prompt(a.manage.confirmDelete(user.handle)) === user.handle) done(() => adminDeleteUser(user.userId, user.handle));
-            }}
+            onClick={() => setDeleting(true)}
           />
         </Group>
+      )}
+      {deleting && (
+        <ConfirmModal
+          title={a.manage.delete}
+          confirmLabel={a.manage.delete}
+          cancelLabel={a.cancel}
+          closeLabel={a.close}
+          danger
+          requireText={user.handle}
+          requireLabel={a.manage.typeHandle}
+          onConfirm={() => {
+            setDeleting(false);
+            done(() => adminDeleteUser(user.userId, user.handle));
+          }}
+          onCancel={() => setDeleting(false)}
+        >
+          <p>{a.manage.confirmDelete(user.handle)}</p>
+        </ConfirmModal>
       )}
       {cardOpen && <SendCardModal recipient={user} onClose={() => setCardOpen(false)} onLocked={lockAdmin} />}
     </Page>
@@ -730,11 +781,27 @@ function EpochsView({ go }: { go: (v: View) => void }) {
     void load();
   }, [load]);
   const act = (fn: () => Promise<unknown>) => void run(fn).then(load);
-  const destroy = (what: string, fn: () => Promise<unknown>) => {
-    if (window.confirm(a.manage.confirmDestroy(what))) act(fn);
-  };
+  const [destroying, setDestroying] = useState<{ what: string; fn: () => Promise<unknown> } | null>(null);
+  const destroy = (what: string, fn: () => Promise<unknown>) => setDestroying({ what, fn });
   return (
     <Page title={a.manage.epochs} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
+      {destroying && (
+        <ConfirmModal
+          title={a.manage.destroy}
+          confirmLabel={a.manage.destroy}
+          cancelLabel={a.cancel}
+          closeLabel={a.close}
+          danger
+          onConfirm={() => {
+            const { fn } = destroying;
+            setDestroying(null);
+            act(fn);
+          }}
+          onCancel={() => setDestroying(null)}
+        >
+          <p>{a.manage.confirmDestroy(destroying.what)}</p>
+        </ConfirmModal>
+      )}
       <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {rows && (
@@ -858,6 +925,103 @@ function JobsView({ go }: { go: (v: View) => void }) {
           </div>
         ))}
       </Group>
+    </Page>
+  );
+}
+
+const num = (n: number): string => Math.round(n).toLocaleString();
+const perSecond = (n: number): string => (n >= 10 ? n.toFixed(0) : n.toFixed(1));
+
+/** How the AWS account is used (last 24 hours) and what it is given. Reading it costs the page nothing but one request: the numbers were collected by the jobs function. */
+function AwsView({ go }: { go: (v: View) => void }) {
+  const { a } = useLang();
+  const when = useWhen();
+  const { error, run, busy, loaded } = useAdmin();
+  const [s, setS] = useState<AwsState | null>(null);
+  // A refresh is answered by the background collector (a schedule that runs every five minutes). The page does not ask again meanwhile: the server
+  // pushes a notice when the snapshot changes (and the socket coming back counts as one), and `awsTick` is how that reaches this page.
+  const tick = useChat((st) => st.awsTick);
+  const load = useCallback(() => run(() => rawApi().get<AwsState>("/admin/aws")).then((r) => r && setS(r)), [run]);
+  useEffect(() => {
+    void load();
+  }, [load, tick]);
+  const waiting = s?.refreshing === true;
+  // Never a red message for this button: if the server says "conflict" (a request is already there, or an older server that limits how often) the page just reads where things stand.
+  const refresh = () =>
+    void run(async () => {
+      try {
+        return await rawApi().post<AwsState>("/admin/aws/refresh");
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409) return rawApi().get<AwsState>("/admin/aws");
+        throw e;
+      }
+    }).then((r) => r && setS(r));
+  const snap = s?.snapshot ?? null;
+  const m = a.manage;
+  return (
+    <Page title={m.aws} onBack={() => go({ k: "root" })} backLabel={m.title}>
+      <Loading busy={busy && !waiting} first={!loaded} label={a.loading} />
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {s && (
+        <>
+          <Group footer={m.awsNote}>
+            <Row title={m.awsUpdated} value={snap ? when(snap.fetchedAt) : m.awsNone} />
+            <Row title={m.awsNext} value={when(s.nextAt)} />
+            {s.error && (
+              <div className="ios-form">
+                <div className="ios-sub ios-destructive">
+                  {m.awsFailed(when(s.failedAt))}: {s.error}
+                </div>
+              </div>
+            )}
+            <div className="ios-form">
+              <div className="ios-actions">
+                <button type="button" className="ios-link ch-btn-icon" disabled={busy || waiting} aria-busy={waiting} onClick={refresh}>
+                  {waiting && <span className="ch-spinner ch-spinner-sm" aria-hidden="true" />}
+                  {waiting ? m.awsWaiting : m.awsRefresh}
+                </button>
+              </div>
+            </div>
+          </Group>
+          {snap && (
+            <>
+              <Group header={m.awsLambda}>
+                {snap.lambdas.map((l) => (
+                  <Row key={l.name} title={l.name} subtitle={`${num(l.invocations)} ${m.awsInvocations} · ${m.awsErrors} ${num(l.errors)} · ${m.awsThrottles} ${num(l.throttles)}`} value={`${Math.round(l.avgMs)} / ${Math.round(l.maxMs)} ms`} />
+                ))}
+              </Group>
+              {snap.tables.map((t) => (
+                <Group key={t.name} header={`DynamoDB · ${t.name.endsWith("ephemeral") ? m.awsEphemeral : t.name.endsWith("main") ? m.awsMain : ""} (${t.name})`}>
+                  <Row
+                    title={m.awsProvisioned}
+                    value={`${t.readProvisioned} / ${t.writeProvisioned}`}
+                    subtitle={t.indexes.length ? t.indexes.map((x) => `${x.name} ${x.readProvisioned} / ${x.writeProvisioned}`).join(" · ") : undefined}
+                  />
+                  <Row title={m.awsConsumed} value={`${num(t.readUnits)} / ${num(t.writeUnits)}`} />
+                  <Row title={m.awsPeak} value={`${perSecond(t.readPeak)} / ${perSecond(t.writePeak)}`} />
+                  <Row title={m.awsTableThrottles} value={`${num(t.readThrottles)} / ${num(t.writeThrottles)}`} />
+                  <Row title={m.awsItems} value={num(t.items)} />
+                  <Row title={m.awsSize} value={formatBytes(t.sizeBytes)} />
+                </Group>
+              ))}
+              <Group header={m.awsTotal}>
+                <Row title={m.awsProvisioned} value={`${snap.provisionedRead} / ${snap.provisionedWrite}`} />
+              </Group>
+              <Group header={m.awsApis}>
+                {snap.apis.map((x) => (
+                  <Row key={x.name} title={x.name} subtitle={x.kind === "websocket" ? `${m.awsConnects} ${num(x.connects)}` : undefined} value={`${num(x.requests)} ${x.kind === "websocket" ? m.awsMessages : m.awsRequests}`} />
+                ))}
+              </Group>
+              {snap.bucket && (
+                <Group header={`S3 · ${snap.bucket.name}`}>
+                  <Row title={m.awsSize} value={formatBytes(snap.bucket.sizeBytes)} />
+                  <Row title={m.awsObjects} value={num(snap.bucket.objects)} />
+                </Group>
+              )}
+            </>
+          )}
+        </>
+      )}
     </Page>
   );
 }
@@ -1037,6 +1201,7 @@ export const VIEW_PERMISSION: Record<string, string | null> = {
   wipe: "wipe",
   wipeAll: "wipe_all",
   jobs: "jobs",
+  aws: "aws",
   status: "status",
   audit: "audit",
   starter: "starter",
@@ -1099,6 +1264,8 @@ export function ManagementPage() {
       return <WipeAllView go={setView} />;
     case "jobs":
       return <JobsView go={setView} />;
+    case "aws":
+      return <AwsView go={setView} />;
     case "status":
       return <StatusView go={setView} />;
     case "audit":
@@ -1117,9 +1284,10 @@ export function ManagementPage() {
               {can("config") && <Row icon={<Icon color="#8e8e93"><SlidersHorizontal size={18} /></Icon>} title={a.manage.config} chevron onClick={() => setView({ k: "config" })} />}
             </Group>
           )}
-          {(can("status") || can("epochs") || can("jobs") || can("audit")) && (
+          {(can("status") || can("epochs") || can("jobs") || can("audit") || can("aws")) && (
             <Group>
               {can("status") && <Row icon={<Icon color="#34c759"><Activity size={18} /></Icon>} title={a.manage.status} chevron onClick={() => setView({ k: "status" })} />}
+              {can("aws") && <Row icon={<Icon color="#0a84ff"><Cloud size={18} /></Icon>} title={a.manage.aws} chevron onClick={() => setView({ k: "aws" })} />}
               {can("epochs") && <Row icon={<Icon color="#af52de"><KeyRound size={18} /></Icon>} title={a.manage.epochs} chevron onClick={() => setView({ k: "epochs" })} />}
               {can("jobs") && <Row icon={<Icon color="#ff9500"><Timer size={18} /></Icon>} title={a.manage.jobs} chevron onClick={() => setView({ k: "jobs" })} />}
               {can("audit") && <Row icon={<Icon color="#5856d6"><ScrollText size={18} /></Icon>} title={a.manage.audit} chevron onClick={() => setView({ k: "audit" })} />}

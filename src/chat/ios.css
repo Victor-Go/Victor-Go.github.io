@@ -184,6 +184,12 @@
   text-overflow: ellipsis;
 }
 
+/* A link that cannot be used now (a refresh is running) is grey, like any disabled control. */
+.ios-link:disabled {
+  color: var(--ios-label3);
+  cursor: default;
+}
+
 .ios-sub {
   font-size: 13px;
   color: var(--ios-label2);

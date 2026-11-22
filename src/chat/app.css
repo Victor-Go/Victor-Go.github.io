@@ -401,6 +401,13 @@ textarea:disabled {
   justify-content: space-between;
 }
 
+.ch-head-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .ch-scroll {
   overflow-y: auto;
   flex: 1;
@@ -750,6 +757,33 @@ textarea:disabled {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Inside a dialog the headings and rows start at the same left edge as the fields below them (they carry the list's own 12 px indent elsewhere). */
+.ch-modal .ch-section {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.ch-modal .ch-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.ch-title-badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.ch-contact-head {
+  justify-content: center;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.ch-grow {
+  flex: 1;
+  min-width: 0;
 }
 
 .ch-modal-head {
@@ -1598,4 +1632,13 @@ section > .ch-primary {
 }
 .ch-callrec.ch-bad {
   color: var(--ch-bad);
+}
+
+/* The one-time notice after an account is created: a short list. */
+.ch-notes {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }

@@ -95,6 +95,8 @@ const s = {
   configAt: 0,
   /** Sequence numbers deleted this session, per conversation (numbers only, no content): a page fetched before the push arrived must not bring a message back. */
   tombs: new Map<string, Set<number>>(),
+  /** Chats removed this session: the server deletes their favourites in the background (a few minutes), so a sync must not bring them back into view. */
+  goneConvs: new Set<string>(),
   /** Bumped when a conversation's cache is replaced or dropped; a slower request that started before it is thrown away. */
   loadGen: new Map<string, number>(),
   sentRead: new Map<string, number>(),
@@ -168,6 +170,7 @@ export async function register(handle: string, password: string, inviteCode: str
     onProgress({ step: "server" });
     const session = await api().post<SessionPayload>("/auth/register/finish", { regId: start.regId, registrationRecord: done.registrationRecord, publicKey: identity.publicKey, wrappedMK });
     await establish(session, mk, identity.seed, onProgress);
+    patch({ welcome: true });
   } finally {
     kek?.fill(0);
     flow.wipe();
@@ -226,6 +229,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
         patch({ socket });
         // Every time the socket comes up (first connection, reconnect, the two-hour roll-over) pushes may have been missed: read again.
         if (socket === "open") {
+          if (!firstOpen) patch({ awsTick: useChat.getState().awsTick + 1 }); // a push may have been missed while the socket was down
           void resync(!firstOpen);
           firstOpen = false;
         }
@@ -264,6 +268,7 @@ export function lock(notice: string | null = null): void {
   s.lastSeq.clear();
   s.configAt = 0;
   s.tombs.clear();
+  s.goneConvs.clear();
   s.loadGen.clear();
   s.sentRead.clear();
   s.readAt.clear();
@@ -403,7 +408,10 @@ async function loadVault(): Promise<void> {
       } else if (rec.id.startsWith("fav:")) {
         // fav:<favourite epoch>:<id>: the epoch in the record id says which constant it was sealed under, without opening it.
         const tag = /^fav:(\d+):(.+)$/.exec(rec.id);
-        if (tag) favorites.push(await readFavorite(Number(tag[1]), tag[2], v));
+        if (tag) {
+          const fav = await readFavorite(Number(tag[1]), tag[2], v);
+          if (!s.goneConvs.has(fav.conv)) favorites.push(fav);
+        }
       }
     } catch {
       /* a record that does not open is skipped, never fatal */
@@ -650,6 +658,7 @@ function forgetContact(userId: string): void {
   dropCached(convId);
   s.sentRead.delete(convId);
   s.tombs.delete(convId);
+  s.goneConvs.add(convId);
   const messages = { ...useChat.getState().messages };
   delete messages[convId]; // even a message still being sent
   patch({ messages, favorites: useChat.getState().favorites.filter((f) => f.conv !== convId) });
@@ -1237,9 +1246,9 @@ async function transmit(conv: string, m: Msg): Promise<void> {
   const { epoch, ct } = await encryptMessage(key, epochs(), m.payload, { conv, senderId: m.senderId, clientMsgId: m.id, gen });
   const frame = { t: "send", conv, clientMsgId: m.id, epoch, gen, ct };
   if (s.ws?.send(frame)) return;
-  const r = await api().post<{ seq: number }>("/messages", frame);
+  const r = await api().post<{ seq: number; used?: number }>("/messages", frame);
   addMessage(conv, { ...m, seq: r.seq, status: "sent" });
-  void refreshUsage();
+  countSent(r.used);
 }
 
 export async function onFrame(f: Frame): Promise<void> {
@@ -1293,7 +1302,7 @@ export async function onFrame(f: Frame): Promise<void> {
     const list = useChat.getState().messages[conv] ?? [];
     const m = list.find((x) => x.id === f.clientMsgId && x.mine);
     if (m) addMessage(conv, { ...m, seq: Number(f.seq), status: "sent" });
-    void refreshUsage();
+    countSent(f.used);
   } else if (f.t === "error") {
     for (const [conv, list] of Object.entries(useChat.getState().messages)) {
       const m = list.find((x) => x.id === f.clientMsgId && x.mine && x.status === "sending");
@@ -1323,6 +1332,7 @@ export async function onFrame(f: Frame): Promise<void> {
     }
     else if (kind === "group_event" || kind === "group_deleted") await refreshGroups().catch(() => {});
     else if (kind === "admins") await refreshAdmins().catch(() => {});
+    else if (kind === "aws") patch({ awsTick: useChat.getState().awsTick + 1 });
     else if (kind === "epochs") await refreshEpochs().catch(() => {});
     else if (kind === "wiped") {
       await refreshEpochs().catch(() => {});
@@ -1515,6 +1525,16 @@ export async function transferGroup(gid: string, userId: string): Promise<void> 
 }
 export async function acceptOwnership(gid: string): Promise<void> {
   await api().post(`/groups/${gid}/accept-owner`);
+  await refreshGroups();
+}
+/** Mutes (or unmutes) one member, or the whole group when `userId` is left out. The owner and administrators can never be muted. */
+export async function muteGroup(gid: string, muted: boolean, userId?: string): Promise<void> {
+  await api().post(`/groups/${gid}/mute`, userId ? { muted, userId } : { muted });
+  await refreshGroups();
+}
+/** An administrator who is a member makes themselves the owner. Nothing is re-keyed: a member already holds the current key. */
+export async function takeOverGroup(gid: string): Promise<void> {
+  await api().post(`/groups/${gid}/take-over`);
   await refreshGroups();
 }
 export async function deleteGroup(gid: string): Promise<void> {
@@ -1751,6 +1771,13 @@ export async function wipeEverything(password: string, onProgress?: OnProgress):
   lock(s.lockNotice("kicked"));
 }
 
+/** The acknowledgement of a message says how many this person has sent this month: the counter follows it, with no request of its own. */
+function countSent(used: unknown): void {
+  const usage = useChat.getState().usage;
+  if (usage && typeof used === "number" && Number.isFinite(used)) patch({ usage: { ...usage, used } });
+}
+
+/** Read when the "Me" pages open, after a sign-in and after a `monthly_limit` (never after every message: it reads all of the person's favourites). */
 export async function refreshUsage(): Promise<void> {
   try {
     patch({ usage: await api().get<NonNullable<ChatState["usage"]>>("/usage") });

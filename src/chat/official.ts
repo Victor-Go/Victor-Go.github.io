@@ -59,6 +59,22 @@ export interface GroupDeleted {
 }
 
 /** `group_deleted`: sent to every member of a dissolved group except the one who dissolved it (the group is gone, so its name is in the message). */
+export interface GroupOwnerTaken {
+  groupId: string;
+  name: string;
+  by: { userId: string; handle: string } | null;
+}
+
+/** `group_owner_taken`: sent to the former owner of a group that an administrator took over without asking. */
+export function parseGroupOwnerTaken(data: unknown): GroupOwnerTaken | null {
+  if (!isRecord(data)) return null;
+  const groupId = text(data.groupId);
+  const name = text(data.name, 100);
+  if (!groupId || name === null) return null;
+  const by = isRecord(data.by) && text(data.by.userId) ? { userId: text(data.by.userId) as string, handle: text(data.by.handle) ?? "" } : null;
+  return { groupId, name, by };
+}
+
 export function parseGroupDeleted(data: unknown): GroupDeleted | null {
   if (!isRecord(data)) return null;
   const groupId = text(data.groupId);

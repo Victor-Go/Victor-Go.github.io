@@ -330,3 +330,19 @@ describe("administrators in the contact list", () => {
     expect(badges[0].closest(".ch-row-title")?.textContent).toContain("@boss");
   });
 });
+
+describe("a group_owner_taken message", () => {
+  it("tells the former owner who took which group, in both languages", () => {
+    useChat.setState({
+      official: OFFICIAL,
+      activeConv: OFFICIAL,
+      messages: { [OFFICIAL]: [official(1, "group_owner_taken", { groupId: "g1", name: "Team", by: { userId: "u2", handle: "victor" } })] },
+    });
+    const { unmount } = render(<Conversation />);
+    expect(screen.getByText(/Administrator @victor took over ownership of "Team"/)).toBeTruthy();
+    unmount();
+    setLang("zh");
+    render(<Conversation />);
+    expect(screen.getByText(/管理员 @victor已接管你在群「Team」的群主身份/)).toBeTruthy();
+  });
+});

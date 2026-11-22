@@ -8,7 +8,7 @@ import { errorOf } from "../i18nApp";
 import { deliveryOf } from "../delivery";
 import { dayKey, formatClock, formatDay, isExpired } from "../format";
 import { applyMention, mentionQuery, splitMentions, suggest } from "../mentions";
-import { contactLabel, useChat, type Msg } from "../store";
+import { contactLabel, nameText, useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
 import { callsSupported } from "../net/call";
 import { CallBubble } from "./CallBubble";
@@ -16,8 +16,8 @@ import { ContactInfo } from "./ContactInfo";
 import { GroupInfo } from "./GroupInfo";
 import { splitLinks } from "../links";
 import { quoteInto, splitBlocks, splitBold } from "../richText";
-import { DELETE_MAX, canDelete } from "../selection";
-import { Avatar, Modal, TitleBadge } from "./ui";
+import { DELETE_MAX, canDelete, moderatesGroup } from "../selection";
+import { Avatar, Marquee, Modal, TitleBadge } from "./ui";
 import { OfficialMessage } from "./OfficialMessage";
 import { ImageBubble } from "./ImageBubble";
 import { ImageViewer } from "./ImageViewer";
@@ -212,9 +212,11 @@ export function Conversation() {
   const drag =useRef<{ x: number; y: number; active: boolean } | null>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const raf = useRef(0);
-  const deletable = new Set(visible.filter(canDelete).map((m) => m.seq));
+  const permissions = useChat((st) => st.permissions);
+  const moderator = moderatesGroup(group, me?.userId ?? "", permissions);
+  const deletable = new Set(visible.filter((m) => canDelete(m, moderator)).map((m) => m.seq));
   // A message that was deleted meanwhile (by the push, by a reload) drops out of the selection by itself.
-  const chosen = visible.filter((m) => picked.has(m.seq) && canDelete(m));
+  const chosen = visible.filter((m) => picked.has(m.seq) && canDelete(m, moderator));
   const stopSelecting = () => {
     setSelecting(false);
     setPicked(new Set());
@@ -477,17 +479,22 @@ export function Conversation() {
   const keyOk = isOfficial ? false : contact ? contact.key !== null && !contact.deleted : (group?.keys.get(group!.gen) ?? null) !== null;
   const canSend = keyOk && !mutedNote;
   // How a group member is shown: the nickname I gave them, when they are one of my contacts (the nickname is mine alone and never leaves this browser).
-  const labelOf = (userId: string, handle: string): string => {
-    const c = contacts.find((x) => x.userId === userId);
-    return c ? contactLabel(c) : "@" + handle;
-  };
-  const nameOf = (m: Msg): string => (m.mine ? me.handle : group ? (group.members.find((x) => x.userId === m.senderId)?.handle ?? "?") : (contact?.handle ?? "?"));
+  const labelOf = (userId: string, who: { handle: string; aliased?: boolean; alias?: string }): string => contactLabel(contacts.find((x) => x.userId === userId) ?? who);
+  // Who wrote a message: the name the server shows me (a code name when the person has one, then without "@"), or my own handle.
+  const whoOf = (m: Msg): { handle: string; aliased?: boolean; alias?: string } =>
+    m.mine ? { handle: me.handle } : group ? (group.members.find((x) => x.userId === m.senderId) ?? { handle: "?" }) : (contact ?? { handle: "?" });
+  const nameOf = (m: Msg): string => whoOf(m).handle;
+  const shownOf = (m: Msg): string => nameText(whoOf(m).handle, whoOf(m).aliased);
   const length = Array.from(draft).length;
-  const memberHandles = group ? group.members.map((x) => x.handle) : [];
+  // An administrator sees the real handle of a person who has a code name, but the people in the group write the code name: both can be mentioned.
+  const memberHandles = group ? group.members.flatMap((x) => (x.alias ? [x.handle, x.alias] : [x.handle])) : [];
 
   // Typing "@" in a group offers the members; Enter, Tab or a tap inserts "@name " (name plus the one space the rule needs).
   const query = group && !dismissed ? mentionQuery(draft, caret) : null;
-  const options = query ? suggest(memberHandles.filter((h) => h.toLowerCase() !== me.handle.toLowerCase()), query.query) : [];
+  // What the list offers and what a tap writes is the name the people in the group see: the code name when there is one, else the handle.
+  const mentionNames = group ? group.members.map((x) => x.alias ?? x.handle) : [];
+  const mentionNameOf = (userId: string): string | undefined => group?.members.map((x) => ({ id: x.userId, name: x.alias ?? x.handle })).find((x) => x.id === userId)?.name;
+  const options = query ? suggest(mentionNames.filter((h) => h.toLowerCase() !== me.handle.toLowerCase() && h.toLowerCase() !== (me.alias ?? "").toLowerCase()), query.query) : [];
   const open = options.length > 0;
   const choose = (handle: string) => {
     if (!query) return;
@@ -633,8 +640,9 @@ export function Conversation() {
           <Avatar userId={isOfficial ? "official" : (contact?.userId ?? group!.id)} size={36} admin={contact?.role === "admin"} />
         )}
         <div className="ch-row-text">
-          <div className="ch-row-title">
-            {title} {contact && <TitleBadge userId={contact.userId} role={contact.role} />}
+          <div className="ch-row-title ch-name-line">
+            <Marquee>{title}</Marquee>
+            {contact && <TitleBadge userId={contact.userId} role={contact.role} />}
           </div>
           <div className="ch-hint">{isOfficial ? a.officialNote : group ? a.memberCount(group.members.length) : a.encryptedNote}</div>
         </div>
@@ -687,7 +695,7 @@ export function Conversation() {
                   <Trash2 size={16} aria-hidden="true" />
                   <strong>{a.messageDeleted}</strong>
                   <span>
-                    @{nameOf(m)} · {formatClock(m.time, lang)}
+                    {shownOf(m)} · {formatClock(m.time, lang)}
                   </span>
                 </div>
               ) : m.kind !== undefined ? (
@@ -721,7 +729,7 @@ export function Conversation() {
                   {m.lost === "destroyed" ? <ShieldOff size={16} aria-hidden="true" /> : <ShieldAlert size={16} aria-hidden="true" />}
                   <strong>{m.lost === "destroyed" ? a.undecryptable : a.unverified}</strong>
                   <span>
-                    @{nameOf(m)} · {formatClock(m.time, lang)}
+                    {shownOf(m)} · {formatClock(m.time, lang)}
                   </span>
                 </div>
               ) : (
@@ -747,7 +755,7 @@ export function Conversation() {
                     {picked.has(m.seq) && <Check size={16} aria-hidden="true" />}
                   </button>
                 ) : group && !m.mine ? (
-                  <button type="button" className="ch-avatar-btn" aria-label={`@${nameOf(m)}`} onClick={() => mentionSender(nameOf(m))}>
+                  <button type="button" className="ch-avatar-btn" aria-label={shownOf(m)} onClick={() => mentionSender(mentionNameOf(m.senderId) ?? nameOf(m))}>
                     <Avatar userId={m.senderId} size={32} admin={m.role === "admin"} />
                   </button>
                 ) : contact && !contact.deleted && !m.mine ? (
@@ -759,8 +767,9 @@ export function Conversation() {
                 )}
                 <div className={"ch-msg" + (m.mine ? " ch-mine" : "") + (m.payload ? "" : " ch-gone") + (m.payload?.k === "image" ? " ch-has-image" : "")}>
                   {!m.mine && group && (
-                    <div className="ch-sender">
-                      {labelOf(m.senderId, nameOf(m))} <TitleBadge userId={m.senderId} role={m.role} />
+                    <div className="ch-sender ch-name-line">
+                      <Marquee>{labelOf(m.senderId, whoOf(m))}</Marquee>
+                      <TitleBadge userId={m.senderId} role={m.role} />
                     </div>
                   )}
                   {m.payload?.k === "text" ? (
@@ -864,7 +873,7 @@ export function Conversation() {
                     choose(h);
                   }}
                 >
-                  <Avatar userId={group!.members.find((x) => x.handle === h)?.userId ?? h} size={24} admin={group!.members.find((x) => x.handle === h)?.role === "admin"} />@{h}
+                  <Avatar userId={group!.members.find((x) => (x.alias ?? x.handle) === h)?.userId ?? h} size={24} admin={group!.members.find((x) => (x.alias ?? x.handle) === h)?.role === "admin"} />@{h}
                 </button>
               </li>
             ))}

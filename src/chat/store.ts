@@ -5,13 +5,20 @@ import type { SocketState } from "./net/socket";
 export interface Me {
   userId: string;
   handle: string;
+  /** My own code name, when an administrator gave me one (only I and administrators see it next to the real handle). */
+  alias?: string;
   role: "admin" | "user";
   publicKey: string;
 }
 
 export interface Contact {
   userId: string;
+  /** What the server shows: the real username, or the code name when `aliased` (the real one is then not told to me). */
   handle: string;
+  /** `handle` is a code name: shown without "@". */
+  aliased?: boolean;
+  /** Administrators only: the code name this person has (their `handle` is then the real one). */
+  alias?: string;
   role: string;
   convId: string;
   /** Chat key; null when the vault has none (the contact then cannot be used). */
@@ -22,8 +29,15 @@ export interface Contact {
   deleted?: boolean;
 }
 
-/** How a contact is shown: `@handle`, then the nickname in brackets when there is one. */
-export const contactLabel = (c: { handle: string; nick?: string }): string => `@${c.handle}${c.nick ? ` (${c.nick})` : ""}`;
+/** A name as it is shown: `@handle`, but a code name (`aliased`) stands without the "@". */
+export const nameText = (handle: string, aliased?: boolean): string => (aliased ? handle : `@${handle}`);
+
+/**
+ * How a contact is shown: the name, then (for an administrator, who is the only one the server tells) the code name in square brackets, then
+ * the nickname in round brackets when there is one.
+ */
+export const contactLabel = (c: { handle: string; aliased?: boolean; alias?: string; nick?: string }): string =>
+  `${nameText(c.handle, c.aliased)}${c.alias && !c.aliased ? ` [${c.alias}]` : ""}${c.nick ? ` (${c.nick})` : ""}`;
 
 /** Whether this person may add or be added as a contact now, as the server says (`GET /me`); other people's switches are never known. */
 export interface AccountFlags {
@@ -93,7 +107,7 @@ export interface RequestItem {
   id: string;
   direction: "in" | "out";
   status: string;
-  user: { userId: string; handle: string; role?: string };
+  user: { userId: string; handle: string; aliased?: boolean; role?: string };
   createdAt: number;
   /** Made with a contact card: the receiver can accept it whatever the switches say. */
   viaCard?: boolean;
@@ -126,6 +140,8 @@ export interface Msg {
 export interface GroupMember {
   userId: string;
   handle: string;
+  aliased?: boolean;
+  alias?: string;
   role: string;
 }
 
@@ -136,7 +152,6 @@ export interface Group {
   gen: number;
   max: number;
   needsRekey: boolean;
-  pendingOwner: { userId: string } | null;
   /** The whole group is muted: only the owner and administrators may write. (Missing on a server older than 2026-11-21: not muted.) */
   muted?: boolean;
   /** Members who may not write (never the owner or an administrator). */

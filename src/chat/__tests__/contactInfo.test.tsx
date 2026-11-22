@@ -108,3 +108,23 @@ describe("sending a contact card from the contact's info panel", () => {
     expect(screen.getByText("去解锁")).toBeTruthy();
   });
 });
+
+describe("code names", () => {
+  it("a code name is shown without @, a plain handle with it", () => {
+    useChat.setState({ contacts: [{ userId: "peer", handle: "Blue", aliased: true, role: "user", convId: CONV, key: new Uint8Array(32) }] });
+    render(<Conversation />);
+    expect(screen.getByText("Blue")).toBeTruthy();
+    expect(screen.queryByText("@Blue")).toBeNull();
+  });
+
+  it("only an administrator with users.manage gets the code name field", () => {
+    render(<Conversation />);
+    fireEvent.click(screen.getByLabelText("联系人信息"));
+    expect(screen.queryByText(/^代号/)).toBeNull();
+    cleanup();
+    useChat.setState({ permissions: ["users.manage"] });
+    render(<Conversation />);
+    fireEvent.click(screen.getByLabelText("联系人信息"));
+    expect(screen.getByText(/^代号/)).toBeTruthy();
+  });
+});

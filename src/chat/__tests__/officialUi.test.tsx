@@ -182,7 +182,6 @@ describe("a group is never offered more than 32 members", () => {
     gen: 1,
     max,
     needsRekey: false,
-    pendingOwner: null,
     members: Array.from({ length: n }, (_, i) => ({ userId: i === 0 ? "me" : `u${i}`, handle: i === 0 ? "me" : `m${i}`, role: "user" })),
     keys: new Map(),
   });

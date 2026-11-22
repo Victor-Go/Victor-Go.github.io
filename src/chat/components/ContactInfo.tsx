@@ -8,6 +8,7 @@ import { NICK_MAX, cleanNick } from "../validation";
 import { useLang } from "../useChat";
 import { useCan } from "../store";
 import { SendCardModal } from "./SendCardModal";
+import { AliasEditor } from "./AliasEditor";
 import { Avatar, ConfirmModal, Modal, TitleBadge } from "./ui";
 
 /** The other person of a 1:1 chat: who they are, and the way to remove them (which removes the chat for both of you). */
@@ -21,6 +22,7 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
   const favs = useChat((st) => st.favorites).filter((f) => f.conv === contact.convId);
   const favFiles = favs.filter((f) => f.kind === "voice" || f.kind === "image").length;
   const canSendCard = useCan("cards");
+  const canAlias = useCan("users.manage") && contact.role !== "admin" && !contact.deleted;
   const [nick, setNick] = useState(contact.nick ?? "");
   const nickChanged = cleanNick(nick) !== (contact.nick ?? "");
 
@@ -79,6 +81,7 @@ export function ContactInfo({ contact, onClose }: { contact: Contact; onClose: (
           </button>
         </label>
       )}
+      {canAlias && <AliasEditor userId={contact.userId} initial={contact.alias ?? ""} />}
       <div className="ch-actions-col">
         {canSendCard && contact.role !== "admin" && (
           <button type="button" className="ch-secondary" disabled={busy} onClick={() => setCardOpen(true)}>

@@ -1642,3 +1642,45 @@ section > .ch-primary {
   flex-direction: column;
   gap: 8px;
 }
+
+/* A name that does not fit scrolls back and forth (components/ui.tsx, Marquee); badges stay beside it. */
+.ch-name-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ch-name-line > :not(.ch-marq) {
+  flex: none;
+}
+.ch-marq {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ch-marq-in {
+  display: inline;
+}
+.ch-marq-in[data-run="true"] {
+  display: inline-block;
+  animation: ch-marq var(--ch-dur, 6s) ease-in-out infinite alternate;
+}
+@keyframes ch-marq {
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+  80%,
+  100% {
+    transform: translateX(var(--ch-shift, 0));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch-marq-in[data-run="true"] {
+    display: inline;
+    animation: none;
+  }
+}

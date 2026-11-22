@@ -7,6 +7,8 @@ export type RemovedReason = "removed" | "self_deleted" | "admin_deleted";
 export interface Removed {
   userId: string;
   handle: string;
+  /** `handle` is a code name (shown without "@"). */
+  aliased: boolean;
   reason: RemovedReason;
 }
 
@@ -15,6 +17,8 @@ export interface Card {
   subjectId: string;
   /** The handle when the card was made; the subject may have renamed since (tapping asks for the current one). */
   subjectHandle: string;
+  /** `subjectHandle` is a code name (shown without "@"). */
+  subjectAliased: boolean;
   expiresAt: number;
   state: "active" | "used" | "revoked";
   /** Why a revoked card is dead (`revoked_by_admin`). */
@@ -33,19 +37,20 @@ export function parseRemoved(data: unknown): Removed | null {
   const handle = text(data.handle) ?? "";
   if (!userId) return null;
   const reason: RemovedReason = data.reason === "self_deleted" || data.reason === "admin_deleted" ? data.reason : "removed";
-  return { userId, handle, reason };
+  return { userId, handle, aliased: data.aliased === true, reason };
 }
 
 export interface Declined {
   userId: string;
   handle: string;
+  aliased: boolean;
 }
 
 /** `contact_declined`: sent to the person whose contact request was declined (data: who declined). */
 export function parseDeclined(data: unknown): Declined | null {
   if (!isRecord(data)) return null;
   const userId = text(data.userId);
-  return userId ? { userId, handle: text(data.handle) ?? "" } : null;
+  return userId ? { userId, handle: text(data.handle) ?? "", aliased: data.aliased === true } : null;
 }
 
 export type GroupDeletedReason = "owner" | "admin" | "owner_deleted";
@@ -55,15 +60,21 @@ export interface GroupDeleted {
   name: string;
   reason: GroupDeletedReason;
   /** Who dissolved it; missing when the AWS operator did (no account). */
-  by: { userId: string; handle: string } | null;
+  by: { userId: string; handle: string; aliased: boolean } | null;
 }
 
 /** `group_deleted`: sent to every member of a dissolved group except the one who dissolved it (the group is gone, so its name is in the message). */
 export interface GroupOwnerTaken {
   groupId: string;
   name: string;
-  by: { userId: string; handle: string } | null;
+  by: { userId: string; handle: string; aliased: boolean } | null;
 }
+
+/** `group_member_removed`: sent to a member the owner or an administrator removed from a group (same fields: the group and who did it). */
+export const parseGroupMemberRemoved = (data: unknown): GroupOwnerTaken | null => parseGroupOwnerTaken(data);
+
+/** `group_owner_transferred`: sent to the member a group was handed to (same fields: the group and who did it). */
+export const parseGroupOwnerTransferred = (data: unknown): GroupOwnerTaken | null => parseGroupOwnerTaken(data);
 
 /** `group_owner_taken`: sent to the former owner of a group that an administrator took over without asking. */
 export function parseGroupOwnerTaken(data: unknown): GroupOwnerTaken | null {
@@ -71,7 +82,7 @@ export function parseGroupOwnerTaken(data: unknown): GroupOwnerTaken | null {
   const groupId = text(data.groupId);
   const name = text(data.name, 100);
   if (!groupId || name === null) return null;
-  const by = isRecord(data.by) && text(data.by.userId) ? { userId: text(data.by.userId) as string, handle: text(data.by.handle) ?? "" } : null;
+  const by = isRecord(data.by) && text(data.by.userId) ? { userId: text(data.by.userId) as string, handle: text(data.by.handle) ?? "", aliased: data.by.aliased === true } : null;
   return { groupId, name, by };
 }
 
@@ -81,7 +92,7 @@ export function parseGroupDeleted(data: unknown): GroupDeleted | null {
   const name = text(data.name, 100);
   if (!groupId || name === null) return null;
   const reason: GroupDeletedReason = data.reason === "admin" || data.reason === "owner_deleted" ? data.reason : "owner";
-  const by = isRecord(data.by) && text(data.by.userId) ? { userId: text(data.by.userId) as string, handle: text(data.by.handle) ?? "" } : null;
+  const by = isRecord(data.by) && text(data.by.userId) ? { userId: text(data.by.userId) as string, handle: text(data.by.handle) ?? "", aliased: data.by.aliased === true } : null;
   return { groupId, name, reason, by };
 }
 
@@ -93,7 +104,7 @@ export function parseCard(data: unknown): Card | null {
   const expiresAt = typeof data.expiresAt === "number" && Number.isFinite(data.expiresAt) ? data.expiresAt : null;
   if (!cardId || !subjectId || expiresAt === null) return null;
   const state = data.state === "used" || data.state === "revoked" ? data.state : "active";
-  return { cardId, subjectId, subjectHandle, expiresAt, state, reason: text(data.reason) ?? "" };
+  return { cardId, subjectId, subjectHandle, subjectAliased: data.subjectAliased === true, expiresAt, state, reason: text(data.reason) ?? "" };
 }
 
 /** `skew` is the server's clock minus this device's (ms). The server decides in the end; this only decides what to show. */

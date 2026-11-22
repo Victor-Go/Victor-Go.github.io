@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Api } from "../net/api";
 import { CACHE_MAX, configure, deleteMessages, isLooking, loadHistory, onFrame, loadOlder, lock, markRead, openConversation, resumeView } from "../client";
-import { DELETE_MAX, DELETE_MAX_VOICE, canDelete, planDeleteBatches } from "../selection";
+import { DELETE_MAX, DELETE_MAX_VOICE, canDelete, moderatesGroup, planDeleteBatches } from "../selection";
 import { initialState, useChat, type Msg } from "../store";
 
 const ME = "me";
@@ -251,5 +251,20 @@ describe("read receipts only while someone is looking", () => {
     await onMessage(CONV, 3);
     expect(useChat.getState().unread[CONV]).toBe(3);
     expect(sent(api.post)).toHaveLength(0);
+  });
+});
+
+describe("a moderator of a group", () => {
+  it("may delete anybody's message, and only in a group they moderate", () => {
+    const theirs = { mine: false, seq: 3, status: "sent" as const };
+    expect(canDelete(theirs)).toBe(false);
+    expect(canDelete(theirs, true)).toBe(true);
+    expect(canDelete({ ...theirs, deleted: true }, true)).toBe(false);
+    expect(canDelete({ ...theirs, status: "sending" as const, seq: 0 }, true)).toBe(false);
+    const group = { ownerId: "o1" };
+    expect(moderatesGroup(group, "o1", [])).toBe(true);
+    expect(moderatesGroup(group, "u2", [])).toBe(false);
+    expect(moderatesGroup(group, "u2", ["groups.delete_messages"])).toBe(true);
+    expect(moderatesGroup(undefined, "o1", ["groups.delete_messages"])).toBe(false); // a direct chat has no group
   });
 });

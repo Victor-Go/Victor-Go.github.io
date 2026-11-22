@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cardStatus, parseCard, parseDeclined, parseGroupDeleted, parseRemoved } from "../official";
+import { cardStatus, parseCard, parseDeclined, parseGroupDeleted, parseGroupMemberRemoved, parseGroupOwnerTransferred, parseRemoved } from "../official";
 import { canDelete } from "../selection";
 
 const card = { cardId: "c1", subjectId: "u2", subjectHandle: "bob", expiresAt: 10_000, state: "active" };
 
 describe("parsing what an official message carries", () => {
   it("reads a contact_removed record, with the reasons the server names", () => {
-    expect(parseRemoved({ userId: "u1", handle: "ann", reason: "removed" })).toEqual({ userId: "u1", handle: "ann", reason: "removed" });
+    expect(parseRemoved({ userId: "u1", handle: "ann", reason: "removed" })).toEqual({ userId: "u1", handle: "ann", aliased: false, reason: "removed" });
+    // a code name arrives in `handle` with `aliased: true`
+    expect(parseRemoved({ userId: "u1", handle: "Blue", aliased: true, reason: "removed" })).toEqual({ userId: "u1", handle: "Blue", aliased: true, reason: "removed" });
     expect(parseRemoved({ userId: "u1", handle: "ann", reason: "self_deleted" })?.reason).toBe("self_deleted");
     expect(parseRemoved({ userId: "u1", handle: "ann", reason: "admin_deleted" })?.reason).toBe("admin_deleted");
   });
@@ -19,7 +21,8 @@ describe("parsing what an official message carries", () => {
   });
 
   it("reads a card and refuses one that is missing what it needs", () => {
-    expect(parseCard(card)).toEqual({ ...card, reason: "" });
+    expect(parseCard(card)).toEqual({ ...card, subjectAliased: false, reason: "" });
+    expect(parseCard({ ...card, subjectHandle: "Green", subjectAliased: true })).toMatchObject({ subjectHandle: "Green", subjectAliased: true });
     expect(parseCard({ ...card, state: "revoked", reason: "revoked_by_admin" })).toMatchObject({ state: "revoked", reason: "revoked_by_admin" });
     expect(parseCard({ ...card, state: "used" })?.state).toBe("used");
     expect(parseCard({ ...card, state: "anything else" })?.state).toBe("active");
@@ -32,7 +35,7 @@ describe("parsing what an official message carries", () => {
 
 describe("a dissolved group", () => {
   it("reads the name, the reason and who did it", () => {
-    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u1", handle: "ann" } })).toEqual({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u1", handle: "ann" } });
+    expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u1", handle: "ann" } })).toEqual({ groupId: "g1", name: "Team", reason: "owner", by: { userId: "u1", handle: "ann", aliased: false } });
     expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "admin", by: { userId: "u1", handle: "ann" } })?.reason).toBe("admin");
     expect(parseGroupDeleted({ groupId: "g1", name: "Team", reason: "owner_deleted", by: { userId: "u1", handle: "ann" } })?.reason).toBe("owner_deleted");
   });
@@ -80,9 +83,23 @@ describe("deleting official messages", () => {
 
 describe("contact_declined", () => {
   it("reads who declined, and refuses a record without a user", () => {
-    expect(parseDeclined({ userId: "u2", handle: "bob" })).toEqual({ userId: "u2", handle: "bob" });
-    expect(parseDeclined({ userId: "u2" })).toEqual({ userId: "u2", handle: "" });
+    expect(parseDeclined({ userId: "u2", handle: "bob" })).toEqual({ userId: "u2", handle: "bob", aliased: false });
+    expect(parseDeclined({ userId: "u2" })).toEqual({ userId: "u2", handle: "", aliased: false });
     expect(parseDeclined({ handle: "bob" })).toBeNull();
     expect(parseDeclined(null)).toBeNull();
+  });
+});
+
+describe("group_owner_transferred", () => {
+  it("reads the group and who handed it over, with a code name when there is one", () => {
+    expect(parseGroupOwnerTransferred({ groupId: "g1", name: "Team", by: { userId: "u1", handle: "Blue", aliased: true } })).toEqual({ groupId: "g1", name: "Team", by: { userId: "u1", handle: "Blue", aliased: true } });
+    expect(parseGroupOwnerTransferred({ name: "Team" })).toBeNull();
+  });
+});
+
+describe("group_member_removed", () => {
+  it("reads the group and who removed the person, with a code name when there is one", () => {
+    expect(parseGroupMemberRemoved({ groupId: "g1", name: "Team", by: { userId: "u1", handle: "Blue", aliased: true } })).toEqual({ groupId: "g1", name: "Team", by: { userId: "u1", handle: "Blue", aliased: true } });
+    expect(parseGroupMemberRemoved({ name: "Team" })).toBeNull();
   });
 });

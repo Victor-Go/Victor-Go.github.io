@@ -20,7 +20,6 @@ const group = (over: Partial<Group> = {}): Group => ({
   gen: 1,
   max: 10,
   needsRekey: false,
-  pendingOwner: null,
   members: [
     { userId: "owner", handle: "olga", role: "admin" },
     { userId: "adm", handle: "victor", role: "admin" },
@@ -184,13 +183,76 @@ describe("removing a member from the group", () => {
     as("owner", "admin", []);
     render(<GroupInfo group={group()} onClose={() => {}} />);
     fireEvent.click(screen.getAllByText("移出")[0]);
-    expect(screen.getByText("确定把 @victor 移出群吗?")).toBeTruthy();
+    expect(screen.getByText("确定把 @kay 移出群吗?")).toBeTruthy();
     expect(kickMember).not.toHaveBeenCalled();
     expect(native).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("取消"));
-    expect(screen.queryByText("确定把 @victor 移出群吗?")).toBeNull();
+    expect(screen.queryByText("确定把 @kay 移出群吗?")).toBeNull();
     fireEvent.click(screen.getAllByText("移出")[0]);
     fireEvent.click(screen.getAllByText("移出").at(-1)!);
-    await waitFor(() => expect(kickMember).toHaveBeenCalledWith(GID, "adm"));
+    await waitFor(() => expect(kickMember).toHaveBeenCalledWith(GID, "kay"));
+  });
+});
+
+describe("removing members as an administrator", () => {
+  it("an administrator with groups.kick_any gets the remove buttons, but not for the owner or for themself", () => {
+    as("adm", "admin", ["groups.kick_any"]);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.getAllByText("移出")).toHaveLength(2); // kay and lee: never the owner, and never an administrator
+    cleanup();
+    as("owner", "admin", [], group());
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.getAllByText("移出")).toHaveLength(2); // the owner does not get one for the administrator either
+  });
+
+  it("an administrator without it, and an ordinary member, get none", () => {
+    as("adm", "admin", []);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.queryByText("移出")).toBeNull();
+    cleanup();
+    as("kay", "user", []);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.queryByText("移出")).toBeNull();
+  });
+});
+
+describe("mentioning in a group as an administrator", () => {
+  it("offers the code name, not the real handle, of a member who has one", () => {
+    const g = group({ members: [{ userId: "adm", handle: "victor", role: "admin" }, { userId: "kay", handle: "kay", alias: "Blue", role: "user" }, { userId: "lee", handle: "lee", role: "user" }] });
+    as("adm", "admin", [], g);
+    render(<Conversation />);
+    const box = screen.getByPlaceholderText("输入消息") as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: "@", selectionStart: 1, selectionEnd: 1 } });
+    const list = screen.getByRole("listbox");
+    expect(list.textContent).toContain("@Blue");
+    expect(list.textContent).toContain("@lee");
+    expect(list.textContent).not.toContain("@kay");
+  });
+});
+
+describe("inviting as an administrator", () => {
+  it("an administrator member with groups.add_any gets the invite field, like the owner; an ordinary member and one without the permission do not", () => {
+    as("adm", "admin", ["groups.add_any"]);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.getByText("邀请成员")).toBeTruthy();
+    cleanup();
+    as("adm", "admin", []);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.queryByText("邀请成员")).toBeNull();
+    cleanup();
+    as("kay", "user", []);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    expect(screen.queryByText("邀请成员")).toBeNull();
+  });
+});
+
+describe("transferring the group", () => {
+  it("the confirmation says what the new owner can do", () => {
+    as("owner", "admin", []);
+    render(<GroupInfo group={group()} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText("转让给"), { target: { value: "kay" } });
+    fireEvent.click(screen.getByText("转让群主"));
+    expect(screen.getByText(/确定把群主转让给 @kay 吗/)).toBeTruthy();
+    expect(screen.getByText(/群主可以:邀请成员、移出成员.*删除任何人的消息.*解散群/)).toBeTruthy();
   });
 });

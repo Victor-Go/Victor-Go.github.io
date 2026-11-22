@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { acceptOwnership, deleteGroup, inviteToGroup, kickMember, leaveGroup, muteGroup, rekeyGroup, takeOverGroup, transferGroup } from "../client";
+import { deleteGroup, inviteToGroup, kickMember, leaveGroup, muteGroup, rekeyGroup, takeOverGroup, transferGroup } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { GROUP_MAX, contactLabel, useCan, useChat, type Group } from "../store";
+import { GROUP_MAX, contactLabel, nameText, useCan, useChat, type Group } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
 import { HandleField } from "./HandleField";
-import { Avatar, ConfirmModal, Modal, TitleBadge } from "./ui";
+import { Avatar, ConfirmModal, Marquee, Modal, TitleBadge } from "./ui";
 
 export function GroupInfo({ group, onClose }: { group: Group; onClose: () => void }) {
   const { m, a } = useLang();
@@ -19,14 +19,18 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
   const [transferTo, setTransferTo] = useState("");
   const [inviting, setInviting] = useState(false);
   const [confirm, setConfirm] = useState<"takeOver" | "delete" | null>(null);
-  const [kicking, setKicking] = useState<{ userId: string; handle: string } | null>(null);
+  const [transferring, setTransferring] = useState<string | null>(null);
+  const [kicking, setKicking] = useState<{ userId: string; handle: string; aliased?: boolean } | null>(null);
   const canDeleteAny = useCan("groups.delete_any");
   const canMuteAny = useCan("groups.mute_any");
   const canTakeOver = useCan("groups.take_over");
+  const canKickAny = useCan("groups.kick_any");
+  const canAddAny = useCan("groups.add_any");
   const isOwner = group.ownerId === me.userId;
   const canMute = isOwner || canMuteAny;
+  // The owner removes members and re-keys; so does an administrator with groups.kick_any (the modal only opens for a member).
+  const canKick = isOwner || canKickAny;
   const mutedUsers = group.mutedUsers ?? [];
-  const offered = group.pendingOwner?.userId === me.userId;
 
   const run = async (fn: () => Promise<void>, closeAfter = false) => {
     setBusy(true);
@@ -50,9 +54,9 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
     setInviting(true);
     void run(async () => {
       try {
-        await inviteToGroup(group.id, name);
+        const shown = await inviteToGroup(group.id, name);
         setInvite("");
-        setOk(a.invited(name));
+        setOk(a.invited(shown));
       } finally {
         setInviting(false);
       }
@@ -62,15 +66,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
   return (
     <Modal title={group.name} onClose={onClose} closeLabel={a.close}>
       {error && <div className="ch-notice">{error}</div>}
-      {offered && (
-        <div className="ch-callout">
-          <p>{a.ownerOffer}</p>
-          <button type="button" className="ch-primary" disabled={busy} onClick={() => void run(() => acceptOwnership(group.id))}>
-            {a.acceptOwner}
-          </button>
-        </div>
-      )}
-      {isOwner && group.needsRekey && (
+      {canKick && group.needsRekey && (
         <div className="ch-callout">
           <p>{a.needsRekey}</p>
           <button type="button" className="ch-primary" disabled={busy} onClick={() => void run(() => rekeyGroup(group.id))}>
@@ -78,7 +74,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
           </button>
         </div>
       )}
-      {isOwner && (
+      {(isOwner || canAddAny) && (
         <section>
           <h3 className="ch-section">{a.inviteMember}</h3>
           <HandleField
@@ -116,8 +112,9 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
           {group.members.map((mem) => (
             <li key={mem.userId} className="ch-row">
               <Avatar userId={mem.userId} size={32} admin={mem.role === "admin"} />
-              <div className="ch-row-text ch-row-title">
-                {contactLabel(contacts.find((c) => c.userId === mem.userId) ?? mem)} {mem.userId === group.ownerId && <span className="ch-admin">{a.owner}</span>}
+              <div className="ch-row-text ch-row-title ch-name-line">
+                <Marquee>{contactLabel(contacts.find((c) => c.userId === mem.userId) ?? mem)}</Marquee>
+                {mem.userId === group.ownerId && <span className="ch-admin">{a.owner}</span>}
                 <TitleBadge userId={mem.userId} role={mem.role} />
                 {mem.role !== "admin" && mem.userId !== group.ownerId && mutedUsers.includes(mem.userId) && <span className="ch-admin ch-muted-badge">{a.mutedBadge}</span>}
               </div>
@@ -126,8 +123,8 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
                   {mutedUsers.includes(mem.userId) ? a.unmuteMember : a.muteMember}
                 </button>
               )}
-              {isOwner && mem.userId !== me.userId && (
-                <button type="button" className="ch-secondary ch-small" disabled={busy} onClick={() => setKicking({ userId: mem.userId, handle: mem.handle })}>
+              {canKick && mem.userId !== me.userId && mem.userId !== group.ownerId && mem.role !== "admin" && (
+                <button type="button" className="ch-secondary ch-small" disabled={busy} onClick={() => setKicking({ userId: mem.userId, handle: mem.handle, aliased: mem.aliased })}>
                   {a.kick}
                 </button>
               )}
@@ -149,11 +146,11 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
             <option value="">{a.transferTo}…</option>
             {group.members.filter((x) => x.userId !== me.userId).map((x) => (
               <option key={x.userId} value={x.userId}>
-                @{x.handle}
+                {nameText(x.handle, x.aliased)}
               </option>
             ))}
           </select>
-          <button type="button" className="ch-secondary" disabled={busy || !transferTo} onClick={() => void run(() => transferGroup(group.id, transferTo))}>
+          <button type="button" className="ch-secondary" disabled={busy || !transferTo} onClick={() => setTransferring(transferTo)}>
             {a.transfer}
           </button>
         </section>
@@ -185,6 +182,29 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
           </button>
         )}
       </div>
+      {transferring && (() => {
+        const to = group.members.find((x) => x.userId === transferring);
+        return (
+          <ConfirmModal
+            title={a.transfer}
+            confirmLabel={a.transfer}
+            cancelLabel={a.cancel}
+            closeLabel={a.close}
+            danger
+            busy={busy}
+            onConfirm={() => {
+              const id = transferring;
+              setTransferring(null);
+              setTransferTo("");
+              void run(() => transferGroup(group.id, id));
+            }}
+            onCancel={() => setTransferring(null)}
+          >
+            <p>{a.confirmTransfer(to ? contactLabel(contacts.find((c) => c.userId === to.userId) ?? to) : "")}</p>
+            <div className="ch-callout">{a.transferPowers}</div>
+          </ConfirmModal>
+        );
+      })()}
       {kicking && (
         <ConfirmModal
           title={a.kick}
@@ -200,7 +220,7 @@ export function GroupInfo({ group, onClose }: { group: Group; onClose: () => voi
           }}
           onCancel={() => setKicking(null)}
         >
-          <p>{a.confirmKick(kicking.handle)}</p>
+          <p>{a.confirmKick(nameText(kicking.handle, kicking.aliased))}</p>
         </ConfirmModal>
       )}
       {confirm && (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { OFFICIAL_ID, avatarUri } from "../avatar";
 import type { Progress } from "../client";
 import type { Messages } from "../i18n";
@@ -9,6 +9,42 @@ import { useLang } from "../useChat";
  * The title badge of an administrator: "管理员", or the gold "负责人" for the owner. The title comes from the server's administrator list
  * (`GET /admins`); `role` is only the fallback for somebody the list does not have. Nothing for anyone else.
  */
+/**
+ * A name on one line. When it does not fit it scrolls back and forth (a marquee) so the whole of it can be read; when it fits, or when the person
+ * asks for less motion, it stays still (with an ellipsis if it is cut). Put it in a flex line next to a badge: `<span class="ch-name-line">`.
+ */
+export function Marquee({ children }: { children: ReactNode }) {
+  // A short name cannot overflow a row, and a long chat has a name above every message: those get no observer and no measuring at all.
+  if (typeof children === "string" && children.length <= SHORT_NAME) return <span className="ch-marq">{children}</span>;
+  return <MarqueeLong>{children}</MarqueeLong>;
+}
+const SHORT_NAME = 12;
+
+function MarqueeLong({ children }: { children: ReactNode }) {
+  const outer = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      // The outer box is a block with hidden overflow, so its scrollWidth is the full width of the text (an inline span reports 0).
+      const o = outer.current;
+      if (o) setShift(Math.max(0, Math.ceil(o.scrollWidth - o.clientWidth)));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined" || !outer.current) return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(outer.current);
+    return () => watch.disconnect();
+  }, [children]);
+  const style = shift > 0 ? ({ "--ch-shift": `-${shift}px`, "--ch-dur": `${Math.min(20, 3 + shift / 25)}s` } as CSSProperties) : undefined;
+  return (
+    <span ref={outer} className="ch-marq">
+      <span className="ch-marq-in" data-run={shift > 0 ? "true" : undefined} style={style}>
+        {children}
+      </span>
+    </span>
+  );
+}
+
 export function TitleBadge({ userId, role, title, className = "" }: { userId?: string; role?: string; title?: string; className?: string }) {
   const { a } = useLang();
   const looked = useBadge(userId, role);

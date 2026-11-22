@@ -3,8 +3,8 @@ import { OFFICIAL_ID } from "../avatar";
 import { ApiError, requestViaCard, type Progress } from "../client";
 import { formatClock, formatDay } from "../format";
 import { errorOf } from "../i18nApp";
-import { cardStatus, parseCard, parseDeclined, parseGroupDeleted, parseGroupOwnerTaken, parseRemoved } from "../official";
-import { useChat, type Msg } from "../store";
+import { cardStatus, parseCard, parseDeclined, parseGroupDeleted, parseGroupOwnerTaken, parseGroupMemberRemoved, parseGroupOwnerTransferred, parseRemoved } from "../official";
+import { nameText, useChat, type Msg } from "../store";
 import { useLang } from "../useChat";
 import { Avatar, Steps } from "./ui";
 
@@ -23,7 +23,7 @@ export function OfficialMessage({ m, selecting }: { m: Msg; selecting: boolean }
     return (
       <div className="ch-system" role="note" data-official="contact_removed">
         <Avatar userId={OFFICIAL_ID} size={18} />
-        <strong>{r ? a.officialRemoved(r.handle, r.reason) : a.officialUnknown}</strong>
+        <strong>{r ? a.officialRemoved(nameText(r.handle, r.aliased), r.reason) : a.officialUnknown}</strong>
         <span>{formatClock(m.time, lang)}</span>
       </div>
     );
@@ -34,7 +34,7 @@ export function OfficialMessage({ m, selecting }: { m: Msg; selecting: boolean }
     return (
       <div className="ch-system" role="note" data-official="contact_declined">
         <Avatar userId={OFFICIAL_ID} size={18} />
-        <strong>{d ? a.officialDeclined(d.handle) : a.officialUnknown}</strong>
+        <strong>{d ? a.officialDeclined(nameText(d.handle, d.aliased)) : a.officialUnknown}</strong>
         <span>{formatClock(m.time, lang)}</span>
       </div>
     );
@@ -45,7 +45,29 @@ export function OfficialMessage({ m, selecting }: { m: Msg; selecting: boolean }
     return (
       <div className="ch-system" role="note" data-official="group_deleted">
         <Avatar userId={OFFICIAL_ID} size={18} />
-        <strong>{g ? a.officialGroupDeleted(g.name, g.reason, g.by?.handle || null) : a.officialUnknown}</strong>
+        <strong>{g ? a.officialGroupDeleted(g.name, g.reason, g.by?.handle ? nameText(g.by.handle, g.by.aliased) : null) : a.officialUnknown}</strong>
+        <span>{formatClock(m.time, lang)}</span>
+      </div>
+    );
+  }
+
+  if (m.kind === "group_member_removed") {
+    const g = parseGroupMemberRemoved(m.data);
+    return (
+      <div className="ch-system" role="note" data-official="group_member_removed">
+        <Avatar userId={OFFICIAL_ID} size={18} />
+        <strong>{g ? a.officialMemberRemoved(g.name, g.by?.handle ? nameText(g.by.handle, g.by.aliased) : null) : a.officialUnknown}</strong>
+        <span>{formatClock(m.time, lang)}</span>
+      </div>
+    );
+  }
+
+  if (m.kind === "group_owner_transferred") {
+    const g = parseGroupOwnerTransferred(m.data);
+    return (
+      <div className="ch-system" role="note" data-official="group_owner_transferred">
+        <Avatar userId={OFFICIAL_ID} size={18} />
+        <strong>{g ? a.officialOwnerTransferred(g.name, g.by?.handle ? nameText(g.by.handle, g.by.aliased) : null) : a.officialUnknown}</strong>
         <span>{formatClock(m.time, lang)}</span>
       </div>
     );
@@ -56,7 +78,7 @@ export function OfficialMessage({ m, selecting }: { m: Msg; selecting: boolean }
     return (
       <div className="ch-system" role="note" data-official="group_owner_taken">
         <Avatar userId={OFFICIAL_ID} size={18} />
-        <strong>{g ? a.officialOwnerTaken(g.name, g.by?.handle || null) : a.officialUnknown}</strong>
+        <strong>{g ? a.officialOwnerTaken(g.name, g.by?.handle ? nameText(g.by.handle, g.by.aliased) : null) : a.officialUnknown}</strong>
         <span>{formatClock(m.time, lang)}</span>
       </div>
     );
@@ -94,7 +116,7 @@ export function OfficialMessage({ m, selecting }: { m: Msg; selecting: boolean }
       <div className="ch-system ch-card" role="note" data-official="card" data-state={status}>
         <Avatar userId={OFFICIAL_ID} size={18} />
         <strong>{a.cardTitle}</strong>
-        <span className="ch-card-who">{a.cardFor(card.subjectHandle)}</span>
+        <span className="ch-card-who">{a.cardFor(nameText(card.subjectHandle, card.subjectAliased))}</span>
         <span>{status === "active" ? a.cardExpires(when(card.expiresAt)) : status === "revoked" ? (a.cardRevoked[card.reason] ?? a.cardState.revoked) : a.cardState[status]}</span>
         <Steps progress={progress} m={texts} />
         {error && (

@@ -3,13 +3,13 @@ import { UserPlus, Users } from "lucide-react";
 import { acceptRequest, createGroup, declineRequest, requestContact, type Progress } from "../client";
 import { errorOf } from "../i18nApp";
 import { PATH, go } from "../route";
-import { contactLabel, useCan, useChat } from "../store";
+import { contactLabel, nameText, useCan, useChat } from "../store";
 import { useLang } from "../useChat";
 import { checkHandle } from "../validation";
 import { HandleField } from "./HandleField";
 import { NotifyPrompt } from "./NotifyPrompt";
 import { NO_AUTOFILL } from "./noAutofill";
-import { Avatar, Modal, Steps, TitleBadge } from "./ui";
+import { Avatar, Marquee, Modal, Steps, TitleBadge } from "./ui";
 import { onEnter } from "../keys";
 
 function AddContactDialog({ onClose }: { onClose: () => void }) {
@@ -179,14 +179,9 @@ export function ContactsPane() {
       <button type="button" className={"ch-row ch-row-btn" + (activeConv === id ? " ch-active" : "")} onClick={() => go(group ? PATH.group : PATH.conversation, id)}>
         <Avatar userId={userId} admin={admin} />
         <div className="ch-row-text">
-          <div className="ch-row-title">
-            {title}
-            {badge && (
-              <>
-                {" "}
-                <TitleBadge userId={userId} role="admin" />
-              </>
-            )}
+          <div className="ch-row-title ch-name-line">
+            <Marquee>{title}</Marquee>
+            {badge && <TitleBadge userId={userId} role="admin" />}
           </div>
           {sub && <div className="ch-hint">{sub}</div>}
         </div>
@@ -239,8 +234,9 @@ export function ContactsPane() {
                 <li key={r.id} className="ch-row">
                   <Avatar userId={r.user.userId} admin={r.user.role === "admin"} />
                   <div className="ch-row-text">
-                    <div className="ch-row-title">
-                      @{r.user.handle} <TitleBadge userId={r.user.userId} role={r.user.role} />
+                    <div className="ch-row-title ch-name-line">
+                      <Marquee>{nameText(r.user.handle, r.user.aliased)}</Marquee>
+                      <TitleBadge userId={r.user.userId} role={r.user.role} />
                     </div>
                     <div className="ch-hint">{r.direction === "in" ? (r.viaCard ? a.incomingViaCard : a.incoming) : a.outgoing}</div>
                   </div>

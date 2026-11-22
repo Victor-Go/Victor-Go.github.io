@@ -13,7 +13,7 @@ import { createCallFlow } from "./callFlow";
 import { downloadBytes, uploadBytes, type UploadTarget } from "./net/blob";
 import { getPreferredWs } from "./net/preferred";
 import { ChatSocket, type Frame } from "./net/socket";
-import { GROUP_MAX, patch, reset, useChat, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem, type ServerConfig } from "./store";
+import { GROUP_MAX, nameText, patch, reset, useChat, type ChatState, type Contact, type Favorite, type Group, type Msg, type RequestItem, type ServerConfig } from "./store";
 import { unlockedNow } from "./adminLock";
 import { setLang, useLangStore } from "./lang";
 import { mentionsHandle } from "./mentions";
@@ -23,7 +23,7 @@ import { stripControls } from "./text";
 import { canonicalHandle, cleanNick, NOTE_MAX } from "./validation";
 import { compressImage, sniffFormat } from "./image";
 import { fitsServer } from "./voice";
-import { canDelete, planDeleteBatches } from "./selection";
+import { canDelete, moderatesGroup, planDeleteBatches } from "./selection";
 import { playVoice, stopVoice, stopVoiceIf } from "./voicePlayer";
 import { Cancelled, cancelWork, solveInWorkers } from "./workers/client";
 import type { Challenge } from "./workers/solve";
@@ -48,6 +48,8 @@ interface SessionPayload {
   sessionToken: string;
   userId: string;
   handle: string;
+  /** My code name, when I have one. */
+  alias?: string;
   role: "admin" | "user";
   publicKey: string;
   wrappedMK: string;
@@ -211,7 +213,7 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
   a.token = session.sessionToken;
   s.mk = mk;
   s.wrappedMK = session.wrappedMK;
-  patch({ phase: "busy", me: { userId: session.userId, handle: session.handle, role: session.role, publicKey: session.publicKey }, notice: null });
+  patch({ phase: "busy", me: { userId: session.userId, handle: session.handle, ...(session.alias ? { alias: session.alias } : {}), role: session.role, publicKey: session.publicKey }, notice: null });
   onProgress({ step: "vault" });
   try {
     if (typeof session.serverTime === "number") patch({ clockSkew: session.serverTime - Date.now() });
@@ -340,7 +342,11 @@ export function applyConfig(c: Partial<ServerConfig> | null | undefined): void {
 
 /** `GET /me`: the account's configuration. Called at sign-in when the answer lacks it, after a reconnect, and after a refusal that names a switch. */
 export async function refreshMe(): Promise<void> {
-  applyConfig((await api().get<{ config?: Partial<ServerConfig> }>("/me")).config);
+  const r = await api().get<{ alias?: string; config?: Partial<ServerConfig> }>("/me");
+  const mine = useChat.getState().me;
+  // A code name is set by an administrator without telling me: it shows up here the next time the account is read.
+  if (mine && (mine.alias ?? "") !== (r.alias ?? "")) patch({ me: { ...mine, alias: r.alias || undefined } });
+  applyConfig(r.config);
 }
 
 /**
@@ -483,8 +489,8 @@ interface WireRequest {
   auto?: boolean;
   /** Made with a contact card: it can be accepted whatever the contact switches say. */
   viaCard?: boolean;
-  from: { userId: string; handle: string; publicKey: string; role?: string };
-  to: { userId: string; handle: string; publicKey: string; role?: string };
+  from: { userId: string; handle: string; aliased?: boolean; publicKey: string; role?: string };
+  to: { userId: string; handle: string; aliased?: boolean; publicKey: string; role?: string };
   kx: string | null;
 }
 
@@ -505,7 +511,7 @@ export async function refreshContacts(eventual = false): Promise<void> {
       }
     }
   }
-  const list = (await api().get<{ contacts: { userId: string; handle: string; role: string; convId: string; deleted?: boolean; lastAt?: number }[] }>("/contacts" + (eventual ? "?eventual=1" : ""))).contacts;
+  const list = (await api().get<{ contacts: { userId: string; handle: string; aliased?: boolean; alias?: string; role: string; convId: string; deleted?: boolean; lastAt?: number }[] }>("/contacts" + (eventual ? "?eventual=1" : ""))).contacts;
   // The server says when each chat last had a message, which orders the list.
   for (const c of list) noteActive(c.convId, c.lastAt ?? 0);
   const contacts: Contact[] = list.map((c) => ({ ...c, key: s.contactKeys.get(c.userId)?.key ?? null, nick: s.contactKeys.get(c.userId)?.nick }));
@@ -604,10 +610,11 @@ export async function requestViaCard(m: Msg, onProgress: OnProgress): Promise<vo
   const who = await api().get<{ handle?: string; deleted?: boolean }>(`/users/${encodeURIComponent(card.subjectId)}`);
   // A subject whose account is gone has no handle to ask for; the card is as good as dead.
   if (who.deleted || typeof who.handle !== "string" || !who.handle) throw new ApiError(404, "not_found", { reason: "handle" });
-  const solution = await pow("contact", canonicalHandle(who.handle), onProgress);
+  // The subject is named by user id: the holder of a card must not need (or be told) the real username of somebody who has a code name.
+  const solution = await pow("contact", card.subjectId, onProgress);
   onProgress({ step: "server" });
   try {
-    await api().post("/contacts/request", { toHandle: who.handle, pow: solution, cardId: card.cardId });
+    await api().post("/contacts/request", { toUserId: card.subjectId, pow: solution, cardId: card.cardId });
   } catch (e) {
     cardRefused(m, e);
     throw e;
@@ -753,7 +760,7 @@ function addMessage(conv: string, msg: Msg): boolean {
     patch({ unread: { ...useChat.getState().unread, [conv]: (st.unread[conv] ?? 0) + 1 } });
     // "@name " in a group message to me turns that group's badge red.
     const me = st.me;
-    if (me && msg.payload?.k === "text" && !st.contacts.some((c) => c.convId === conv) && mentionsHandle(msg.payload.text, me.handle)) {
+    if (me && msg.payload?.k === "text" && !st.contacts.some((c) => c.convId === conv) && (mentionsHandle(msg.payload.text, me.handle) || (!!me.alias && mentionsHandle(msg.payload.text, me.alias)))) {
       patch({ mentions: { ...useChat.getState().mentions, [conv]: true } });
     }
     notifyIncoming(conv);
@@ -1008,7 +1015,9 @@ export interface DeleteOutcome {
 /** Deletes my own messages for everyone in the chat, in as many requests as the server's limits need (50 messages, 20 recordings each). */
 export async function deleteMessages(conv: string, seqs: readonly number[]): Promise<DeleteOutcome> {
   const bySeq = new Map((useChat.getState().messages[conv] ?? []).map((m) => [m.seq, m]));
-  const picked = seqs.map((n) => bySeq.get(n)).filter((m): m is Msg => m !== undefined && canDelete(m));
+  const st = useChat.getState();
+  const moderator = !!st.me && moderatesGroup(st.groups.find((g) => g.id === conv), st.me.userId, st.permissions);
+  const picked = seqs.map((n) => bySeq.get(n)).filter((m): m is Msg => m !== undefined && canDelete(m, moderator));
   const deleted: number[] = [];
   for (const b of planDeleteBatches(picked)) {
     try {
@@ -1333,6 +1342,9 @@ export async function onFrame(f: Frame): Promise<void> {
     const kind = String(f.kind);
     // (A removed contact is no longer a notice: it arrives as a `contact_removed` official message.)
     if (kind === "contact_request" || kind === "contact_accepted") await refreshContacts().catch(() => {});
+    // A code name was set or changed for somebody this person shows. Everybody in a group gets this at the same moment, so each waits a random
+    // moment (up to PEOPLE_JITTER_MS) and reads with the cheaper eventual reads: the server's database is small and a burst of full reads would throttle it.
+    else if (kind === "people") setTimeout(() => void Promise.all([refreshContacts(true), refreshGroups(true), refreshMe()].map((p) => p.catch(() => {}))), (randomBytes(2).reduce((n, b) => n * 256 + b, 0) / 65535) * PEOPLE_JITTER_MS);
     else if (kind === "account") {
       if (isRecord(f.config)) applyConfig(f.config as Partial<ServerConfig>);
       else await refreshMe().catch(() => {});
@@ -1351,7 +1363,8 @@ export async function onFrame(f: Frame): Promise<void> {
 // ---------- voice calls (callFlow.ts; protocol section 9b of the chat server) ----------
 function notifyCall(userId: string): void {
   if (!notificationsSupported() || Notification.permission !== "granted" || !(document.hidden || !document.hasFocus())) return;
-  const handle = useChat.getState().contacts.find((c) => c.userId === userId)?.handle ?? "";
+  const who = useChat.getState().contacts.find((c) => c.userId === userId);
+  const handle = who ? nameText(who.handle, who.aliased) : "";
   try {
     new Notification(s.callTitle(handle), { silent: false, tag: "call" });
   } catch {
@@ -1392,6 +1405,9 @@ export const setCallMuted = (muted: boolean): void => callFlow.setMuted(muted);
 /** Is a call going on? The idle timer does not sign anybody out in the middle of one. */
 export const callInProgress = (): boolean => callFlow.busy();
 
+/** How long a "people" notice waits, at most, before the page reads names again (spreads the reads of a whole group). */
+const PEOPLE_JITTER_MS = 3000;
+
 // ---------- notifications ----------
 export const notificationsSupported = (): boolean => typeof Notification !== "undefined";
 export async function enableNotifications(): Promise<NotificationPermission> {
@@ -1401,7 +1417,8 @@ function notifyIncoming(conv: string): void {
   // Only when the page is not being looked at: in another tab, minimised, or behind another window.
   if (!notificationsSupported() || Notification.permission !== "granted" || !(document.hidden || !document.hasFocus())) return;
   const st = useChat.getState();
-  const name = st.contacts.find((c) => c.convId === conv)?.handle ?? st.groups.find((g) => g.id === conv)?.name ?? "";
+  const contact = st.contacts.find((c) => c.convId === conv);
+  const name = contact ? nameText(contact.handle, contact.aliased) : (st.groups.find((g) => g.id === conv)?.name ?? "");
   try {
     // Only who wrote, never the text.
     new Notification(s.notifyTitle(name), { silent: false, tag: conv });
@@ -1471,10 +1488,11 @@ export async function createGroup(name: string): Promise<void> {
 const publicKeyOfUser = async (userId: string): Promise<string> => (await api().get<{ publicKey: string }>(`/users/${userId}`)).publicKey;
 
 /** The admin invites someone by username: the person is added at once and gets the group key wrapped to their identity. */
-export async function inviteToGroup(gid: string, handle: string): Promise<void> {
+export async function inviteToGroup(gid: string, handle: string): Promise<string> {
   const solution = await pow("lookup", canonicalHandle(handle));
-  const u = await api().post<{ userId: string; publicKey: string }>("/users/lookup", { handle, pow: solution });
+  const u = await api().post<{ userId: string; publicKey: string; handle?: string; aliased?: boolean }>("/users/lookup", { handle, pow: solution });
   await addMember(gid, u.userId, u.publicKey);
+  return nameText(u.handle ?? handle, u.aliased);
 }
 
 async function addMember(gid: string, userId: string, publicKey?: string): Promise<void> {
@@ -1497,7 +1515,9 @@ async function rotate(gid: string, exclude: string | null, endpoint: "kick" | "r
     if (m.userId === g.ownerId || m.userId === exclude) continue;
     wraps.push({ userId: m.userId, wrap: await wrapKey(await publicKeyOfUser(m.userId), key, KX_EPOCHS) });
   }
-  const selfWrap = await wrapKey(me().publicKey, key, KX_EPOCHS);
+  // The owner's own copy (`selfWrap`) is for the owner's identity key. An administrator who is only a member does this for the owner: their own copy
+  // is then one of `wraps` (the server wants one for every member but the owner).
+  const selfWrap = await wrapKey(g.ownerId === me().userId ? me().publicKey : await publicKeyOfUser(g.ownerId), key, KX_EPOCHS);
   // Vault first, then the server: a crash in between leaves an unused key behind, never a group generation nobody can open.
   let keys = s.groupKeys.get(gid);
   if (!keys) s.groupKeys.set(gid, (keys = new Map()));
@@ -1528,10 +1548,6 @@ export async function transferGroup(gid: string, userId: string): Promise<void> 
   const selfWraps: { gen: number; wrap: string }[] = [];
   for (const [gen, key] of keys) selfWraps.push({ gen, wrap: await wrapKey(me().publicKey, key, KX_EPOCHS) });
   await api().post(`/groups/${gid}/transfer`, { userId, selfWraps });
-  await refreshGroups();
-}
-export async function acceptOwnership(gid: string): Promise<void> {
-  await api().post(`/groups/${gid}/accept-owner`);
   await refreshGroups();
 }
 /** Mutes (or unmutes) one member, or the whole group when `userId` is left out. The owner and administrators can never be muted. */
@@ -1763,6 +1779,18 @@ export async function deleteAccount(password: string, onProgress?: OnProgress): 
   const proof = await stepUp(password, "delete", onProgress);
   await api().request("POST", "/auth/delete", { proof }, { keepSession: true });
   lock(null);
+}
+
+/** An administrator sets (or, with "", clears) a person's code name; nobody is told. Errors: `alias_taken`, `handle_reserved`, `bad_request`, `stepup_required`. */
+export async function adminSetAlias(userId: string, alias: string): Promise<string> {
+  const r = await api().post<{ alias?: string }>(`/admin/users/${encodeURIComponent(userId)}/alias`, { alias });
+  const next = r.alias ?? alias;
+  const st = useChat.getState();
+  patch({
+    contacts: st.contacts.map((c) => (c.userId === userId ? { ...c, alias: next || undefined } : c)),
+    groups: st.groups.map((g) => ({ ...g, members: g.members.map((x) => (x.userId === userId ? { ...x, alias: next || undefined } : x)) })),
+  });
+  return next;
 }
 
 /** The administrator deletes someone: the handle is typed out and sent along, and the server checks it again. */

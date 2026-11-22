@@ -9,6 +9,7 @@ import { PATH, go as navigate, useLocation } from "../route";
 import { GROUP_MAX, useCan, useChat } from "../store";
 import { useLang } from "../useChat";
 import { Alert, ErrorBanner, FormRow, Group, Icon, Page, Row, SwitchRow } from "./ios";
+import { AliasEditor } from "./AliasEditor";
 import { NO_AUTOFILL } from "./noAutofill";
 import { Secret } from "./Secret";
 import { SendCardModal } from "./SendCardModal";
@@ -29,6 +30,8 @@ interface AdminUser {
   lastActiveAt: number;
   ips: { ip: string; at: number }[];
   loginCount: number;
+  /** The code name (protocol 13b); "" when there is none. */
+  alias?: string;
   failedCount: number;
   suspended: boolean;
   /** Bytes of files (voice messages and pictures) uploaded this (UTC) month. */
@@ -46,6 +49,7 @@ export interface UserActions {
   logout?: boolean;
   suspend?: boolean;
   contactsBlocked?: boolean;
+  alias?: boolean;
   canCall?: boolean;
   delete?: boolean;
 }
@@ -333,7 +337,7 @@ function UsersView({ go }: { go: (v: View) => void }) {
             icon={<Avatar userId={u.userId} size={30} admin={u.role === "admin"} />}
             title={
               <>
-                @{u.handle} {u.role === "admin" && <TitleBadge userId={u.userId} role="admin" />} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>} {u.role !== "admin" && u.canCall && <span className="ch-admin">{a.manage.canCallTag}</span>}
+                @{u.handle} {u.alias && <span className="ch-admin">{u.alias}</span>} {u.role === "admin" && <TitleBadge userId={u.userId} role="admin" />} {u.suspended && <span className="ios-destructive">⏸</span>} {u.contactsBlocked && <span className="ch-admin">{a.manage.contactsBlockedTag}</span>} {u.role !== "admin" && u.canCall && <span className="ch-admin">{a.manage.canCallTag}</span>}
               </>
             }
             subtitle={`${a.manage.lastLogin}: ${when(u.lastLoginAt)} · ${a.manage.loginsCount(u.loginCount)}${u.messageCount === undefined ? "" : ` · ${a.manage.messageSummary(u.messageCount, u.messageLimit ?? null)}`}${u.fileBytes ? ` · ${a.manage.fileSummary(formatBytes(u.fileBytes))}` : ""}`}
@@ -396,6 +400,11 @@ function UserView({ user, go }: { user: AdminUser; go: (v: View) => void }) {
       {act.contactsBlocked === true && (
         <Group footer={a.manage.contactsBlockedHint}>
           <SwitchRow title={a.manage.contactsBlocked} checked={blocked} onChange={setContactsBlocked} />
+        </Group>
+      )}
+      {act.alias === true && (
+        <Group>
+          <AliasEditor userId={user.userId} initial={user.alias ?? ""} />
         </Group>
       )}
       {act.canCall === true && (

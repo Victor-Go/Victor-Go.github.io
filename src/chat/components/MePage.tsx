@@ -149,7 +149,10 @@ export function MePage() {
         <div className="ios-profile">
           <Avatar userId={me.userId} size={64} admin={me.role === "admin"} />
           <div>
-            <h2>@{me.handle}</h2>
+            <h2>
+              @{me.handle}
+              {me.alias && <span className="ios-alias"> ({me.alias})</span>}
+            </h2>
             <TitleBadge userId={me.userId} role={me.role} className="ios-badge" />
           </div>
         </div>

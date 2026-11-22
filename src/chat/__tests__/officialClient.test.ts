@@ -133,8 +133,9 @@ describe("a contact card", () => {
     );
     await requestViaCard(msg(), progress);
     expect(get).toHaveBeenCalledWith("/users/u2");
-    expect(post).toHaveBeenCalledWith("/pow/challenge", { action: "contact", subject: "bobby" });
-    expect(post).toHaveBeenCalledWith("/contacts/request", { toHandle: "Bobby", pow: { id: "ch1", nonces: [1, 2, 3] }, cardId: "card1" });
+    // the subject is named by user id, so a code name never needs the real username
+    expect(post).toHaveBeenCalledWith("/pow/challenge", { action: "contact", subject: "u2" });
+    expect(post).toHaveBeenCalledWith("/contacts/request", { toUserId: "u2", pow: { id: "ch1", nonces: [1, 2, 3] }, cardId: "card1" });
     // shown as used at once; the server's `updated` frame confirms it later
     expect(useChat.getState().messages[OFFICIAL][0].data).toMatchObject({ state: "used" });
   });
@@ -382,5 +383,20 @@ describe("the configuration the server pushes", () => {
     fakeApi(() => ({ userId: ME, handle: "me", role: "user", config: { canAddContacts: true, limits: { groupMax: 10 } } }));
     await refreshMe();
     expect(useChat.getState()).toMatchObject({ retentionDays: 9, voiceMaxSec: 20, groupMax: 10 });
+  });
+});
+
+describe("the silent notice about names", () => {
+  it("makes the page read contacts, groups and the own account again, and shows nothing", async () => {
+    vi.useFakeTimers();
+    useChat.setState({ me: { userId: "me", handle: "me", role: "user", publicKey: "" } });
+    const { get } = fakeApi((path) => (path === "/contacts" ? { contacts: [] } : path === "/groups" ? { groups: [] } : path === "/me" ? { ...meAnswer({}), alias: "Blue" } : { requests: [] }));
+    await onFrame({ t: "notice", kind: "people" });
+    expect(get).not.toHaveBeenCalled(); // it waits a random moment first, so a whole group does not read at the same instant
+    await vi.advanceTimersByTimeAsync(3100);
+    vi.useRealTimers();
+    const asked = get.mock.calls.map((c) => String(c[0]));
+    expect(asked).toEqual(expect.arrayContaining(["/contacts?eventual=1", "/groups?eventual=1", "/me"]));
+    expect(useChat.getState().me?.alias).toBe("Blue");
   });
 });

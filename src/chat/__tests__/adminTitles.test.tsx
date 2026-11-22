@@ -327,7 +327,7 @@ describe("the starter administrator", () => {
 });
 
 describe("an administrator deleting their own account", () => {
-  const group = (id: string, ownerId: string): Group => ({ id, name: id, ownerId, gen: 0, max: 32, needsRekey: false, pendingOwner: null, members: [], keys: new Map() });
+  const group = (id: string, ownerId: string): Group => ({ id, name: id, ownerId, gen: 0, max: 32, needsRekey: false, members: [], keys: new Map() });
 
   it("is offered, and says how many groups they own go with it", () => {
     useChat.setState({ groups: [group("g1", "a"), group("g2", "a"), group("g3", "other")] });

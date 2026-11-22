@@ -237,8 +237,8 @@ async function establish(session: SessionPayload, mk: Uint8Array, seed: Uint8Arr
       onFinal: (reason) => mine() && lock(s.lockNotice(reason === "replaced" ? "replaced" : "kicked")),
     });
     s.ws = sock;
-    await Promise.all([refreshContacts(), refreshGroups(), refreshAdmins().catch(() => {})]);
-    await refreshUsage();
+    await Promise.all([refreshContacts(true), refreshGroups(true), refreshAdmins(true).catch(() => {})]);
+    await refreshUsage(true);
     await loadUnread().catch(() => {});
     s.ws.start();
     unlockedNow(); // the server opens the management lock at sign-in too
@@ -341,8 +341,9 @@ export async function refreshMe(): Promise<void> {
  * `GET /admins`: every administrator's title by user id, for the badge. Messages, contacts and group members carry only the class (`role`), never the title.
  * A failure keeps what is known; a title is only ever compared (never shown as it came), so an unknown one cannot do harm.
  */
-export async function refreshAdmins(): Promise<void> {
-  const r = await api().get<{ admins?: { userId?: unknown; handle?: unknown; title?: unknown }[] }>("/admins");
+/** `eventual`: the sign-in sync, where nothing has just been written, may be read with eventual consistency (half the cost on the server). */
+export async function refreshAdmins(eventual = false): Promise<void> {
+  const r = await api().get<{ admins?: { userId?: unknown; handle?: unknown; title?: unknown }[] }>("/admins" + (eventual ? "?eventual=1" : ""));
   const admins: Record<string, string> = Object.create(null);
   const adminList: { userId: string; handle: string }[] = [];
   for (const x of Array.isArray(r.admins) ? r.admins : []) {
@@ -481,7 +482,7 @@ interface WireRequest {
   kx: string | null;
 }
 
-export async function refreshContacts(): Promise<void> {
+export async function refreshContacts(eventual = false): Promise<void> {
   const myId = me().userId;
   const reqs = (await api().get<{ requests: WireRequest[] }>("/contacts/requests")).requests;
   for (const r of reqs) {
@@ -498,7 +499,7 @@ export async function refreshContacts(): Promise<void> {
       }
     }
   }
-  const list = (await api().get<{ contacts: { userId: string; handle: string; role: string; convId: string; deleted?: boolean; lastAt?: number }[] }>("/contacts")).contacts;
+  const list = (await api().get<{ contacts: { userId: string; handle: string; role: string; convId: string; deleted?: boolean; lastAt?: number }[] }>("/contacts" + (eventual ? "?eventual=1" : ""))).contacts;
   // The server says when each chat last had a message, which orders the list.
   for (const c of list) noteActive(c.convId, c.lastAt ?? 0);
   const contacts: Contact[] = list.map((c) => ({ ...c, key: s.contactKeys.get(c.userId)?.key ?? null, nick: s.contactKeys.get(c.userId)?.nick }));
@@ -1406,8 +1407,8 @@ function notifyIncoming(conv: string): void {
 // ---------- groups ----------
 type WireGroup = Omit<Group, "keys"> & { lastAt?: number };
 
-export async function refreshGroups(): Promise<void> {
-  const list = (await api().get<{ groups: WireGroup[] }>("/groups")).groups;
+export async function refreshGroups(eventual = false): Promise<void> {
+  const list = (await api().get<{ groups: WireGroup[] }>("/groups" + (eventual ? "?eventual=1" : ""))).groups;
   const groups: Group[] = [];
   for (const g of list) {
     noteActive(g.id, g.lastAt ?? 0);
@@ -1778,9 +1779,9 @@ function countSent(used: unknown): void {
 }
 
 /** Read when the "Me" pages open, after a sign-in and after a `monthly_limit` (never after every message: it reads all of the person's favourites). */
-export async function refreshUsage(): Promise<void> {
+export async function refreshUsage(eventual = false): Promise<void> {
   try {
-    patch({ usage: await api().get<NonNullable<ChatState["usage"]>>("/usage") });
+    patch({ usage: await api().get<NonNullable<ChatState["usage"]>>("/usage" + (eventual ? "?eventual=1" : "")) });
   } catch {
     /* the count is only shown, never needed */
   }

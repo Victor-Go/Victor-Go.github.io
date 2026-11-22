@@ -1684,3 +1684,11 @@ section > .ch-primary {
     animation: none;
   }
 }
+
+/* In a name line the badge is centred by the flex box itself: the nudge that centres it in running text would lift it. */
+.ch-name-line > .ch-admin {
+  margin-left: 0;
+  top: 0;
+  vertical-align: baseline;
+  line-height: 1.5;
+}

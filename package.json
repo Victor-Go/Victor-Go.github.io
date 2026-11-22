@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@breezystack/lamejs": "1.2.7",
+    "@dicebear/core": "10.7.0",
+    "@dicebear/styles": "10.6.0",
     "@noble/hashes": "2.4.0",
     "@noble/post-quantum": "0.7.1",
     "@scure/base": "2.4.0",
@@ -29,7 +31,6 @@
     "pdfjs-dist": "5.4.149",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "vicon-avatars": "0.1.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

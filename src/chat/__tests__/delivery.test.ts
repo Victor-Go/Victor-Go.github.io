@@ -35,4 +35,12 @@ describe("avatar", () => {
     const uris = new Set(["u1", "u2", "u3", "u4", "u5", "u6"].map(avatarUri));
     expect(uris.size).toBeGreaterThan(3);
   });
+
+  it("gives about 60% shapes and 40% planets, picked by the id", () => {
+    const isPlanet = (id: string) => decodeURIComponent(avatarUri(id).split(",")[1]).length > 3000;
+    const planets = Array.from({ length: 400 }, (_, i) => isPlanet("user" + i)).filter(Boolean).length;
+    expect(planets).toBeGreaterThan(400 * 0.3);
+    expect(planets).toBeLessThan(400 * 0.5);
+    expect(isPlanet("user7")).toBe(isPlanet("user7"));
+  });
 });

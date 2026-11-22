@@ -1,4 +1,7 @@
-import { toDataUri } from "vicon-avatars";
+import { Avatar, Style } from "@dicebear/core";
+import planets from "@dicebear/styles/planets.json";
+import shapes from "@dicebear/styles/shapes.json";
+import { sha256 } from "@noble/hashes/sha2.js";
 
 const cache = new Map<string, string>();
 
@@ -24,15 +27,23 @@ export function officialBadgeSvg(): string {
   );
 }
 
+const planetsStyle = new Style(planets);
+const shapesStyle = new Style(shapes);
+/** The share of users who get flat shapes; the rest get a planet. */
+const SHAPES_SHARE = 0.6;
+
 /**
- * A Vicon landscape picture as a data: URI, generated from the user id, so everyone sees the same picture and renaming
- * never changes it. Used through <img>, so the SVG is never inserted into the page as markup.
+ * A DiceBear picture as a data: URI, generated from the user id, so everyone sees the same picture and renaming never
+ * changes it. The id also decides the look, 60% flat shapes and 40% a planet on a dark sky: the first byte of its hash
+ * is read as a number in 0..1, so the split is the same for everybody. DiceBear then draws the picture from the id as
+ * the seed. Used through <img>, so the SVG is never inserted into the page as markup.
  */
 export function avatarUri(userId: string): string {
   if (userId === OFFICIAL_ID) return `data:image/svg+xml;utf8,${encodeURIComponent(officialBadgeSvg())}`;
   let uri = cache.get(userId);
   if (!uri) {
-    uri = toDataUri(userId);
+    const roll = sha256(new TextEncoder().encode(`avatar-style/v1|${userId}`))[0] / 256;
+    uri = new Avatar(roll < SHAPES_SHARE ? shapesStyle : planetsStyle, { seed: userId, size: 96 }).toDataUri();
     cache.set(userId, uri);
   }
   return uri;

@@ -133,20 +133,30 @@ export function ConfirmModal({
 
 /** Where a slow step is, in friendly words; the proof-of-work step shows a bar and the failure multiplier. */
 export function Steps({ progress, m }: { progress: Progress | null; m: Messages }) {
+  const [slow, setSlow] = useState(false);
+  const active = progress !== null;
+  useEffect(() => {
+    setSlow(false);
+    if (!active) return;
+    const t = setTimeout(() => setSlow(true), 20_000);
+    return () => clearTimeout(t);
+  }, [active]);
   if (!progress) return null;
-  const text = { derive: m.stepDerive, pow: m.stepPow, server: m.stepServer, vault: m.stepVault }[progress.step];
+  const text = { derive: m.stepDerive, pow: m.stepPow, server: m.stepServer, submit: m.stepSubmit, create: m.stepCreate, vault: m.stepVault }[progress.step];
+  const prefix = progress.n && progress.of ? m.stepOf(progress.n, progress.of) : "";
   return (
     <div className="ch-steps" role="status" aria-live="polite">
-      <div className="ch-steps-title">{progress.step === "pow" ? m.powTitle : text}</div>
+      <div className="ch-steps-title">{prefix}{progress.step === "pow" ? m.powTitle : text}</div>
       {progress.step === "pow" && (
         <>
           <div className="ch-meter" aria-hidden="true">
             <span style={{ width: `${Math.round((progress.fraction ?? 0) * 100)}%`, background: "var(--ch-accent)" }} />
           </div>
-          <div className="ch-hint">{m.powNote}</div>
+          <div className="ch-hint">{progress.of ? m.powNoteSignUp : m.powNote}</div>
           {(progress.multiplier ?? 1) > 1 && <div className="ch-notice">{m.multiplierNote(progress.multiplier ?? 1)}</div>}
         </>
       )}
+      {slow && <div className="ch-hint">{m.slowNote}</div>}
     </div>
   );
 }

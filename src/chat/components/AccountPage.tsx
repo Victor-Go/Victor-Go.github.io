@@ -70,7 +70,7 @@ export function AccountPage() {
       return;
     }
     setNotice(null);
-    setProgress({ step: "derive" });
+    setProgress(signUp ? { step: "derive", n: 1, of: 6 } : { step: "derive" });
     try {
       if (signUp) await register(handle, password, inviteRequired ? invite : undefined, setProgress);
       else await login(handle, password, setProgress);

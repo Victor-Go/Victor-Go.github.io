@@ -31,13 +31,16 @@ import type { Challenge } from "./workers/solve";
 export { ApiError, Cancelled };
 export const cancelWorkNow = cancelWork;
 
-export type Step = "derive" | "pow" | "server" | "vault";
+export type Step = "derive" | "pow" | "server" | "submit" | "create" | "vault";
 export interface Progress {
   step: Step;
   /** 0..1 within the proof-of-work step. */
   fraction?: number;
   /** Difficulty multiplier from recent failed sign-ins; shown only when above 1. */
   multiplier?: number;
+  /** "Step n of of", shown for sign-up only. */
+  n?: number;
+  of?: number;
 }
 export type OnProgress = (p: Progress) => void;
 
@@ -153,23 +156,26 @@ async function pow(action: string, subject: string, onProgress?: OnProgress): Pr
 // ---------- session ----------
 const wrongPassword = (): ApiError => new ApiError(401, "unauthorized");
 
+const SIGNUP_STEPS = 6;
+
 export async function register(handle: string, password: string, inviteCode: string | undefined, onProgress: OnProgress): Promise<void> {
   const flow = new PasswordFlow(password);
   let kek: Uint8Array | null = null;
+  const at = (n: number): OnProgress => (p) => onProgress({ ...p, n, of: SIGNUP_STEPS });
   try {
     const registrationRequest = await flow.startRegistration();
-    const solution = await pow("register", canonicalHandle(handle), onProgress);
-    onProgress({ step: "server" });
+    const solution = await pow("register", canonicalHandle(handle), at(2));
+    at(3)({ step: "submit" });
     const start = await api().post<{ regId: string; userId: string; registrationResponse: string }>("/auth/register/start", { handle, inviteCode, pow: solution, registrationRequest });
-    onProgress({ step: "derive" });
+    at(4)({ step: "derive" });
     const done = await flow.finishRegistration(start.registrationResponse, start.userId);
     kek = done.kek;
     const identity = generateIdentity();
     const mk = newMasterKey();
     const wrappedMK = await wrapMasterKey(mk, kek);
-    onProgress({ step: "server" });
+    at(5)({ step: "create" });
     const session = await api().post<SessionPayload>("/auth/register/finish", { regId: start.regId, registrationRecord: done.registrationRecord, publicKey: identity.publicKey, wrappedMK });
-    await establish(session, mk, identity.seed, onProgress);
+    await establish(session, mk, identity.seed, at(6));
     patch({ welcome: true });
   } finally {
     kek?.fill(0);

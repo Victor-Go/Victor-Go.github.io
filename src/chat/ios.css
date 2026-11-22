@@ -437,6 +437,14 @@
   max-width: 120px;
 }
 
+.ios-fav-image-open {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
 .ios-fav-image {
   display: block;
   max-width: 100%;

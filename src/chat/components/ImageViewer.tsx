@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useLang } from "../useChat";
 import { clampView, containSize, startView, zoomAt, type Size, type View } from "../zoom";
@@ -15,6 +15,22 @@ const WHEEL_MAX = 400;
 const screenSize = (): Size => ({ w: window.innerWidth, h: window.innerHeight });
 const baseOf = containSize;
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
+
+/**
+ * The state of a full-screen viewer: `open` shows a picture at once from `url` (the small preview, when the picture has one) and, when `upgrade` is given,
+ * swaps in what it resolves to (the whole picture) as soon as that is ready, unless the viewer was closed or shows another picture by then.
+ */
+export function useImageViewer() {
+  const [viewer, setViewer] = useState<{ url: string; w: number; h: number } | null>(null);
+  const close = useCallback(() => setViewer(null), []);
+  const open = useCallback((url: string, w: number, h: number, upgrade?: () => Promise<string | null>) => {
+    setViewer({ url, w, h });
+    upgrade?.()
+      .then((full) => full && setViewer((v) => (v && v.url === url ? { ...v, url: full } : v)))
+      .catch(() => {});
+  }, []);
+  return { viewer, open, close };
+}
 
 /**
  * The picture over the whole screen, all of it in view, with the chat blurred behind it. One finger or the mouse drags it, two fingers pinch,

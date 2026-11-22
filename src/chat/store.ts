@@ -177,6 +177,8 @@ export interface Favorite {
   ms?: number;
   w?: number;
   h?: number;
+  /** Picture: the stored file holds a small preview first, sealed on its own, this many bytes long (see Payload in crypto/message.ts); none: the file is the picture. */
+  t?: number;
 }
 
 export type Phase = "out" | "busy" | "ready";

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Phone, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
 import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendImage, sendText, startCall } from "../client";
@@ -20,7 +20,7 @@ import { DELETE_MAX, canDelete, moderatesGroup } from "../selection";
 import { Avatar, Marquee, Modal, TitleBadge } from "./ui";
 import { OfficialMessage } from "./OfficialMessage";
 import { ImageBubble } from "./ImageBubble";
-import { ImageViewer } from "./ImageViewer";
+import { ImageViewer, useImageViewer } from "./ImageViewer";
 import { VoiceBubble } from "./VoiceBubble";
 import { VoiceComposer } from "./VoiceComposer";
 
@@ -133,8 +133,7 @@ export function Conversation() {
   const micRef = useRef<{ start: () => void } | null>(null);
   const footerRef = useRef<HTMLElement>(null);
   const [imageBusy, setImageBusy] = useState(false);
-  const [viewer, setViewer] = useState<{ url: string; w: number; h: number } | null>(null);
-  const closeViewer = useCallback(() => setViewer(null), []);
+  const { viewer, open: openViewer, close: closeViewer } = useImageViewer();
   // A picture pasted or dropped waits here for the user's yes before it is sent.
   const [pending, setPending] = useState<File | null>(null);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
@@ -781,7 +780,7 @@ export function Conversation() {
                   ) : m.payload?.k === "call" ? (
                     <CallBubble m={m} />
                   ) : m.payload?.k === "image" ? (
-                    <ImageBubble conv={activeConv} m={m} onOpen={(url, w, h) => !selecting && setViewer({ url, w, h })} />
+                    <ImageBubble conv={activeConv} m={m} onOpen={(url, w, h, upgrade) => !selecting && openViewer(url, w, h, upgrade)} />
                   ) : (
                     <div className="ch-text ch-gone-text">{a.undecryptable}</div>
                   )}

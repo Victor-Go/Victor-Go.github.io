@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { toEpochs } from "../crypto/keys";
 import { IMAGE_SIDE_MAX, decryptMessage, encryptMessage, type Binding, type Payload } from "../crypto/message";
-import { IMAGE_MAX_BYTES, IMAGE_MAX_SIDE, ImageError, compressImage, drawSize, fitPicture, fitSize, fitToBudget, isPicture, outputFormat, sniffFormat } from "../image";
+import { IMAGE_MAX_BYTES, IMAGE_MAX_SIDE, ImageError, THUMB_MAX_BYTES, THUMB_SIDE, compressImage, drawSize, fitPicture, fitSize, fitToBudget, isPicture, outputFormat, sealedLength, sniffFormat } from "../image";
 import { planDeleteBatches } from "../selection";
 import type { Msg } from "../store";
 import { VOICE_MAX_BYTES } from "../voice";
@@ -184,5 +184,26 @@ describe("deleting pictures", () => {
     expect(batches).toEqual([{ seqs: [1, 2, 3, 4], fileIds: ["i1", "v1"] }]);
     const many = Array.from({ length: 21 }, (_, i) => msg(i + 1, { k: "image", image: { id: `i${i}`, w: 1, h: 1 }, sentAt: 1 }));
     expect(planDeleteBatches(many).map((b) => b.fileIds.length)).toEqual([20, 1]);
+  });
+});
+
+describe("the preview of a picture", () => {
+  const encoder = (weight: number) => async (w: number, h: number, q: number) => ({ size: Math.round(w * h * q * weight), w, h, q });
+
+  it("starts at the preview's side, not at the picture's, and keeps its shape", async () => {
+    const r = await fitToBudget(4000, 3000, THUMB_MAX_BYTES, encoder(0.05), [0.7], THUMB_SIDE);
+    expect([r.w, r.h]).toEqual([THUMB_SIDE, 360]);
+    expect(r.out.size).toBeLessThanOrEqual(THUMB_MAX_BYTES);
+  });
+
+  it("shrinks further when even that is too big for the preview's budget", async () => {
+    const r = await fitToBudget(4000, 3000, 2000, encoder(0.5), [0.7, 0.3], THUMB_SIDE);
+    expect(Math.max(r.w, r.h)).toBeLessThan(THUMB_SIDE);
+    expect(r.out.size).toBeLessThanOrEqual(2000);
+  });
+
+  it("leaves the picture room for the sealed preview inside the 512 KiB an object may have", () => {
+    expect(IMAGE_MAX_BYTES - sealedLength(THUMB_MAX_BYTES)).toBeGreaterThan(400 * 1024);
+    expect(sealedLength(THUMB_MAX_BYTES) + sealedLength(IMAGE_MAX_BYTES - sealedLength(THUMB_MAX_BYTES))).toBeLessThanOrEqual(VOICE_MAX_BYTES);
   });
 });

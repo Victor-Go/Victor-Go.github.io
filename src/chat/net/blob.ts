@@ -34,9 +34,15 @@ export async function uploadBytes(target: UploadTarget, bytes: Uint8Array): Prom
   if (!res.ok) throw new ApiError(res.status, res.status === 404 ? "not_found" : "internal");
 }
 
-/** Fetches raw bytes from a short-lived download address. 404 (never uploaded, or gone) is `not_found`. */
-export async function downloadBytes(url: string): Promise<Uint8Array> {
-  const res = await transfer(url, { method: "GET" });
+/**
+ * Fetches raw bytes from a short-lived download address. 404 (never uploaded, or gone) is `not_found`. With `span` only those bytes come
+ * (`to` is the last byte, inclusive; none means to the end): the storage answers 206 and sends only them. Should it answer the whole object
+ * (200) the span is cut out here, so the caller always gets exactly that part.
+ */
+export async function downloadBytes(url: string, span?: { from: number; to?: number }): Promise<Uint8Array> {
+  const init: RequestInit = span ? { method: "GET", headers: { Range: `bytes=${span.from}-${span.to ?? ""}` } } : { method: "GET" };
+  const res = await transfer(url, init);
   if (!res.ok) throw new ApiError(res.status, res.status === 404 ? "not_found" : "internal");
-  return new Uint8Array(await res.arrayBuffer());
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return span && res.status === 200 ? bytes.slice(span.from, span.to === undefined ? undefined : span.to + 1) : bytes;
 }

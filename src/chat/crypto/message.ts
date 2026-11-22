@@ -17,8 +17,12 @@ export const MESSAGE_MAX_CHARS = 1024;
 export type Payload =
   | { k: "text"; text: string; sentAt: number }
   | { k: "voice"; voice: { id: string; ms: number }; sentAt: number }
-  /** `id` is the stored object's id (the server's voice storage); `w` and `h` are the pixels, so the bubble keeps its shape while the image loads. */
-  | { k: "image"; image: { id: string; w: number; h: number }; sentAt: number }
+  /**
+   * `id` is the stored object's id (the server's voice storage); `w` and `h` are the pixels, so the bubble keeps its shape while the image loads.
+   * `t`: the object holds a small preview first, sealed on its own, `t` bytes long, and the whole picture sealed after it. A reader that only shows
+   * the bubble fetches just the first `t` bytes (an HTTP Range request) and the rest only when the picture is opened. Without `t` the object is the picture.
+   */
+  | { k: "image"; image: { id: string; w: number; h: number; t?: number }; sentAt: number }
   /** The record of a voice call, written by the caller's client when a call that rang has ended (protocol section 9b of the chat server). `sec`: whole seconds of talking. */
   | { k: "call"; call: { outcome: "answered" | "noanswer" | "cancelled" | "declined" | "failed"; sec: number }; sentAt: number };
 
@@ -68,6 +72,12 @@ export const encryptMessage = (chatKey: Uint8Array, epochs: Epochs, payload: Pay
 /** The binding of a voice recording: tied to the message that carries it, but never interchangeable with that message's own body. */
 export const voiceBinding = (b: Binding): Binding => ({ ...b, clientMsgId: `voice:${b.clientMsgId}` });
 
+/** The binding of a picture's small preview: tied to the message, and never interchangeable with the picture itself. */
+export const thumbBinding = (b: Binding): Binding => ({ ...b, clientMsgId: `thumb:${b.clientMsgId}` });
+
+/** The most bytes a stored object may have (protocol section 10), so no preview can be longer. */
+export const STORED_MAX_BYTES = 512 * 1024;
+
 /** The epoch id in a ciphertext's header (not authenticated until it opens), or null when it is too short or of an unknown version. */
 export function epochOfCiphertext(ct: string): number | null {
   try {
@@ -105,7 +115,11 @@ export async function decryptMessage(chatKey: Uint8Array, epochs: Epochs, ct: st
     if (call && CALL_OUTCOMES.includes(call.outcome) && typeof call.sec === "number" && Number.isInteger(call.sec) && call.sec >= 0 && call.sec <= CALL_SEC_MAX) return payload;
     const im = payload.k === "image" ? payload.image : null;
     const side = (n: unknown): boolean => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= IMAGE_SIDE_MAX;
-    if (im && typeof im.id === "string" && im.id.length > 0 && im.id.length <= 128 && side(im.w) && side(im.h)) return payload;
+    if (im && typeof im.id === "string" && im.id.length > 0 && im.id.length <= 128 && side(im.w) && side(im.h)) {
+      // A preview length that cannot be right is left out: the picture is then read as a whole, as before.
+      if (im.t !== undefined && !(Number.isInteger(im.t) && im.t > 0 && im.t < STORED_MAX_BYTES)) delete im.t;
+      return payload;
+    }
     throw new CipherError("decrypt");
   } catch {
     throw new CipherError("decrypt");

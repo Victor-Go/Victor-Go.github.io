@@ -10,6 +10,20 @@ const QUALITIES = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.25];
 /** An original at most this big (and in a format that is sent as it is) is not squeezed: it keeps its size and gets the best quality. */
 const SMALL_QUALITIES = [0.95, ...QUALITIES];
 
+/**
+ * A picture that is bigger than this many pixels along its longer side, and than NO_THUMB_BELOW in bytes, gets a small preview of THUMB_SIDE pixels, at
+ * most THUMB_MAX_BYTES: the chat shows that and fetches the whole picture only when it is opened (see the payload of an image in crypto/message.ts).
+ * The preview takes part of the 512 KiB an object may have, so the picture itself gets a little less.
+ */
+export const THUMB_SIDE = 480;
+export const THUMB_MAX_BYTES = 40 * 1024;
+const THUMB_QUALITIES = [0.7, 0.55, 0.4, 0.3];
+const NO_THUMB_BELOW = 64 * 1024;
+/** A preview is kept only when the picture is clearly bigger than it (a picture that is hardly bigger gains nothing from one). */
+const THUMB_MIN_RATIO = 3;
+/** What sealing one part adds (see SEAL_OVERHEAD). */
+export const sealedLength = (n: number): number => n + SEAL_OVERHEAD;
+
 export class ImageError extends Error {}
 
 export type PictureFormat = "image/png" | "image/jpeg";
@@ -60,8 +74,9 @@ export async function fitToBudget<T extends { size: number }>(
   budget: number,
   encode: (w: number, h: number, quality: number) => Promise<T | null>,
   qualities: readonly number[] = QUALITIES,
+  startSide: number = IMAGE_MAX_SIDE,
 ): Promise<{ out: T; w: number; h: number }> {
-  for (let max = IMAGE_MAX_SIDE; ; max = Math.floor(max * 0.75)) {
+  for (let max = startSide; ; max = Math.floor(max * 0.75)) {
     const { w, h } = fitSize(srcW, srcH, max);
     for (const q of qualities) {
       const out = await encode(w, h, q);
@@ -95,14 +110,25 @@ export async function fitPicture<T extends { size: number }>(
   return { ...r, type: "image/jpeg" };
 }
 
+/** What compressImage makes: the picture, and when it is big enough a small preview of it (see THUMB_SIDE). */
+export interface Compressed {
+  bytes: Uint8Array;
+  w: number;
+  h: number;
+  type: PictureFormat;
+  thumb?: Uint8Array;
+}
+
 /**
  * Turns a picked picture into bytes that fit IMAGE_MAX_BYTES, whatever the original (see fitPicture): a PNG stays a PNG while it fits at full size,
  * everything else is a JPEG (outputFormat). An original already under the budget is not squeezed (full size, the best quality). Drawing it again
  * on a canvas drops everything the file carried besides the pixels (camera data, the place it was taken, the phone's name) and straightens a rotated photo;
  * a JPEG also flattens transparency onto white. Throws ImageError("unreadable") when the browser cannot read the file as a picture (a HEIC photo,
  * for one, is only readable where the browser can open it, as Safari does).
+ * A picture that is big enough also comes with `thumb`, a JPEG preview of THUMB_SIDE pixels at most THUMB_MAX_BYTES (see THUMB_SIDE); `bytes` then
+ * fits what is left of the object after the sealed preview.
  */
-export async function compressImage(file: Blob & { name?: string }): Promise<{ bytes: Uint8Array; w: number; h: number; type: PictureFormat }> {
+export async function compressImage(file: Blob & { name?: string }): Promise<Compressed> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -110,28 +136,40 @@ export async function compressImage(file: Blob & { name?: string }): Promise<{ b
     throw new ImageError("unreadable");
   }
   try {
+    const encode = async (type: PictureFormat, w: number, h: number, q: number): Promise<Blob | null> => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new ImageError("unreadable");
+      if (type === "image/jpeg") {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, type, q));
+      return blob && blob.type === type ? blob : null;
+    };
+    // The preview first: its size decides what is left for the picture. A preview that cannot be made is simply left out.
+    let thumb: Uint8Array | undefined;
+    if (file.size > NO_THUMB_BELOW && Math.max(bitmap.width, bitmap.height) > THUMB_SIDE) {
+      try {
+        const t = await fitToBudget<Blob>(bitmap.width, bitmap.height, THUMB_MAX_BYTES, (w, h, q) => encode("image/jpeg", w, h, q), THUMB_QUALITIES, THUMB_SIDE);
+        thumb = new Uint8Array(await t.out.arrayBuffer());
+      } catch {
+        thumb = undefined;
+      }
+    }
     const { out, w, h, type } = await fitPicture<Blob>(
       bitmap.width,
       bitmap.height,
-      IMAGE_MAX_BYTES,
+      IMAGE_MAX_BYTES - (thumb ? sealedLength(thumb.length) : 0),
       outputFormat(file) === "image/png",
       file.size <= IMAGE_MAX_BYTES,
-      async (type, w, h, q) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new ImageError("unreadable");
-        if (type === "image/jpeg") {
-          ctx.fillStyle = "#fff";
-          ctx.fillRect(0, 0, w, h);
-        }
-        ctx.drawImage(bitmap, 0, 0, w, h);
-        const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, type, q));
-        return blob && blob.type === type ? blob : null;
-      },
+      encode,
     );
-    return { bytes: new Uint8Array(await out.arrayBuffer()), w, h, type };
+    const bytes = new Uint8Array(await out.arrayBuffer());
+    return thumb && bytes.length >= thumb.length * THUMB_MIN_RATIO ? { bytes, w, h, type, thumb } : { bytes, w, h, type };
   } finally {
     bitmap.close();
   }

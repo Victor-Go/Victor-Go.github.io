@@ -4,7 +4,7 @@ import { fromB64, toB64 } from "./crypto/b64";
 import { openFavoriteBytes, openFavoriteText, sealFavoriteBytes, sealFavoriteText } from "./crypto/favorite";
 import { generateIdentity, publicKeyOf, toEpochs } from "./crypto/keys";
 import { KX_EPOCHS, unwrapKey, wrapKey } from "./crypto/kx";
-import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, voiceBinding, type Binding, type Payload } from "./crypto/message";
+import { decryptBytes, decryptMessage, encryptBytes, encryptMessage, epochOfCiphertext, thumbBinding, voiceBinding, type Binding, type Payload } from "./crypto/message";
 import { PasswordFlow } from "./crypto/opaque";
 import { newMasterKey, openRecord, sealRecord, unwrapMasterKey, wrapMasterKey } from "./crypto/vault";
 import { Api, ApiError } from "./net/api";
@@ -445,6 +445,7 @@ interface FavoriteRecord {
   ms?: unknown;
   w?: unknown;
   h?: unknown;
+  t?: unknown;
 }
 
 /** A favourite from the vault: its text opens only while the favourite epoch it was sealed under still exists. */
@@ -453,7 +454,7 @@ async function readFavorite(epoch: number, id: string, v: FavoriteRecord): Promi
   const base: Omit<Favorite, "text"> = {
     id, conv: String(v.conv ?? ""), from: String(v.from ?? ""), time: Number(v.time) || 0, savedAt: Number(v.savedAt) || 0, gen: epoch, kind,
     ...(kind === "voice" ? { ms: Number(v.ms) || 0 } : {}),
-    ...(kind === "image" ? { w: Number(v.w) || 1, h: Number(v.h) || 1 } : {}),
+    ...(kind === "image" ? { w: Number(v.w) || 1, h: Number(v.h) || 1, ...(Number(v.t) > 0 ? { t: Number(v.t) } : {}) } : {}),
   };
   const constant = s.fav?.constants.get(epoch);
   if (typeof v.sealed === "string" && constant !== undefined && s.mk) {
@@ -475,7 +476,7 @@ async function putFavorite(f: Favorite, fileId?: string): Promise<void> {
   const sealed = await sealFavoriteText(s.mk, archive, me().userId, f.id, f.text);
   await putRecord(
     `fav:${archive.gen}:${f.id}`,
-    { conv: f.conv, from: f.from, time: f.time, savedAt: f.savedAt, sealed, kind: f.kind ?? "text", ...(f.ms !== undefined ? { ms: f.ms } : {}), ...(f.w !== undefined ? { w: f.w, h: f.h } : {}) },
+    { conv: f.conv, from: f.from, time: f.time, savedAt: f.savedAt, sealed, kind: f.kind ?? "text", ...(f.ms !== undefined ? { ms: f.ms } : {}), ...(f.w !== undefined ? { w: f.w, h: f.h } : {}), ...(f.t !== undefined ? { t: f.t } : {}) },
     fileId,
   );
 }
@@ -820,11 +821,12 @@ function wipeVoiceId(id: string): void {
 /** A picture is told apart by who sent it and the id the sender gave the message, which the optimistic and the stored message share. */
 export const imageKey = (m: Pick<Msg, "senderId" | "id">): string => `${m.senderId}.${m.id}`;
 function wipeImage(m: Msg): void {
-  const key = imageKey(m);
-  const url = s.images.get(key);
-  if (url) URL.revokeObjectURL(url);
-  s.images.delete(key);
-  s.imageLoads.delete(key);
+  for (const key of [imageKey(m), "thumb:" + imageKey(m)]) {
+    const url = s.images.get(key);
+    if (url) URL.revokeObjectURL(url);
+    s.images.delete(key);
+    s.imageLoads.delete(key);
+  }
 }
 const wipeVoice = (m: Msg): void => {
   if (m.payload?.k === "voice" && m.payload.voice.id) wipeVoiceId(m.payload.voice.id);
@@ -1125,16 +1127,32 @@ export async function sendImage(conv: string, file: Blob): Promise<void> {
   await sendStored(
     conv,
     img.bytes,
-    (storedId, sentAt) => ({ k: "image", image: { id: storedId, w: img.w, h: img.h }, sentAt }),
+    (storedId, sentAt, t) => ({ k: "image", image: { id: storedId, w: img.w, h: img.h, ...(t ? { t } : {}) }, sentAt }),
     (msgId) => s.images.set(imageKey({ senderId: me().userId, id: msgId }), URL.createObjectURL(new Blob([img.bytes as BlobPart], { type: img.type }))),
+    img.thumb,
   );
 }
 
+/** The two sealed parts of a stored picture are joined into one object: the preview first, then the picture (protocol section 10). */
+const joinBytes = (a: Uint8Array, b: Uint8Array): Uint8Array => {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+};
+
 /**
  * The common path of recordings and pictures: seal the bytes bound to the message that will carry them, upload them, then send the message.
- * `payloadOf` builds the message body (with "" as the stored id while it is not known); `onId` runs once the message has its id, before it shows.
+ * `payloadOf` builds the message body (with "" as the stored id while it is not known; `t` is the length of the sealed preview when there is one);
+ * `onId` runs once the message has its id, before it shows. A picture's small `thumb` is sealed on its own and goes first in the same object.
  */
-async function sendStored(conv: string, bytes: Uint8Array, payloadOf: (storedId: string, sentAt: number) => Payload, onId?: (msgId: string) => void): Promise<void> {
+async function sendStored(
+  conv: string,
+  bytes: Uint8Array,
+  payloadOf: (storedId: string, sentAt: number, t?: number) => Payload,
+  onId?: (msgId: string) => void,
+  thumb?: Uint8Array,
+): Promise<void> {
   if (conv === useChat.getState().official) throw new ApiError(403, "forbidden", { reason: "official_readonly" });
   const myId = me().userId;
   const gen = currentGen(conv);
@@ -1148,13 +1166,20 @@ async function sendStored(conv: string, bytes: Uint8Array, payloadOf: (storedId:
   const attempt = async (): Promise<void> => {
     const key = keyFor(conv, gen);
     if (!key) throw new ApiError(0, "forbidden");
-    const sealed = await encryptBytes(key, epochs(), bytes, voiceBinding({ conv, senderId: myId, clientMsgId: id, gen }));
+    const binding = { conv, senderId: myId, clientMsgId: id, gen };
+    const sealed = await encryptBytes(key, epochs(), bytes, voiceBinding(binding));
     // The storage takes the raw ciphertext bytes, not their base64 text; the server is told how many to expect and signs exactly that.
-    const raw = fromB64(sealed.ct);
+    let raw = fromB64(sealed.ct);
+    let t: number | undefined;
+    if (thumb) {
+      const head = fromB64((await encryptBytes(key, epochs(), thumb, thumbBinding(binding))).ct);
+      t = head.length;
+      raw = joinBytes(head, raw);
+    }
     if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
     const up = await api().post<{ fileId: string; upload: UploadTarget }>("/files", { conv, size: raw.length });
     await uploadBytes(up.upload, raw);
-    const m: Msg = { ...optimistic, payload: payloadOf(up.fileId, sentAt) };
+    const m: Msg = { ...optimistic, payload: payloadOf(up.fileId, sentAt, t) };
     addMessage(conv, m);
     await transmit(conv, m);
   };
@@ -1196,7 +1221,7 @@ export async function playVoiceMessage(conv: string, m: Msg): Promise<void> {
  * Downloads and opens the sealed bytes a message refers to (a recording or a picture). Returns null after marking the message lost when they
  * are gone for good (retention, a wipe, a destroyed key) or do not open. Other failures (the network) throw ApiError for the caller to show.
  */
-async function openStored(conv: string, m: Msg, storedId: string): Promise<Uint8Array | null> {
+async function openStored(conv: string, m: Msg, storedId: string, part?: { t: number; of: "thumb" | "picture" }): Promise<Uint8Array | null> {
   const gen = m.gen ?? currentGen(conv);
   const key = keyFor(conv, gen);
   const epoch = m.epoch;
@@ -1209,7 +1234,7 @@ async function openStored(conv: string, m: Msg, storedId: string): Promise<Uint8
   try {
     // A short-lived address for the raw ciphertext; 404 from either step (retention, wipe, an upload that never finished) is the same: gone.
     const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/files/${encodeURIComponent(storedId)}`);
-    ct = toB64(await downloadBytes(download.url));
+    ct = toB64(await downloadBytes(download.url, part ? (part.of === "thumb" ? { from: 0, to: part.t - 1 } : { from: part.t }) : undefined));
   } catch (e) {
     // Older than the retention period, or removed with a wipe: gone for good.
     if (e instanceof ApiError && (e.status === 404 || e.status === 410)) {
@@ -1219,7 +1244,8 @@ async function openStored(conv: string, m: Msg, storedId: string): Promise<Uint8
     throw e;
   }
   try {
-    return await decryptBytes(key, epochs(), ct, voiceBinding({ conv, senderId: m.senderId, clientMsgId: m.id, gen }));
+    const binding = { conv, senderId: m.senderId, clientMsgId: m.id, gen };
+    return await decryptBytes(key, epochs(), ct, part?.of === "thumb" ? thumbBinding(binding) : voiceBinding(binding));
   } catch {
     markLost(conv, m, "unverified");
     return null;
@@ -1233,14 +1259,31 @@ async function openStored(conv: string, m: Msg, storedId: string): Promise<Uint8
 export function imageUrl(conv: string, m: Msg): Promise<string | null> {
   const p = m.payload;
   if (p?.k !== "image") return Promise.resolve(null);
+  const have = s.images.get(imageKey(m));
+  if (have) return Promise.resolve(have);
+  // The bubble only needs the small preview, when the picture has one: the rest is fetched when the picture is opened (fullImageUrl).
+  return p.image.t ? loadPicture(conv, m, "thumb:" + imageKey(m), { t: p.image.t, of: "thumb" }) : fullImageUrl(conv, m);
+}
+
+/** The whole picture of a picture message, as a blob URL: downloaded and opened on the first call (past the preview, when there is one). */
+export function fullImageUrl(conv: string, m: Msg): Promise<string | null> {
+  const p = m.payload;
+  if (p?.k !== "image") return Promise.resolve(null);
   const key = imageKey(m);
   const have = s.images.get(key);
   if (have) return Promise.resolve(have);
-  if (!p.image.id) return Promise.resolve(null);
+  return loadPicture(conv, m, key, p.image.t ? { t: p.image.t, of: "picture" } : undefined);
+}
+
+function loadPicture(conv: string, m: Msg, key: string, part?: { t: number; of: "thumb" | "picture" }): Promise<string | null> {
+  const p = m.payload;
+  if (p?.k !== "image" || !p.image.id) return Promise.resolve(null);
+  const have = s.images.get(key);
+  if (have) return Promise.resolve(have);
   const under = s.imageLoads.get(key);
   if (under) return under;
   const load = (async () => {
-    const bytes = await openStored(conv, m, p.image.id);
+    const bytes = await openStored(conv, m, p.image.id, part);
     if (!bytes) return null;
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: sniffFormat(bytes) }));
     s.images.set(key, url);
@@ -1583,10 +1626,20 @@ export async function addFavorite(conv: string, msg: Msg, from: string): Promise
     fav = p.k === "voice" ? { ...base, text: "", kind: "voice", ms: p.voice.ms } : { ...base, text: "", kind: "image", w: p.image.w, h: p.image.h };
     const constant = s.fav?.constants.get(s.fav.current);
     if (!s.fav || constant === undefined || !s.mk) throw new ApiError(0, "unavailable");
+    const archive = { gen: s.fav.current, constant };
     // The chat's copy expires and its keys are destroyed, so the bytes are opened here and sealed again under the favourite's own key and epoch.
-    const bytes = await openStored(conv, msg, storedId);
+    // A picture with a preview keeps both parts (the favourites page shows the preview and fetches the picture when it is opened).
+    const t = p.k === "image" ? p.image.t : undefined;
+    const bytes = await openStored(conv, msg, storedId, t ? { t, of: "picture" } : undefined);
     if (!bytes) throw new ApiError(404, "not_found");
-    const raw = await sealFavoriteBytes(s.mk, { gen: s.fav.current, constant }, me().userId, id, bytes);
+    let raw = await sealFavoriteBytes(s.mk, archive, me().userId, id, bytes);
+    if (t) {
+      const preview = await openStored(conv, msg, storedId, { t, of: "thumb" });
+      if (!preview) throw new ApiError(404, "not_found");
+      const head = await sealFavoriteBytes(s.mk, archive, me().userId, thumbId(id), preview);
+      raw = joinBytes(head, raw);
+      fav = { ...fav, t: head.length };
+    }
     if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
     const up = await api().post<{ fileId: string; upload: UploadTarget }>("/favorites/files", { size: raw.length });
     await uploadBytes(up.upload, raw);
@@ -1631,33 +1684,39 @@ export async function removeFavorite(id: string): Promise<void> {
 
 /** The opened file of a favourite is kept in memory under this key (the maps of opened voice and picture files), until the chat locks or the favourite goes. */
 const favKey = (id: string): string => `fav:${id}`;
+/** The name a favourite's preview is sealed under: bound to the favourite like its picture, and never interchangeable with it. */
+const thumbId = (id: string): string => `${id}#t`;
 function wipeFavoriteCache(id: string): void {
   stopVoiceIf(favKey(id));
   s.voice.get(favKey(id))?.fill(0);
   s.voice.delete(favKey(id));
-  const url = s.images.get(favKey(id));
-  if (url) URL.revokeObjectURL(url);
-  s.images.delete(favKey(id));
-  s.imageLoads.delete(favKey(id));
+  for (const key of [favKey(id), "thumb:" + favKey(id)]) {
+    const url = s.images.get(key);
+    if (url) URL.revokeObjectURL(url);
+    s.images.delete(key);
+    s.imageLoads.delete(key);
+  }
 }
 
 /**
  * Downloads and opens the voice message or picture saved with a favourite: a short-lived address (owner only), the raw ciphertext, opened with the
  * favourite's own key. Returns null when it is gone for good (the favourite epoch was destroyed, or the object is gone) or does not open.
  */
-async function openFavoriteFile(f: Favorite): Promise<Uint8Array | null> {
+async function openFavoriteFile(f: Favorite, part?: "thumb" | "picture"): Promise<Uint8Array | null> {
   const constant = s.fav?.constants.get(f.gen);
   if (constant === undefined || !s.mk) return null;
+  // With a preview, `t` bytes at the start are the preview and the rest is the picture; only the part asked for is downloaded.
+  const span = f.t && part ? (part === "thumb" ? { from: 0, to: f.t - 1 } : { from: f.t }) : undefined;
   let raw: Uint8Array;
   try {
     const { download } = await api().get<{ download: { url: string; expiresAt: number } }>(`/favorites/${encodeURIComponent(`fav:${f.gen}:${f.id}`)}/file`);
-    raw = await downloadBytes(download.url);
+    raw = await downloadBytes(download.url, span);
   } catch (e) {
     if (e instanceof ApiError && (e.status === 404 || e.status === 410)) return null;
     throw e;
   }
   try {
-    return await openFavoriteBytes(s.mk, { gen: f.gen, constant }, me().userId, f.id, f.gen, raw);
+    return await openFavoriteBytes(s.mk, { gen: f.gen, constant }, me().userId, span && part === "thumb" ? thumbId(f.id) : f.id, f.gen, raw);
   } catch {
     return null;
   }
@@ -1680,13 +1739,24 @@ export async function playFavoriteVoice(f: Favorite): Promise<boolean> {
 /** A blob URL of the picture saved with a favourite (opened on the first call, kept until lock()); null when it is gone. */
 export function favoriteImageUrl(f: Favorite): Promise<string | null> {
   if (f.kind !== "image") return Promise.resolve(null);
-  const key = favKey(f.id);
+  if (s.images.has(favKey(f.id))) return Promise.resolve(s.images.get(favKey(f.id)) ?? null);
+  // The list only needs the small preview, when there is one: the picture itself is fetched when it is opened (favoriteFullImageUrl).
+  return f.t ? loadFavoritePicture(f, "thumb:" + favKey(f.id), "thumb") : favoriteFullImageUrl(f);
+}
+
+/** The whole picture saved with a favourite, as a blob URL (past the preview, when there is one). */
+export function favoriteFullImageUrl(f: Favorite): Promise<string | null> {
+  if (f.kind !== "image") return Promise.resolve(null);
+  return loadFavoritePicture(f, favKey(f.id), f.t ? "picture" : undefined);
+}
+
+function loadFavoritePicture(f: Favorite, key: string, part?: "thumb" | "picture"): Promise<string | null> {
   const have = s.images.get(key);
   if (have) return Promise.resolve(have);
   const under = s.imageLoads.get(key);
   if (under) return under;
   const load = (async () => {
-    const bytes = await openFavoriteFile(f);
+    const bytes = await openFavoriteFile(f, part);
     if (!bytes) return null;
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: sniffFormat(bytes) }));
     s.images.set(key, url);

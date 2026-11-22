@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Pause, Play } from "lucide-react";
-import { ApiError, favoriteImageUrl, playFavoriteVoice } from "../client";
+import { ApiError, favoriteFullImageUrl, favoriteImageUrl, playFavoriteVoice } from "../client";
 import { errorOf } from "../i18nApp";
 import type { Favorite } from "../store";
 import { useLang } from "../useChat";
+import { ImageViewer, useImageViewer } from "./ImageViewer";
 import { formatDuration } from "../voice";
 import { stopVoice, usePlayingVoice } from "../voicePlayer";
 
 /**
  * The voice message or picture saved with a favourite (protocol 10a). It is downloaded and opened with the favourite's own key when it is
- * shown (a picture) or played (a recording); when it is gone for good it says the same as a destroyed text.
+ * shown (a picture) or played (a recording); when it is gone for good it says the same as a destroyed text. A picture is shown as its small preview when it
+ * has one, and a tap opens it full screen (the whole picture is downloaded then), like a picture in a chat.
  */
 export function FavoriteMedia({ f }: { f: Favorite }) {
   const { a } = useLang();
@@ -18,6 +21,7 @@ export function FavoriteMedia({ f }: { f: Favorite }) {
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
+  const { viewer, open, close } = useImageViewer();
 
   useEffect(() => {
     if (f.kind !== "image") return;
@@ -38,7 +42,12 @@ export function FavoriteMedia({ f }: { f: Favorite }) {
   if (gone) return <div className="ios-text ios-gone">{a.undecryptable}</div>;
   if (f.kind === "image") {
     return url ? (
-      <img className="ios-fav-image" src={url} alt={a.imageMessage} width={f.w} height={f.h} draggable={false} />
+      <>
+        <button type="button" className="ios-fav-image-open" aria-label={a.imageOpen} onClick={() => open(url, f.w ?? 1, f.h ?? 1, f.t ? () => favoriteFullImageUrl(f) : undefined)}>
+          <img className="ios-fav-image" src={url} alt={a.imageMessage} width={f.w} height={f.h} draggable={false} />
+        </button>
+        {viewer && createPortal(<ImageViewer url={viewer.url} w={viewer.w} h={viewer.h} onClose={close} />, document.body)}
+      </>
     ) : error ? (
       <div className="ch-bad ch-hint" role="alert">
         {error}

@@ -3,15 +3,17 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
-import { resolve, join, dirname, relative } from 'node:path';
+import { resolve, join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FORBIDDEN } from '../../cipher/__tests__/forbidden';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const scanDir = resolve(root, 'src/scan');
+const sharedDir = resolve(root, 'src/shared/esplora');
 const outDir = resolve(root, 'node_modules/.tmp/scan-guard-dist');
 
 // /scan must talk to exactly these hosts and nothing else; it may use fetch (only in api.ts)
+// (all of it in ../shared/esplora/transport.ts, which /scan shares with /trace)
 // and write public lookups to the address bar (pushState/replaceState, see Scanner.tsx `inUrl`),
 // but every storage, tracking and logging API stays forbidden.
 const HOSTS = ['https://mempool.space', 'https://blockstream.info'];
@@ -27,18 +29,19 @@ function walk(dir: string): string[] {
 }
 
 describe('static source guard for src/scan', () => {
-  const files = walk(scanDir);
+  const files = [...walk(scanDir), ...walk(sharedDir)];
+  const rel = (f: string) => relative(resolve(root, 'src'), f).split(sep).join('/');
 
   it('uses no storage, tracking, logging or other network APIs', () => {
     const hits = files.flatMap((f) =>
-      STILL_FORBIDDEN.filter((x) => x.re.test(readFileSync(f, 'utf8'))).map((x) => `${relative(scanDir, f)}: ${x.label}`),
+      STILL_FORBIDDEN.filter((x) => x.re.test(readFileSync(f, 'utf8'))).map((x) => `${rel(f)}: ${x.label}`),
     );
     expect(hits).toEqual([]);
   });
 
-  it('calls fetch only from api.ts', () => {
-    const users = files.filter((f) => /\bfetch\b/.test(readFileSync(f, 'utf8'))).map((f) => relative(scanDir, f));
-    expect(users).toEqual(['api.ts']);
+  it('calls fetch only from the shared transport', () => {
+    const users = files.filter((f) => /\bfetch\b/.test(readFileSync(f, 'utf8'))).map(rel);
+    expect(users).toEqual(['shared/esplora/transport.ts']);
   });
 
   it('names no host other than the allowed providers', () => {

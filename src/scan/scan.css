@@ -69,6 +69,18 @@
   font-size: 0.85em;
 }
 
+.s-tx-to {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85em;
+}
+
+.s-tx-to-row {
+  overflow-wrap: anywhere;
+}
+
 .s-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.85em;

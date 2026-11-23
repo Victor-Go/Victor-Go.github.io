@@ -1,0 +1,587 @@
+/* Colours for the two directions of money, light and dark, in the same family as the cipher variables. */
+:root {
+  --t-src: #0f766e;
+  --t-src-bg: #ccfbf1;
+  --t-dst: #c2410c;
+  --t-dst-bg: #ffedd5;
+  --t-mid: #15803d;
+  --t-mid-bg: #dcfce7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --t-src: #5eead4;
+    --t-src-bg: #134e4a;
+    --t-dst: #fdba74;
+    --t-dst-bg: #431407;
+    --t-mid: #86efac;
+    --t-mid-bg: #14532d;
+  }
+}
+
+.t-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+}
+
+.t-noise input {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-fg);
+  font: inherit;
+}
+
+/* − [number] + */
+.t-num {
+  display: inline-flex;
+  align-items: stretch;
+  vertical-align: middle;
+}
+
+.t-num button {
+  min-height: 36px;
+  width: 36px;
+  padding: 0;
+  line-height: 1;
+}
+
+.t-num button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.t-num button:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.t-num input {
+  width: 3.5em;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  text-align: center;
+}
+
+/* The three action buttons of a form share one height. */
+.c-actions .c-primary {
+  margin: 0; /* cipher.css gives the primary button a vertical margin that pushes it out of line */
+}
+
+.c-actions button {
+  height: 42px;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.t-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.t-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22em), 1fr));
+  align-items: start;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.t-list {
+  min-width: 0;
+}
+
+.t-list h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.t-src h2 {
+  color: var(--t-src);
+}
+
+.t-dst h2 {
+  color: var(--t-dst);
+}
+
+.t-rows {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.t-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 6px 0 6px 8px;
+  border-bottom: 1px dashed var(--c-border);
+  border-left: 3px solid transparent;
+}
+
+.t-src .t-row {
+  border-left-color: var(--t-src);
+}
+
+.t-dst .t-row {
+  border-left-color: var(--t-dst);
+}
+
+.t-watch {
+  background: var(--c-notice-bg);
+  color: var(--c-notice-fg);
+}
+
+.t-addr {
+  min-width: 0;
+  flex: 1 1 14em;
+  overflow-wrap: anywhere;
+}
+
+.t-amt {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.t-watch-note {
+  margin: 4px 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--c-notice-bg);
+  color: var(--c-notice-fg);
+  overflow-wrap: anywhere;
+}
+
+.t-est {
+  color: var(--c-muted);
+  text-decoration: none;
+}
+
+.t-meta {
+  flex-basis: 100%;
+  color: var(--c-muted);
+  font-size: 0.875em;
+}
+
+.t-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Date picker in the style of the Windows calendar flyout. */
+.t-dp {
+  position: relative;
+}
+
+.t-dp-btn {
+  min-height: 36px;
+}
+
+.t-dp-label {
+  color: var(--c-muted);
+}
+
+.t-dp-empty {
+  color: var(--c-muted);
+}
+
+.t-dp-pop {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(20rem, calc(100vw - 32px));
+  padding: 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.t-dp-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.t-dp-head button {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--c-fg);
+}
+
+.t-dp-title {
+  flex: 1;
+  text-align: left;
+  font-weight: 600;
+}
+
+.t-dp-step {
+  width: 36px;
+  padding: 0;
+  font-size: 0.75em;
+}
+
+.t-dp-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.t-dp-days {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.t-dp-wide {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px 2px;
+}
+
+.t-dp-wd {
+  padding: 4px 0;
+  text-align: center;
+  color: var(--c-muted);
+  font-size: 0.8em;
+}
+
+.t-dp-cell {
+  min-height: 40px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--c-fg);
+}
+
+.t-dp-wide .t-dp-cell {
+  width: 56px;
+  height: 56px;
+  justify-self: center;
+}
+
+.t-dp-pop {
+  touch-action: none;
+}
+
+.t-dp-cell:hover:not(:disabled) {
+  background: var(--c-border);
+}
+
+.t-dp-out {
+  color: var(--c-muted);
+}
+
+.t-dp-today {
+  border-color: var(--c-accent);
+}
+
+.t-dp-cell.t-dp-sel {
+  background: var(--c-accent);
+  color: var(--c-accent-fg);
+}
+
+.t-dp-cell:disabled {
+  opacity: 0.35;
+}
+
+/* View switch */
+.t-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.t-tabs button[aria-pressed="true"] {
+  background: var(--c-accent);
+  color: var(--c-accent-fg);
+}
+
+/* Relationship graph */
+.t-graph-bar {
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.t-graph-bar input {
+  width: 4em;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-fg);
+  font: inherit;
+}
+
+.t-graph-box {
+  max-height: min(70vh, 520px);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  touch-action: none;
+  cursor: grab;
+}
+
+.t-graph-box:active {
+  cursor: grabbing;
+}
+
+.t-graph-box svg {
+  display: block;
+  user-select: none;
+  font-size: 12px;
+}
+
+.t-g-col {
+  fill: var(--c-muted);
+  font-size: 12px;
+}
+
+.t-g-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.t-g-node rect {
+  stroke-width: 1.5;
+}
+
+.t-g-node text {
+  font-size: 12px;
+}
+
+.t-g-amt {
+  opacity: 0.85;
+}
+
+.t-g-src rect {
+  fill: var(--t-src-bg);
+  stroke: var(--t-src);
+}
+
+.t-g-src text {
+  fill: var(--t-src);
+}
+
+.t-g-dst rect {
+  fill: var(--t-dst-bg);
+  stroke: var(--t-dst);
+}
+
+.t-g-dst text {
+  fill: var(--t-dst);
+}
+
+.t-g-center rect {
+  fill: var(--c-accent);
+  stroke: var(--c-accent);
+}
+
+.t-g-center text {
+  fill: var(--c-accent-fg);
+}
+
+.t-g-fold rect {
+  fill: transparent;
+  stroke-dasharray: 4 3;
+}
+
+.t-g-warn rect {
+  stroke-dasharray: 5 3;
+}
+
+.t-g-flag {
+  fill: var(--c-error);
+}
+
+.t-g-node:focus-visible rect,
+.t-g-node.t-g-active rect {
+  stroke-width: 3;
+}
+
+.t-g-edge path {
+  stroke: var(--c-muted);
+  stroke-width: 1.5;
+}
+
+.t-g-edge .t-g-hit {
+  stroke: transparent;
+  stroke-width: 16;
+  cursor: pointer;
+}
+
+.t-g-edge-dash path {
+  stroke-dasharray: 4 4;
+}
+
+.t-g-edge.t-g-active path:first-child {
+  stroke: var(--c-accent);
+  stroke-width: 3;
+}
+
+.t-g-arrow {
+  fill: var(--c-muted);
+}
+
+.t-drawer {
+  position: relative;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+}
+
+.t-drawer-x {
+  float: right;
+}
+
+.t-drawer-addr {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+/* On a phone the details come up from the bottom edge like a drawer. */
+@media (max-width: 640px) {
+  .t-drawer {
+    position: fixed;
+    z-index: 20;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: 55vh;
+    margin: 0;
+    overflow: auto;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.25);
+  }
+}
+
+.t-balance {
+  margin: 6px 0;
+}
+
+/* Verification */
+.t-verdict {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-surface);
+  overflow-wrap: anywhere;
+}
+
+.t-verdict p {
+  margin: 4px 0 0;
+}
+
+.t-verdict-ok {
+  border-left-color: var(--t-mid);
+  background: var(--t-mid-bg);
+}
+
+.t-verdict-none {
+  border-left-color: var(--c-muted);
+}
+
+.t-verdict-partial {
+  border-left-color: var(--c-error);
+  background: var(--c-warn-bg);
+  color: var(--c-warn-fg);
+}
+
+.t-weak-note {
+  color: var(--c-muted);
+}
+
+.t-cover {
+  margin: 8px 0;
+}
+
+.t-cover ul {
+  margin: 4px 0;
+  padding-left: 1.2em;
+  overflow-wrap: anywhere;
+}
+
+.t-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0;
+}
+
+.t-v-target rect {
+  fill: var(--c-accent);
+  stroke: var(--c-accent);
+}
+
+.t-v-target text {
+  fill: var(--c-accent-fg);
+}
+
+.t-v-middle rect {
+  fill: var(--t-mid-bg);
+  stroke: var(--t-mid);
+}
+
+.t-v-middle text {
+  fill: var(--t-mid);
+}
+
+.t-v-other rect {
+  fill: var(--c-surface);
+  stroke: var(--c-muted);
+}
+
+.t-v-other text {
+  fill: var(--c-muted);
+}
+
+.t-v-hot rect {
+  stroke-dasharray: 4 3;
+}
+
+.t-v-extra rect {
+  stroke-dasharray: 2 3;
+}
+
+.t-v-label {
+  fill: var(--c-fg);
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: var(--c-surface);
+  stroke-width: 3px;
+}
+
+.t-v-sub {
+  fill: var(--c-muted);
+}
+
+.t-v-weak path:first-child {
+  stroke-opacity: 0.5;
+  stroke-dasharray: 2 4;
+}
+
+.t-g-edge.t-v-path path:first-child {
+  stroke: var(--t-mid);
+  stroke-width: 2.5;
+}

@@ -330,6 +330,43 @@ function Link({ value, m, follow, children }: { value: string; m: Messages; foll
 
 const short = (h: string) => `${h.slice(0, 12)}…${h.slice(-6)}`;
 const abbr = (h: string) => `${h.slice(0, 8)}…${h.slice(-8)}`;
+
+/** Outputs shown per transaction before the rest fold into "N more". */
+const PAYEES_SHOWN = 5;
+
+/**
+ * Who the transaction pays: its outputs, with the amount. An output back to this address is marked as its own,
+ * and one to an address that also signed an input is marked as change.
+ */
+function Payees({ tx, mine, m, follow }: { tx: TxInfo; mine: (io: TxIO) => boolean; m: Messages; follow: Follow }) {
+  const [all, setAll] = useState(false);
+  if (tx.vout.length === 0) return null;
+  const signers = new Set(tx.vin.map((i) => i.address).filter(Boolean));
+  const shown = all ? tx.vout : tx.vout.slice(0, PAYEES_SHOWN);
+  return (
+    <span className="s-tx-to c-hint">
+      <span>{m.txPayees}</span>
+      {shown.map((o, i) => (
+        <span key={i} className="s-tx-to-row">
+          {o.address ? (
+            <Link value={o.address} m={m} follow={follow}>
+              {o.address}
+            </Link>
+          ) : (
+            m.noAddress
+          )}{" "}
+          {formatBtc(o.value ?? 0)} BTC
+          {mine(o) ? ` · ${m.txSelf}` : o.address && signers.has(o.address) ? ` · ${m.txChange}` : ""}
+        </span>
+      ))}
+      {tx.vout.length > PAYEES_SHOWN && (
+        <button type="button" className="c-link" onClick={() => setAll(!all)}>
+          {all ? m.txPayeesLess : m.txPayeesMore(tx.vout.length - PAYEES_SHOWN)}
+        </button>
+      )}
+    </span>
+  );
+}
 const usdText = (n: number, digits: number) => n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 /** Who an input or output belongs to: an address, or for address-less scripts what kind of script it is. */
@@ -548,6 +585,11 @@ function AddressCard({
         <strong>{label ?? m.addrTitle}</strong>
       </header>
       <Output label={addrLabel ?? m.addrTitle} value={data.address} m={m} rows={addrLabel ? 3 : 1} />
+      {!data.script && (
+        <p>
+          <a className="c-link" href={`/trace/#a=${data.address}`}>{m.openInTrace}</a>
+        </p>
+      )}
       <Row label={m.balance}>{formatBtc(data.balance)} BTC</Row>
       {data.unconfirmed !== 0 && <Row label={m.pending}>{formatBtc(data.unconfirmed)} BTC</Row>}
       <Row label={m.received}>{formatBtc(data.received)} BTC</Row>
@@ -709,6 +751,7 @@ function TxHistory({ data, m, follow }: { data: AddressResult; m: Messages; foll
                 .filter(Boolean)
                 .join(" · ")}
             </span>
+            <Payees tx={tx} mine={data.script ? (io) => io.script === data.script!.toLowerCase() : (io) => io.address === data.address} m={m} follow={follow} />
           </div>
         );
       })}

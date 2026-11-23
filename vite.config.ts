@@ -18,11 +18,11 @@ const cipherDevWithoutCsp = (): Plugin => ({
   },
 })
 
-// GitHub Pages already redirects /cipher, /btc, /scan, /hash and /pdf to their trailing-slash form; mirror that for dev and preview servers.
+// GitHub Pages already redirects /cipher, /btc, /scan, /trace, /hash and /pdf to their trailing-slash form; mirror that for dev and preview servers.
 const cipherTrailingSlash = (): Plugin => {
   const redirect = (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(): void }, next: () => void) => {
     const [path, query = ''] = (req.url ?? '').split('?')
-    if (['/cipher', '/btc', '/scan', '/hash', '/pdf', '/chat', ...CHAT_PATHS.filter((p) => p !== '/chat/').map((p) => p.slice(0, -1))].includes(path)) {
+    if (['/cipher', '/btc', '/scan', '/trace', '/hash', '/pdf', '/chat', ...CHAT_PATHS.filter((p) => p !== '/chat/').map((p) => p.slice(0, -1))].includes(path)) {
       res.statusCode = 301
       res.setHeader('Location', path + '/' + (query ? '?' + query : ''))
       res.end()
@@ -149,6 +149,7 @@ export default defineConfig({
         cipher: fileURLToPath(new URL('./cipher/index.html', import.meta.url)),
         btc: fileURLToPath(new URL('./btc/index.html', import.meta.url)),
         scan: fileURLToPath(new URL('./scan/index.html', import.meta.url)),
+        trace: fileURLToPath(new URL('./trace/index.html', import.meta.url)),
         hash: fileURLToPath(new URL('./hash/index.html', import.meta.url)),
         pdf: fileURLToPath(new URL('./pdf/index.html', import.meta.url)),
         chat: fileURLToPath(new URL('./chat/index.html', import.meta.url)),

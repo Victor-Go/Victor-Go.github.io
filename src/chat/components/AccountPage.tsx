@@ -125,6 +125,7 @@ export function AccountPage() {
                 setMode(id);
                 setNotice(null);
                 setTouched(false);
+                patch({ notice: null }); // like editing a field: the sign-out reason has been read
               }}
             >
               {id === "in" ? m.signIn : m.signUp}

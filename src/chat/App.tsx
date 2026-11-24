@@ -81,7 +81,7 @@ export function App() {
   }, [ready, here]);
 
   useWipeOnLeave(ready);
-  const { warning } = useIdleLogout(ready, a.lockedExpired);
+  const { warning } = useIdleLogout(ready, a.lockedIdle);
   const { covered, uncover } = usePrivacyCover(ready);
   // The cover blocks read receipts (isLooking). Lifting it is what makes the open chat read: the focus listener above runs while the cover is
   // still up, and a tap on the cover lifts it with no event at all, so without this the server keeps counting messages that were shown.

@@ -27,13 +27,16 @@ const mine = () => useChat.getState().messages[CONV]?.find((m) => m.mine);
 
 // Only the clock is faked: the encryption finishes on real macrotasks, which `settle` waits for.
 beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
-const settle = (until: () => boolean = () => false) =>
-  new Promise<void>((done) => {
-    let n = 0;
-    const poll = () => (until() || ++n > 200 ? done() : setImmediate(poll));
-    poll();
-  });
-afterEach(() => {
+/**
+ * Waits on the real clock (Date is not faked): until the condition holds (at most 5 s: a slow runner needs far more than a laptop), or, with no
+ * condition, a fixed 150 ms in which anything still under way (sealing a message again) finishes and nothing more is expected to happen.
+ */
+const settle = async (until?: () => boolean): Promise<void> => {
+  const end = Date.now() + (until ? 5000 : 150);
+  while (Date.now() < end && !until?.()) await new Promise<void>((next) => setImmediate(next));
+};
+afterEach(async () => {
+  await settle(); // what a test left under way must finish while that test's own fakes are still in place, not in the next test
   vi.useRealTimers();
   lock(null);
 });

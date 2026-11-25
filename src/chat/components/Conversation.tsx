@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, Image as ImageIcon, Info, Mic, Phone, Plus, Send, ShieldAlert, ShieldOff, Smile, Star, Trash2 } from "lucide-react";
 import { PATH, go } from "../route";
-import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, sendImage, sendText, startCall } from "../client";
+import { ApiError, addFavorite, deleteMessages, loadOlder, removeFavorite, resendMessage, sendImage, sendText, startCall } from "../client";
 import { ImageError, isPicture } from "../image";
 import { voiceSupported } from "../voice";
 import { errorOf } from "../i18nApp";
@@ -786,7 +786,11 @@ export function Conversation() {
                   )}
                   <div className="ch-meta">
                     {m.status === "sending" && <span>{a.sending}</span>}
-                    {m.status === "failed" && <span className="ch-bad">{a.failed}</span>}
+                    {m.status === "failed" && (
+                      <button type="button" className="ch-bad ch-resend" onClick={() => void resendMessage(activeConv, m.id)}>
+                        {a.failed} · {a.resend}
+                      </button>
+                    )}
                     <span>{formatClock(m.time, lang)}</span>
                     {m.mine && deliveryOf(m, reads[activeConv] ?? 0, !!contact) === "sent" && <Check size={14} aria-label={a.sentLabel} />}
                     {m.mine && deliveryOf(m, reads[activeConv] ?? 0, !!contact) === "read" && <Eye size={14} aria-label={a.readLabel} />}

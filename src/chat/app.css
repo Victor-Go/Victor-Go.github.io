@@ -684,6 +684,16 @@ textarea:disabled {
   opacity: 0.75;
 }
 
+/* a failed message: the label is the button that sends it again */
+.ch-resend {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .ch-star {
   background: none;
   border: 0;

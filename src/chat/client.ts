@@ -110,6 +110,12 @@ const s = {
   autoBusy: new Set<string>(),
   /** Messages already sent again once after the server said their epoch is gone. */
   retried: new Set<string>(),
+  /** Messages already sent again once after a "busy" answer. A resend by the person starts this over. */
+  busyTried: new Set<string>(),
+  /** Per message id: what sends it again (the whole path of a text, or of a recording or picture from where it stopped). Memory only. */
+  resend: new Map<string, () => Promise<void>>(),
+  /** Per message id: the timer that turns a message nobody answered into a failed one. */
+  sendTimers: new Map<string, ReturnType<typeof setTimeout>>(),
   /** Decrypted recordings, by voice id: memory only, zeroed by lock(). */
   voice: new Map<string, Uint8Array>(),
   /** Decrypted pictures as blob URLs, by `imageKey` of their message: memory only, revoked by lock(). `imageLoads` are the downloads under way. */
@@ -120,6 +126,9 @@ const s = {
   callTitle: (_handle: string) => "",
   lockNotice: (_why: LockWhy) => "",
 };
+
+/** For the tests only: the module's state, so that a test can give it a key and a socket without running a sign-in. */
+export const testHooks = { s };
 
 export function configure(api: Api | null, wsUrls: string[] | null, texts: { notifyTitle: (handle: string) => string; callTitle?: (handle: string) => string; lockNotice: (why: LockWhy) => string }): void {
   s.api = api;
@@ -282,6 +291,10 @@ export function lock(notice: string | null = null): void {
   s.readAt.clear();
   s.autoBusy.clear();
   s.retried.clear();
+  s.busyTried.clear();
+  s.resend.clear();
+  for (const timer of s.sendTimers.values()) clearTimeout(timer);
+  s.sendTimers.clear();
   stopVoice();
   for (const b of s.voice.values()) b.fill(0);
   s.voice.clear();
@@ -312,6 +325,37 @@ export function touch(): void {
 // ---------- own account ----------
 /** The configuration is read again on a reconnect only if it was not applied in the last half minute (a flapping connection must not ask every time). */
 const CONFIG_FRESH_MS = 30_000;
+
+/**
+ * A message sent over the socket that nothing has answered for this long is shown as failed. The answer may only have been lost (the socket dropped, the
+ * server was slow), so the person is offered "send again", which is safe: the server knows the message by its id and stores it once. If the answer
+ * comes after all, the message turns into a sent one by itself.
+ */
+const SEND_TIMEOUT_MS = 15_000;
+/** After a "busy" answer a message is sent again once, after this wait plus up to BUSY_JITTER_MS of chance, so that many people do not come back together. */
+const BUSY_RETRY_MS = 1_500;
+const BUSY_JITTER_MS = 1_500;
+const busyPause = (): Promise<void> => new Promise((done) => setTimeout(done, BUSY_RETRY_MS + (randomBytes(2).reduce((n, b) => n * 256 + b, 0) / 65535) * BUSY_JITTER_MS));
+
+function clearSendTimer(id: string): void {
+  const timer = s.sendTimers.get(id);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  s.sendTimers.delete(id);
+}
+
+/** Starts (or restarts) the wait for the server's answer to a message that went out over the socket. */
+function armSendTimer(conv: string, id: string): void {
+  clearSendTimer(id);
+  s.sendTimers.set(
+    id,
+    setTimeout(() => {
+      s.sendTimers.delete(id);
+      const m = useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine);
+      if (m && m.status === "sending") addMessage(conv, { ...m, status: "failed" });
+    }, SEND_TIMEOUT_MS),
+  );
+}
 
 /** Applies what the server says this account may do, and its limits (sign-in answer, `GET /me` and the "account" notice all carry the same object). */
 export function applyConfig(c: Partial<ServerConfig> | null | undefined): void {
@@ -749,6 +793,7 @@ export function isLooking(conv: string | null): boolean {
 
 /** Returns true when the message was not in the list yet. */
 function addMessage(conv: string, msg: Msg): boolean {
+  if (msg.mine && msg.status !== "sending") clearSendTimer(msg.id); // answered (sent or failed): nothing left to wait for
   const st = useChat.getState();
   const list = st.messages[conv] ?? [];
   const i = list.findIndex((m) => m.id === msg.id && m.senderId === msg.senderId);
@@ -1090,23 +1135,53 @@ async function sendPlain(conv: string, payload: Payload & { sentAt: number }): P
   const sentAt = payload.sentAt;
   const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload, gen, status: "sending" };
   addMessage(conv, optimistic);
-  try {
-    await transmit(conv, optimistic);
-  } catch (e) {
-    // The server no longer knows the epoch this was sealed with: ask for the current ones and send once more, freshly sealed.
-    if (e instanceof ApiError && e.code === "gone" && !s.retried.has(id)) {
-      s.retried.add(id);
-      try {
-        await refreshEpochs();
-        await transmit(conv, optimistic);
-        return;
-      } catch {
-        /* falls through to failed */
+  // Kept for "send again" (resendMessage): the same id, so the server stores the message once however often it arrives.
+  const run = async (): Promise<void> => {
+    try {
+      await transmit(conv, optimistic);
+    } catch (e) {
+      // The server no longer knows the epoch this was sealed with: ask for the current ones and send once more, freshly sealed.
+      if (e instanceof ApiError && e.code === "gone" && !s.retried.has(id)) {
+        s.retried.add(id);
+        try {
+          await refreshEpochs();
+          await transmit(conv, optimistic);
+          return;
+        } catch {
+          /* falls through to failed */
+        }
       }
+      // Busy: once more after a short wait (over the socket the same happens when the "busy" frame arrives, see onFrame).
+      if (e instanceof ApiError && e.code === "busy" && !s.busyTried.has(id)) {
+        s.busyTried.add(id);
+        await busyPause();
+        try {
+          await transmit(conv, optimistic);
+          return;
+        } catch {
+          /* falls through to failed */
+        }
+      }
+      if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
+      addMessage(conv, { ...optimistic, status: "failed" });
     }
-    if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
-    addMessage(conv, { ...optimistic, status: "failed" });
-  }
+  };
+  s.resend.set(id, run);
+  await run();
+}
+
+/**
+ * Sends a message that failed again, with the same id. Safe to press twice, or when the first try did arrive after all: the server answers a repeated
+ * id with the message it already has. Recordings and pictures continue from where they stopped (an upload that is done is not repeated).
+ */
+export async function resendMessage(conv: string, id: string): Promise<void> {
+  const m = useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine);
+  const run = s.resend.get(id);
+  if (!m || m.status !== "failed" || !run) return;
+  s.retried.delete(id);
+  s.busyTried.delete(id);
+  addMessage(conv, { ...m, status: "sending" });
+  await run();
 }
 
 /**
@@ -1163,43 +1238,63 @@ async function sendStored(
   // The bubble shows at once; it has no stored id to download from until the upload is done.
   const optimistic: Msg = { id, seq: 0, senderId: myId, role: me().role, time: sentAt, mine: true, payload: payloadOf("", sentAt), gen, status: "sending" };
   addMessage(conv, optimistic);
+  // The message with its stored id once the upload is done: sending it again after a "busy" answer or a timeout sends only the message, not the file.
+  let uploaded: Msg | null = null;
   const attempt = async (): Promise<void> => {
-    const key = keyFor(conv, gen);
-    if (!key) throw new ApiError(0, "forbidden");
-    const binding = { conv, senderId: myId, clientMsgId: id, gen };
-    const sealed = await encryptBytes(key, epochs(), bytes, voiceBinding(binding));
-    // The storage takes the raw ciphertext bytes, not their base64 text; the server is told how many to expect and signs exactly that.
-    let raw = fromB64(sealed.ct);
-    let t: number | undefined;
-    if (thumb) {
-      const head = fromB64((await encryptBytes(key, epochs(), thumb, thumbBinding(binding))).ct);
-      t = head.length;
-      raw = joinBytes(head, raw);
-    }
-    if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
-    const up = await api().post<{ fileId: string; upload: UploadTarget }>("/files", { conv, size: raw.length });
-    await uploadBytes(up.upload, raw);
-    const m: Msg = { ...optimistic, payload: payloadOf(up.fileId, sentAt, t) };
-    addMessage(conv, m);
-    await transmit(conv, m);
-  };
-  try {
-    await attempt();
-  } catch (e) {
-    if (e instanceof ApiError && e.code === "gone" && !s.retried.has(id)) {
-      s.retried.add(id);
-      try {
-        await refreshEpochs();
-        await attempt();
-        return;
-      } catch {
-        /* falls through to failed */
+    if (!uploaded) {
+      const key = keyFor(conv, gen);
+      if (!key) throw new ApiError(0, "forbidden");
+      const binding = { conv, senderId: myId, clientMsgId: id, gen };
+      const sealed = await encryptBytes(key, epochs(), bytes, voiceBinding(binding));
+      // The storage takes the raw ciphertext bytes, not their base64 text; the server is told how many to expect and signs exactly that.
+      let raw = fromB64(sealed.ct);
+      let t: number | undefined;
+      if (thumb) {
+        const head = fromB64((await encryptBytes(key, epochs(), thumb, thumbBinding(binding))).ct);
+        t = head.length;
+        raw = joinBytes(head, raw);
       }
+      if (!fitsServer(raw.length)) throw new ApiError(413, "too_large");
+      const up = await api().post<{ fileId: string; upload: UploadTarget }>("/files", { conv, size: raw.length });
+      await uploadBytes(up.upload, raw);
+      uploaded = { ...optimistic, payload: payloadOf(up.fileId, sentAt, t) };
+      addMessage(conv, uploaded);
     }
-    if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
-    if (e instanceof ApiError && e.status === 403 && e.code === "forbidden" && e.extra.reason !== "official_readonly") patch({ filesOff: true });
-    addMessage(conv, { ...(useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine) ?? optimistic), status: "failed" });
-  }
+    await transmit(conv, uploaded);
+  };
+  // Kept for "send again" (resendMessage), like a text's.
+  const run = async (): Promise<void> => {
+    try {
+      await attempt();
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "gone" && !s.retried.has(id)) {
+        s.retried.add(id);
+        try {
+          await refreshEpochs();
+          uploaded = null; // sealed under an epoch the server no longer knows: sealed and uploaded again
+          await attempt();
+          return;
+        } catch {
+          /* falls through to failed */
+        }
+      }
+      if (e instanceof ApiError && e.code === "busy" && !s.busyTried.has(id)) {
+        s.busyTried.add(id);
+        await busyPause();
+        try {
+          await attempt();
+          return;
+        } catch {
+          /* falls through to failed */
+        }
+      }
+      if (e instanceof ApiError && e.code === "monthly_limit") void refreshUsage();
+      if (e instanceof ApiError && e.status === 403 && e.code === "forbidden" && e.extra.reason !== "official_readonly") patch({ filesOff: true });
+      addMessage(conv, { ...(useChat.getState().messages[conv]?.find((x) => x.id === id && x.mine) ?? optimistic), status: "failed" });
+    }
+  };
+  s.resend.set(id, run);
+  await run();
 }
 
 /** Downloads, opens and plays a recording. The bytes stay in memory until the chat locks. Throws ApiError / CipherError for the caller to show. */
@@ -1304,7 +1399,10 @@ async function transmit(conv: string, m: Msg): Promise<void> {
   if (!key || !m.payload) throw new ApiError(0, "forbidden");
   const { epoch, ct } = await encryptMessage(key, epochs(), m.payload, { conv, senderId: m.senderId, clientMsgId: m.id, gen });
   const frame = { t: "send", conv, clientMsgId: m.id, epoch, gen, ct };
-  if (s.ws?.send(frame)) return;
+  if (s.ws?.send(frame)) {
+    armSendTimer(conv, m.id); // the answer arrives as a frame; if it does not, the message is shown as failed and can be sent again
+    return;
+  }
   const r = await api().post<{ seq: number; used?: number }>("/messages", frame);
   addMessage(conv, { ...m, seq: r.seq, status: "sent" });
   countSent(r.used);
@@ -1366,6 +1464,16 @@ export async function onFrame(f: Frame): Promise<void> {
     for (const [conv, list] of Object.entries(useChat.getState().messages)) {
       const m = list.find((x) => x.id === f.clientMsgId && x.mine && x.status === "sending");
       if (!m) continue;
+      // Busy: once more after a short wait, then it is failed.
+      const again = f.code === "busy" && !s.busyTried.has(m.id) ? s.resend.get(m.id) : undefined;
+      if (again) {
+        s.busyTried.add(m.id);
+        const id = m.id;
+        void busyPause().then(() => {
+          if (useChat.getState().messages[conv]?.some((x) => x.id === id && x.mine && x.status === "sending")) void again();
+        });
+        continue;
+      }
       if (f.code === "gone" && !s.retried.has(m.id)) {
         s.retried.add(m.id);
         try {

@@ -98,8 +98,11 @@ interface Status {
   users: number;
   online: number;
   groups: number;
-  counters: { messages: number; fileBytes: number; errors: Record<string, number> };
+  counters: { messages: number; fileBytes: number; connects?: number; errors: Record<string, number> };
   recentErrors: { at: number; status: number; code: string; method: string; path: string }[];
+  /** Read cost per route; absent from an older server. */
+  readCost?: { route: string; calls: number; units: number }[];
+  statsWriteFailures?: number;
 }
 
 interface Job {
@@ -1065,12 +1068,19 @@ function StatusView({ go }: { go: (v: View) => void }) {
               }
             />
           </Group>
-          <Group header={a.manage.recentErrors} footer={a.manage.recentErrorsNote}>
+          <Group header={a.manage.recentErrors} footer={a.manage.recentErrorsNote + (s.statsWriteFailures ? " " + a.manage.statsNote(s.statsWriteFailures) : "")}>
             {s.recentErrors.length === 0 && <Row title={a.manage.empty} />}
             {s.recentErrors.map((e, i) => (
               <Row key={i} title={`${e.status} ${e.code}`} subtitle={`${e.method} ${e.path}`} value={when(e.at)} />
             ))}
           </Group>
+          {s.readCost && s.readCost.length > 0 && (
+            <Group header={a.manage.readCost} footer={a.manage.readCostNote}>
+              {s.readCost.map((r) => (
+                <Row key={r.route} title={r.route} subtitle={a.manage.readCostRow(r.calls, (r.units / Math.max(1, r.calls)).toFixed(1))} value={r.units.toFixed(1)} />
+              ))}
+            </Group>
+          )}
         </>
       )}
     </Page>

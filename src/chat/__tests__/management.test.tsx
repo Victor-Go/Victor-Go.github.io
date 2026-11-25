@@ -343,6 +343,7 @@ describe("the status page keeps the long lists on pages of their own", () => {
     recentErrors: [{ at: 1, status: 403, code: "forbidden", method: "GET", path: "/admin/users" }],
     readCost: [{ route: "GET /messages", calls: 2, units: 12 }, { route: "GET /vault", calls: 1, units: 4.5 }],
     writeCost: [{ route: "PUT /vault/:id", calls: 3, units: 18 }],
+    countersFrom: Date.now() - 3_600_000,
   };
 
   it("shows only totals, and opens the reads, the writes and the rejected requests one by one", async () => {
@@ -355,6 +356,7 @@ describe("the status page keeps the long lists on pages of their own", () => {
     fireEvent.click(screen.getByText("Read cost by route"));
     expect(await screen.findByText("GET /messages")).toBeTruthy();
     expect(screen.getByText("GET /vault")).toBeTruthy();
+    expect(screen.getByText(/Counted from .* until now\./)).toBeTruthy(); // since when the figures count
     expect(screen.queryByText("PUT /vault/:id")).toBeNull();
     fireEvent.click(screen.getByText("Status"));
     fireEvent.click(await screen.findByText("Write cost by route"));
@@ -363,6 +365,22 @@ describe("the status page keeps the long lists on pages of their own", () => {
     fireEvent.click(await screen.findByText("Recently rejected requests"));
     expect(await screen.findByText("403 forbidden")).toBeTruthy();
     expect(screen.getByText("GET /admin/users")).toBeTruthy();
+  });
+
+  it("shows the refusals by route first, then the latest of each kind with how many times", async () => {
+    answers = {
+      "GET /admin/status": {
+        ...status,
+        rejected: [{ status: 404, code: "not_found", method: "GET", route: "(no route)", count: 5000 }, { status: 403, code: "forbidden", method: "GET", route: "/admin/users", count: 2 }],
+        recentErrors: [{ at: 5, status: 404, code: "not_found", method: "GET", path: "(no route)", n: 5000 }, { at: 1, status: 403, code: "forbidden", method: "GET", path: "/admin/users" }],
+      },
+    };
+    go(PATH.managementPage("status/rejected"));
+    render(<ManagementPage />);
+    await screen.findByText("By route (times)");
+    expect(screen.getByText("5000")).toBeTruthy(); // the whole count
+    expect(screen.getByText("404 not_found ×5000")).toBeTruthy(); // one line for the flood
+    expect(screen.getAllByText("403 forbidden")).toHaveLength(2); // in the totals and in the latest, once each: no "×"
   });
 
   it("copes with a server that sends no cost lists", async () => {

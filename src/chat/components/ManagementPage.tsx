@@ -99,11 +99,16 @@ interface Status {
   online: number;
   groups: number;
   counters: { messages: number; fileBytes: number; connects?: number; errors: Record<string, number> };
-  recentErrors: { at: number; status: number; code: string; method: string; path: string }[];
+  /** One line per kind of refusal: `n` is how many times (absent: once), `at` the latest. */
+  recentErrors: { at: number; status: number; code: string; method: string; path: string; n?: number }[];
+  /** How often each kind of refusal happened on each route; absent from an older server. */
+  rejected?: { status: number; code: string; method: string; route: string; count: number }[];
   /** Read and write cost per route; absent from an older server. */
   readCost?: { route: string; calls: number; units: number }[];
   writeCost?: { route: string; calls: number; units: number }[];
   statsWriteFailures?: number;
+  /** When the figures start counting (ms): the first thing recorded, or the last reset. */
+  countersFrom?: number;
 }
 
 interface Job {
@@ -1065,9 +1070,17 @@ function useStatus() {
 
 const sumUnits = (rows?: { units: number }[]): string => (rows ?? []).reduce((n, r) => n + r.units, 0).toFixed(1);
 
+/** "Counted from <date and time> until now.", or nothing from a server that does not say. */
+function useSince(s: Status | null): string {
+  const { a } = useLang();
+  const when = useWhen();
+  return s?.countersFrom ? a.manage.since(when(s.countersFrom)) : "";
+}
+
 function StatusView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const { s, load, error, run, busy, loaded } = useStatus();
+  const since = useSince(s);
   const [resetting, setResetting] = useState(false);
   return (
     <Page title={a.manage.status} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
@@ -1091,7 +1104,7 @@ function StatusView({ go }: { go: (v: View) => void }) {
               }
             />
           </Group>
-          <Group footer={s.statsWriteFailures ? a.manage.statsNote(s.statsWriteFailures) : undefined}>
+          <Group footer={[since, s.statsWriteFailures ? a.manage.statsNote(s.statsWriteFailures) : ""].filter(Boolean).join(" ") || undefined}>
             <Row title={a.manage.recentErrors} value={s.recentErrors.length} chevron onClick={() => go({ k: "statusRejected" })} />
             <Row title={a.manage.readCost} value={sumUnits(s.readCost)} chevron onClick={() => go({ k: "statusReads" })} />
             <Row title={a.manage.writeCost} value={sumUnits(s.writeCost)} chevron onClick={() => go({ k: "statusWrites" })} />
@@ -1127,6 +1140,7 @@ function StatusView({ go }: { go: (v: View) => void }) {
 function CostView({ kind, go }: { kind: "reads" | "writes"; go: (v: View) => void }) {
   const { a } = useLang();
   const { s, error, busy, loaded } = useStatus();
+  const since = useSince(s);
   const rows = (kind === "reads" ? s?.readCost : s?.writeCost) ?? [];
   const title = kind === "reads" ? a.manage.readCost : a.manage.writeCost;
   return (
@@ -1134,7 +1148,7 @@ function CostView({ kind, go }: { kind: "reads" | "writes"; go: (v: View) => voi
       <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {s && (
-        <Group footer={kind === "reads" ? a.manage.readCostNote : a.manage.writeCostNote}>
+        <Group footer={`${kind === "reads" ? a.manage.readCostNote : a.manage.writeCostNote} ${since}`.trim()}>
           {rows.length === 0 && <Row title={a.manage.empty} />}
           {rows.map((r) => (
             <Row key={r.route} title={r.route} subtitle={a.manage.readCostRow(r.calls, (r.units / Math.max(1, r.calls)).toFixed(1))} value={r.units.toFixed(1)} />
@@ -1150,17 +1164,26 @@ function RejectedView({ go }: { go: (v: View) => void }) {
   const { a } = useLang();
   const when = useWhen();
   const { s, error, busy, loaded } = useStatus();
+  const since = useSince(s);
   return (
     <Page title={a.manage.recentErrors} onBack={() => go({ k: "status" })} backLabel={a.manage.status}>
       <Loading busy={busy} first={!loaded} label={a.loading} />
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {s && (
-        <Group footer={a.manage.recentErrorsNote}>
-          {s.recentErrors.length === 0 && <Row title={a.manage.empty} />}
-          {s.recentErrors.map((e, i) => (
-            <Row key={i} title={`${e.status} ${e.code}`} subtitle={`${e.method} ${e.path}`} value={when(e.at)} />
-          ))}
-        </Group>
+        <>
+          <Group header={a.manage.rejectedTotals} footer={`${a.manage.recentErrorsNote} ${since}`.trim()}>
+            {(s.rejected ?? []).length === 0 && <Row title={a.manage.empty} />}
+            {(s.rejected ?? []).map((r) => (
+              <Row key={`${r.status} ${r.code} ${r.method} ${r.route}`} title={r.code === "other" ? a.manage.rejectedOther : `${r.status} ${r.code}`} subtitle={r.code === "other" ? undefined : `${r.method} ${r.route}`} value={r.count} />
+            ))}
+          </Group>
+          <Group header={a.manage.rejectedLatest}>
+            {s.recentErrors.length === 0 && <Row title={a.manage.empty} />}
+            {s.recentErrors.map((e) => (
+              <Row key={`${e.status} ${e.code} ${e.method} ${e.path}`} title={`${e.status} ${e.code}${e.n ? ` ×${e.n}` : ""}`} subtitle={`${e.method} ${e.path}`} value={when(e.at)} />
+            ))}
+          </Group>
+        </>
       )}
     </Page>
   );

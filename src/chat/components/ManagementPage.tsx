@@ -1043,9 +1043,11 @@ function StatusView({ go }: { go: (v: View) => void }) {
   const when = useWhen();
   const { error, run, busy, loaded } = useAdmin();
   const [s, setS] = useState<Status | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const load = useCallback(() => run(() => rawApi().get<Status>("/admin/status")).then((r) => r && setS(r)), [run]);
   useEffect(() => {
-    void run(() => rawApi().get<Status>("/admin/status")).then((r) => r && setS(r));
-  }, [run]);
+    void load();
+  }, [load]);
   return (
     <Page title={a.manage.status} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
       <Loading busy={busy} first={!loaded} label={a.loading} />
@@ -1081,7 +1083,28 @@ function StatusView({ go }: { go: (v: View) => void }) {
               ))}
             </Group>
           )}
+          <Group>
+            <Row title={a.manage.resetStatus} center destructive disabled={busy} onClick={() => setResetting(true)} />
+          </Group>
         </>
+      )}
+      {resetting && (
+        <ConfirmModal
+          title={a.manage.resetStatus}
+          confirmLabel={a.manage.resetStatus}
+          cancelLabel={a.cancel}
+          closeLabel={a.close}
+          danger
+          onConfirm={() => {
+            setResetting(false);
+            void run(() => rawApi().post("/admin/status/reset")).then((r) => {
+              if (r !== null) void load();
+            });
+          }}
+          onCancel={() => setResetting(false)}
+        >
+          <p>{a.manage.confirmResetStatus}</p>
+        </ConfirmModal>
       )}
     </Page>
   );

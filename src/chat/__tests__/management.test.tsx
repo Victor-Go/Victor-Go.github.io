@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ManagementPage } from "../components/ManagementPage";
 import { unlockedNow } from "../adminLock";
 import { ApiError } from "../net/api";
@@ -310,5 +310,29 @@ describe("sending a contact card from a user page", () => {
     render(<ManagementPage />);
     await screen.findByText("@bob");
     expect(screen.queryByText("Send contact card")).toBeNull();
+  });
+});
+
+describe("the status page", () => {
+  const status = { version: "go-prod", users: 3, online: 1, groups: 0, counters: { messages: 4, fileBytes: 0, errors: { forbidden: 2 } }, recentErrors: [{ at: 1, status: 403, code: "forbidden", method: "GET", path: "/admin/users" }], readCost: [] };
+
+  it("starts the counting again after a confirmation, and reads the page again", async () => {
+    answers = { "GET /admin/status": status };
+    go(PATH.managementPage("status"));
+    render(<ManagementPage />);
+    fireEvent.click(await screen.findByText("Reset counters"));
+    expect(post("/admin/status/reset")).toHaveLength(0); // asked first
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Reset counters" }));
+    await waitFor(() => expect(post("/admin/status/reset")).toHaveLength(1));
+    await waitFor(() => expect(calls.filter(([m, p]) => m === "GET" && p === "/admin/status")).toHaveLength(2));
+  });
+
+  it("does nothing when the confirmation is cancelled", async () => {
+    answers = { "GET /admin/status": status };
+    go(PATH.managementPage("status"));
+    render(<ManagementPage />);
+    fireEvent.click(await screen.findByText("Reset counters"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(post("/admin/status/reset")).toHaveLength(0);
   });
 });

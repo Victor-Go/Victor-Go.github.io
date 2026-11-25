@@ -336,3 +336,39 @@ describe("the status page", () => {
     expect(post("/admin/status/reset")).toHaveLength(0);
   });
 });
+
+describe("the status page keeps the long lists on pages of their own", () => {
+  const status = {
+    version: "go-prod", users: 3, online: 1, groups: 0, counters: { messages: 4, fileBytes: 0, errors: { forbidden: 2 } },
+    recentErrors: [{ at: 1, status: 403, code: "forbidden", method: "GET", path: "/admin/users" }],
+    readCost: [{ route: "GET /messages", calls: 2, units: 12 }, { route: "GET /vault", calls: 1, units: 4.5 }],
+    writeCost: [{ route: "PUT /vault/:id", calls: 3, units: 18 }],
+  };
+
+  it("shows only totals, and opens the reads, the writes and the rejected requests one by one", async () => {
+    answers = { "GET /admin/status": status };
+    go(PATH.managementPage("status"));
+    render(<ManagementPage />);
+    await screen.findByText("Read cost by route");
+    expect(screen.queryByText("GET /messages")).toBeNull(); // not on this page
+    expect(screen.queryByText("403 forbidden")).toBeNull();
+    fireEvent.click(screen.getByText("Read cost by route"));
+    expect(await screen.findByText("GET /messages")).toBeTruthy();
+    expect(screen.getByText("GET /vault")).toBeTruthy();
+    expect(screen.queryByText("PUT /vault/:id")).toBeNull();
+    fireEvent.click(screen.getByText("Status"));
+    fireEvent.click(await screen.findByText("Write cost by route"));
+    expect(await screen.findByText("PUT /vault/:id")).toBeTruthy();
+    fireEvent.click(screen.getByText("Status"));
+    fireEvent.click(await screen.findByText("Recently rejected requests"));
+    expect(await screen.findByText("403 forbidden")).toBeTruthy();
+    expect(screen.getByText("GET /admin/users")).toBeTruthy();
+  });
+
+  it("copes with a server that sends no cost lists", async () => {
+    answers = { "GET /admin/status": { ...status, readCost: undefined, writeCost: undefined } };
+    go(PATH.managementPage("status/writes"));
+    render(<ManagementPage />);
+    expect(await screen.findByText("Nothing yet")).toBeTruthy();
+  });
+});

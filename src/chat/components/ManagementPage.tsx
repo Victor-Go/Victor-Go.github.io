@@ -100,8 +100,9 @@ interface Status {
   groups: number;
   counters: { messages: number; fileBytes: number; connects?: number; errors: Record<string, number> };
   recentErrors: { at: number; status: number; code: string; method: string; path: string }[];
-  /** Read cost per route; absent from an older server. */
+  /** Read and write cost per route; absent from an older server. */
   readCost?: { route: string; calls: number; units: number }[];
+  writeCost?: { route: string; calls: number; units: number }[];
   statsWriteFailures?: number;
 }
 
@@ -145,7 +146,7 @@ interface AwsState {
   nextAt: number;
 }
 
-type View = { k: "root" } | { k: "aws" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "audit" } | { k: "starter" };
+type View = { k: "root" } | { k: "aws" } | { k: "jobs" } | { k: "epochs" } | { k: "wipe"; scope: "messages" | "favorites" } | { k: "wipeAll" } | { k: "users" } | { k: "user"; user: AdminUser } | { k: "invites" } | { k: "cards" } | { k: "config" } | { k: "status" } | { k: "statusReads" } | { k: "statusWrites" } | { k: "statusRejected" } | { k: "audit" } | { k: "starter" };
 
 /** Each screen has its own address (so the back gesture works); the selected user rides along in memory, never in the address. */
 function addressOf(v: View): { path: string; payload?: unknown } {
@@ -161,6 +162,12 @@ function addressOf(v: View): { path: string; payload?: unknown } {
     case "audit":
     case "starter":
       return { path: PATH.managementPage(v.k) };
+    case "statusReads":
+      return { path: PATH.managementPage("status/reads") };
+    case "statusWrites":
+      return { path: PATH.managementPage("status/writes") };
+    case "statusRejected":
+      return { path: PATH.managementPage("status/rejected") };
     case "user":
       return { path: PATH.managementPage("users/user"), payload: v.user };
     case "wipe":
@@ -186,6 +193,12 @@ function viewAt(path: string, payload: unknown): View {
     case "audit":
     case "starter":
       return { k: name };
+    case "status/reads":
+      return { k: "statusReads" };
+    case "status/writes":
+      return { k: "statusWrites" };
+    case "status/rejected":
+      return { k: "statusRejected" };
     case "users/user":
       return payload ? { k: "user", user: payload as AdminUser } : { k: "users" };
     case "epochs/wipe-messages":
@@ -1038,16 +1051,24 @@ function AwsView({ go }: { go: (v: View) => void }) {
   );
 }
 
-function StatusView({ go }: { go: (v: View) => void }) {
-  const { a } = useLang();
-  const when = useWhen();
-  const { error, run, busy, loaded } = useAdmin();
+/** The status the server answers, read once when a page that shows a part of it opens. */
+function useStatus() {
+  const admin = useAdmin();
+  const { run } = admin;
   const [s, setS] = useState<Status | null>(null);
-  const [resetting, setResetting] = useState(false);
   const load = useCallback(() => run(() => rawApi().get<Status>("/admin/status")).then((r) => r && setS(r)), [run]);
   useEffect(() => {
     void load();
   }, [load]);
+  return { ...admin, s, load };
+}
+
+const sumUnits = (rows?: { units: number }[]): string => (rows ?? []).reduce((n, r) => n + r.units, 0).toFixed(1);
+
+function StatusView({ go }: { go: (v: View) => void }) {
+  const { a } = useLang();
+  const { s, load, error, run, busy, loaded } = useStatus();
+  const [resetting, setResetting] = useState(false);
   return (
     <Page title={a.manage.status} onBack={() => go({ k: "root" })} backLabel={a.manage.title}>
       <Loading busy={busy} first={!loaded} label={a.loading} />
@@ -1070,19 +1091,11 @@ function StatusView({ go }: { go: (v: View) => void }) {
               }
             />
           </Group>
-          <Group header={a.manage.recentErrors} footer={a.manage.recentErrorsNote + (s.statsWriteFailures ? " " + a.manage.statsNote(s.statsWriteFailures) : "")}>
-            {s.recentErrors.length === 0 && <Row title={a.manage.empty} />}
-            {s.recentErrors.map((e, i) => (
-              <Row key={i} title={`${e.status} ${e.code}`} subtitle={`${e.method} ${e.path}`} value={when(e.at)} />
-            ))}
+          <Group footer={s.statsWriteFailures ? a.manage.statsNote(s.statsWriteFailures) : undefined}>
+            <Row title={a.manage.recentErrors} value={s.recentErrors.length} chevron onClick={() => go({ k: "statusRejected" })} />
+            <Row title={a.manage.readCost} value={sumUnits(s.readCost)} chevron onClick={() => go({ k: "statusReads" })} />
+            <Row title={a.manage.writeCost} value={sumUnits(s.writeCost)} chevron onClick={() => go({ k: "statusWrites" })} />
           </Group>
-          {s.readCost && s.readCost.length > 0 && (
-            <Group header={a.manage.readCost} footer={a.manage.readCostNote}>
-              {s.readCost.map((r) => (
-                <Row key={r.route} title={r.route} subtitle={a.manage.readCostRow(r.calls, (r.units / Math.max(1, r.calls)).toFixed(1))} value={r.units.toFixed(1)} />
-              ))}
-            </Group>
-          )}
           <Group>
             <Row title={a.manage.resetStatus} center destructive disabled={busy} onClick={() => setResetting(true)} />
           </Group>
@@ -1105,6 +1118,49 @@ function StatusView({ go }: { go: (v: View) => void }) {
         >
           <p>{a.manage.confirmResetStatus}</p>
         </ConfirmModal>
+      )}
+    </Page>
+  );
+}
+
+/** The read or the write cost of each route: its own page, so that the status page stays short. */
+function CostView({ kind, go }: { kind: "reads" | "writes"; go: (v: View) => void }) {
+  const { a } = useLang();
+  const { s, error, busy, loaded } = useStatus();
+  const rows = (kind === "reads" ? s?.readCost : s?.writeCost) ?? [];
+  const title = kind === "reads" ? a.manage.readCost : a.manage.writeCost;
+  return (
+    <Page title={title} onBack={() => go({ k: "status" })} backLabel={a.manage.status}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {s && (
+        <Group footer={kind === "reads" ? a.manage.readCostNote : a.manage.writeCostNote}>
+          {rows.length === 0 && <Row title={a.manage.empty} />}
+          {rows.map((r) => (
+            <Row key={r.route} title={r.route} subtitle={a.manage.readCostRow(r.calls, (r.units / Math.max(1, r.calls)).toFixed(1))} value={r.units.toFixed(1)} />
+          ))}
+        </Group>
+      )}
+    </Page>
+  );
+}
+
+/** The recently rejected requests: their own page. */
+function RejectedView({ go }: { go: (v: View) => void }) {
+  const { a } = useLang();
+  const when = useWhen();
+  const { s, error, busy, loaded } = useStatus();
+  return (
+    <Page title={a.manage.recentErrors} onBack={() => go({ k: "status" })} backLabel={a.manage.status}>
+      <Loading busy={busy} first={!loaded} label={a.loading} />
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {s && (
+        <Group footer={a.manage.recentErrorsNote}>
+          {s.recentErrors.length === 0 && <Row title={a.manage.empty} />}
+          {s.recentErrors.map((e, i) => (
+            <Row key={i} title={`${e.status} ${e.code}`} subtitle={`${e.method} ${e.path}`} value={when(e.at)} />
+          ))}
+        </Group>
       )}
     </Page>
   );
@@ -1310,6 +1366,12 @@ export function ManagementPage() {
       return <AwsView go={setView} />;
     case "status":
       return <StatusView go={setView} />;
+    case "statusReads":
+      return <CostView kind="reads" go={setView} />;
+    case "statusWrites":
+      return <CostView kind="writes" go={setView} />;
+    case "statusRejected":
+      return <RejectedView go={setView} />;
     case "audit":
       return <AuditView go={setView} />;
     case "starter":

@@ -44,16 +44,33 @@ jobs:
         env:
           VITE_CIPHER_EPOCHS: ${{ secrets.CIPHER_EPOCHS }}
           VITE_CIPHER_EPOCH_CURRENT: ${{ vars.CIPHER_EPOCH_CURRENT }}
-          # Optional: server endpoints for /chat. Unset means the chat pages report "server not configured".
+
+      # /chat comes from its own repository, Victor-Go/chat-front (main): built here with this repository's chat variables and added as dist/chat.
+      # A push to chat-front starts this workflow by itself (its CI dispatches it), so the page follows that repository.
+      - name: Check out the chat
+        uses: actions/checkout@v4
+        with:
+          repository: Victor-Go/chat-front
+          ref: main
+          path: chat-front
+
+      - name: Build the chat
+        working-directory: chat-front
+        run: |
+          npm ci
+          CHAT_COMMIT=$(git rev-parse HEAD) npm run build
+          test -f dist/chat/index.html
+          cp -r dist/chat ../dist/chat
+        env:
           # CHAT_API and CHAT_WS take one address or several separated by commas (a, b, c): the first is preferred, the next ones are tried when it does not answer.
           VITE_CHAT_API: ${{ vars.CHAT_API }}
           VITE_CHAT_WS: ${{ vars.CHAT_WS }}
-          # Signed address list (src/chat/net/endpoints.ts): the public key (the script scripts/chat-endpoints.mjs prints it), where the signed file is
-          # (comma-separated, default /chat/endpoints.json), and the families of names an address in it may use (*.example.com, comma-separated).
+          # Signed address list: the public key, where the signed file is (comma-separated, default /chat/endpoints.json),
+          # and the families of names an address in it may use (*.example.com, comma-separated).
           VITE_CHAT_ENDPOINTS_KEY: ${{ vars.CHAT_ENDPOINTS_KEY }}
           VITE_CHAT_ENDPOINTS_SOURCES: ${{ vars.CHAT_ENDPOINTS_SOURCES }}
           VITE_CHAT_ENDPOINT_HOSTS: ${{ vars.CHAT_ENDPOINT_HOSTS }}
-          # Storage origin for files (voice recordings and pictures): the server's Terraform output `files_origin`. Without it they cannot be sent or shown.
+          # Storage origin for files (voice recordings and pictures): the server's Terraform output `files_origin`.
           VITE_CHAT_FILES_ORIGIN: ${{ vars.CHAT_FILES_ORIGIN }}
 
       - name: Upload artifact
